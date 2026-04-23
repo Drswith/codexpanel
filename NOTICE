@@ -1,0 +1,12 @@
+codex-bar-helper
+Copyright 2026 codex-bar-helper contributors
+
+This repository is a fork of lizhelang/codexbar, which is derived from
+xmasdong/codexbar. The upstream project code is distributed under the MIT
+License, and the preserved MIT license text is provided in LICENSE.MIT.
+
+Unless otherwise noted, new code, documentation, and later modifications in
+this fork are distributed under the Apache License, Version 2.0. See LICENSE.
+
+This repository also documents third-party MIT-licensed sources and attribution
+details in THIRD_PARTY_NOTICES.md.
