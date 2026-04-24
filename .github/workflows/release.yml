@@ -11,6 +11,14 @@ on:
         required: false
         default: false
         type: boolean
+      version:
+        description: "手动构建时使用的版本号，例如 1.0.0"
+        required: false
+        type: string
+      release_tag:
+        description: "手动上传 release 资产时使用的 tag，例如 v1.0.0"
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -49,17 +57,43 @@ jobs:
             RELEASE_URL="${{ github.event.release.html_url }}"
             PUBLISHED_AT="${{ github.event.release.published_at }}"
           else
-            TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
-            if [[ -z "$TAG" ]]; then
-              TAG="manual-${GITHUB_RUN_NUMBER}"
+            VERSION_INPUT="${{ inputs.version }}"
+            TAG_INPUT="${{ inputs.release_tag }}"
+
+            if [[ -n "$TAG_INPUT" ]]; then
+              TAG="$TAG_INPUT"
+            elif [[ -n "$VERSION_INPUT" ]]; then
+              TAG="v$VERSION_INPUT"
+            else
+              TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
             fi
+
+            if [[ -n "$VERSION_INPUT" ]]; then
+              VERSION="$VERSION_INPUT"
+            elif [[ -n "$TAG" ]]; then
+              VERSION="${TAG#v}"
+            else
+              VERSION="$(awk -F ' = ' '/MARKETING_VERSION = / { gsub(/;/, \"\", $2); print $2; exit }' \"$PROJECT/project.pbxproj\")"
+            fi
+
+            if [[ -z "$TAG" ]]; then
+              TAG="v$VERSION"
+            fi
+
             RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/${TAG}"
             PUBLISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           fi
 
-          VERSION="${TAG#v}"
-          if [[ -z "$VERSION" ]]; then
-            VERSION="$TAG"
+          if [[ "${GITHUB_EVENT_NAME}" == "release" ]]; then
+            VERSION="${TAG#v}"
+            if [[ -z "$VERSION" ]]; then
+              VERSION="$TAG"
+            fi
+          fi
+
+          if [[ ! "$VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
+            echo "Invalid MARKETING_VERSION: $VERSION" >&2
+            exit 1
           fi
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"

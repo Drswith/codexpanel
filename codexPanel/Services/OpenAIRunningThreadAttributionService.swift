@@ -73,8 +73,8 @@ struct OpenAIRunningThreadAttribution: Equatable {
 }
 
 struct OpenAIRunningThreadAttributionService {
-    static let shared = OpenAIRunningThreadAttributionService()
-    static let defaultRecentActivityWindow = CodexThreadRuntimeStore.defaultRecentActivityWindow
+    nonisolated static let shared = OpenAIRunningThreadAttributionService()
+    nonisolated static let defaultRecentActivityWindow = CodexThreadRuntimeStore.defaultRecentActivityWindow
 
     private static let openAIProviderID = "openai-oauth"
 

@@ -16,6 +16,7 @@ protocol TokenStoreReloading: AnyObject {
     func load()
 }
 
+@MainActor
 protocol MenuHostLegacyCleaning: AnyObject {
     @discardableResult
     func cleanupLegacyArtifacts() -> MenuHostLegacyCleanupResult

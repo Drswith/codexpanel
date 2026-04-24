@@ -79,9 +79,9 @@ struct CodexThreadRuntimeStore {
         }
     }
 
-    static let shared = CodexThreadRuntimeStore()
-    static let defaultRecentActivityWindow: TimeInterval = 5
-    static let runtimeLogRules: [RuntimeLogRule] = [
+    nonisolated static let shared = CodexThreadRuntimeStore()
+    nonisolated static let defaultRecentActivityWindow: TimeInterval = 5
+    nonisolated static let runtimeLogRules: [RuntimeLogRule] = [
         .init(target: "session_task.turn"),
         .init(target: "codex_api::endpoint::responses_websocket"),
         .init(target: "codex_api::sse::responses"),
@@ -108,7 +108,7 @@ struct CodexThreadRuntimeStore {
         self.fileManager = fileManager
     }
 
-    func loadRunningThreads(
+    nonisolated func loadRunningThreads(
         now: Date = Date(),
         recentActivityWindow: TimeInterval = Self.defaultRecentActivityWindow
     ) -> Snapshot {

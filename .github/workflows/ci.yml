@@ -12,7 +12,7 @@ jobs:
     env:
       PROJECT: codexpanel.xcodeproj
       SCHEME: codexpanel
-      DESTINATION: platform=macOS
+      DESTINATION: platform=macOS,arch=arm64
       DERIVED_DATA: ${{ github.workspace }}/.github/tmp/derived-data
     steps:
       - name: Checkout
@@ -36,6 +36,8 @@ jobs:
             -derivedDataPath "$DERIVED_DATA" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=YES \
+            ARCHS=arm64 \
             build
 
       - name: Test
@@ -49,4 +51,14 @@ jobs:
             -derivedDataPath "$DERIVED_DATA" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=YES \
+            ARCHS=arm64 \
             test
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codexpanel-ci-logs
+          path: |
+            ${{ env.DERIVED_DATA }}/Logs
