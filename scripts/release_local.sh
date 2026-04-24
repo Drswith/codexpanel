@@ -29,6 +29,8 @@ Options:
   --allow-dirty             Allow git operations on a dirty worktree
   --yes                     Skip confirmation prompt
   --dry-run                 Print planned operations without changing files/git
+  --interactive             Force interactive prompts
+  --headless                Disable interactive prompts
 
   --build / --no-build      Build and package artifacts. Default: build
   --upload none|upload|create
@@ -186,6 +188,8 @@ COMMIT_MESSAGE=""
 ALLOW_DIRTY="false"
 ASSUME_YES="false"
 DRY_RUN="false"
+FORCE_INTERACTIVE="false"
+FORCE_HEADLESS="false"
 
 DO_BUILD="true"
 UPLOAD_MODE="none"
@@ -278,6 +282,14 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN="true"
       shift
       ;;
+    --interactive)
+      FORCE_INTERACTIVE="true"
+      shift
+      ;;
+    --headless)
+      FORCE_HEADLESS="true"
+      shift
+      ;;
     --build)
       DO_BUILD="true"
       shift
@@ -310,6 +322,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$FORCE_INTERACTIVE" == "true" && "$FORCE_HEADLESS" == "true" ]]; then
+  echo "--interactive and --headless cannot be used together." >&2
+  exit 1
+fi
+
 if [[ -n "$POSITIONAL_RELEASE" && -n "$RELEASE_TYPE" ]]; then
   echo "Use either positional release or --release, not both." >&2
   exit 1
@@ -331,6 +348,106 @@ fi
 
 if [[ -z "$TARGET_VERSION" && -n "$RELEASE_TYPE" ]]; then
   TARGET_VERSION="$(bump_version "$CURRENT_VERSION" "$RELEASE_TYPE" "$PREID")"
+fi
+
+INTERACTIVE_MODE="false"
+if [[ "$FORCE_INTERACTIVE" == "true" ]]; then
+  INTERACTIVE_MODE="true"
+elif [[ "$FORCE_HEADLESS" == "true" ]]; then
+  INTERACTIVE_MODE="false"
+elif [[ -t 0 && -z "$TARGET_VERSION" && -z "$RELEASE_TYPE" ]]; then
+  INTERACTIVE_MODE="true"
+fi
+
+if [[ "$INTERACTIVE_MODE" == "true" ]]; then
+  echo "Interactive release mode"
+  echo "Current version: $CURRENT_VERSION"
+  echo
+  local_choices=(
+    "patch"
+    "minor"
+    "major"
+    "beta"
+    "alpha"
+    "rc"
+    "custom"
+    "keep"
+  )
+
+  echo "Select release type:"
+  echo "  1) patch  -> $(bump_version "$CURRENT_VERSION" "patch" "$PREID")"
+  echo "  2) minor  -> $(bump_version "$CURRENT_VERSION" "minor" "$PREID")"
+  echo "  3) major  -> $(bump_version "$CURRENT_VERSION" "major" "$PREID")"
+  echo "  4) beta   -> $(bump_version "$CURRENT_VERSION" "beta" "beta")"
+  echo "  5) alpha  -> $(bump_version "$CURRENT_VERSION" "alpha" "alpha")"
+  echo "  6) rc     -> $(bump_version "$CURRENT_VERSION" "rc" "rc")"
+  echo "  7) custom version"
+  echo "  8) keep current version"
+  read -r -p "Choice [1-8]: " release_choice
+
+  case "$release_choice" in
+    1) TARGET_VERSION="$(bump_version "$CURRENT_VERSION" "patch" "$PREID")" ;;
+    2) TARGET_VERSION="$(bump_version "$CURRENT_VERSION" "minor" "$PREID")" ;;
+    3) TARGET_VERSION="$(bump_version "$CURRENT_VERSION" "major" "$PREID")" ;;
+    4) TARGET_VERSION="$(bump_version "$CURRENT_VERSION" "beta" "beta")" ;;
+    5) TARGET_VERSION="$(bump_version "$CURRENT_VERSION" "alpha" "alpha")" ;;
+    6) TARGET_VERSION="$(bump_version "$CURRENT_VERSION" "rc" "rc")" ;;
+    7)
+      read -r -p "Enter version (e.g. 1.2.3 or 1.2.3-beta.0): " TARGET_VERSION
+      ;;
+    8) TARGET_VERSION="$CURRENT_VERSION" ;;
+    *)
+      echo "Invalid choice." >&2
+      exit 1
+      ;;
+  esac
+
+  read -r -p "Commit version bump? [Y/n]: " answer_commit
+  if [[ "$answer_commit" == "n" || "$answer_commit" == "N" ]]; then
+    DO_COMMIT="false"
+  else
+    DO_COMMIT="true"
+  fi
+
+  read -r -p "Create git tag? [Y/n]: " answer_tag
+  if [[ "$answer_tag" == "n" || "$answer_tag" == "N" ]]; then
+    DO_TAG="false"
+  else
+    DO_TAG="true"
+  fi
+
+  read -r -p "Push commit/tag? [Y/n]: " answer_push
+  if [[ "$answer_push" == "n" || "$answer_push" == "N" ]]; then
+    DO_PUSH="false"
+  else
+    DO_PUSH="true"
+  fi
+
+  read -r -p "Build release artifacts? [Y/n]: " answer_build
+  if [[ "$answer_build" == "n" || "$answer_build" == "N" ]]; then
+    DO_BUILD="false"
+  else
+    DO_BUILD="true"
+  fi
+
+  if [[ "$DO_BUILD" == "true" ]]; then
+    echo "Upload mode:"
+    echo "  1) none"
+    echo "  2) upload (existing tag)"
+    echo "  3) create (new release)"
+    read -r -p "Choice [1-3]: " upload_choice
+    case "$upload_choice" in
+      1|"") UPLOAD_MODE="none" ;;
+      2) UPLOAD_MODE="upload" ;;
+      3) UPLOAD_MODE="create" ;;
+      *)
+        echo "Invalid upload choice." >&2
+        exit 1
+        ;;
+    esac
+  else
+    UPLOAD_MODE="none"
+  fi
 fi
 
 if [[ -z "$TARGET_VERSION" ]]; then
