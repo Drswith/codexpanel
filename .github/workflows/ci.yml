@@ -49,6 +49,7 @@ jobs:
             -configuration Debug \
             -destination "$DESTINATION" \
             -derivedDataPath "$DERIVED_DATA" \
+            -parallel-testing-enabled NO \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             ONLY_ACTIVE_ARCH=YES \
