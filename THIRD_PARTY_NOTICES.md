@@ -1,6 +1,17 @@
 # Third-Party Notices
 
-This project includes ideas and adapted implementation from the following MIT-licensed projects:
+codexpanel
+Copyright 2026 codexpanel contributors
+
+This repository is a fork of lizhelang/codexpanel, which is derived from
+xmasdong/codexpanel. The upstream project code is distributed under the MIT
+License, and the preserved MIT license text is provided in LICENSE.MIT.
+
+Unless otherwise noted, new code, documentation, and later modifications in
+this fork are distributed under the Apache License, Version 2.0. See LICENSE.
+
+This project includes ideas and adapted implementation from the following
+MIT-licensed projects:
 
 - [xmasdong/codexbar](https://github.com/xmasdong/codexbar)
 - [steipete/CodexBar](https://github.com/steipete/CodexBar)
