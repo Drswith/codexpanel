@@ -1,8 +1,8 @@
-# codex-bar-helper
+# codexpanel
 
 Keep Codex Desktop context and session history in one shared `~/.codex` pool while switching accounts or providers.
 
-`codex-bar-helper` is a macOS menu bar utility for Codex Desktop users. It is not trying to replace Codex. It narrows in on the part of the workflow where account or provider switching tends to fragment context and session continuity.
+`codexpanel` is a macOS menu bar utility for Codex Desktop users. It is not trying to replace Codex. It narrows in on the part of the workflow where account or provider switching tends to fragment context and session continuity.
 
 > Switching account or provider should not mean splitting your original Codex session pool into multiple homes.
 
@@ -22,7 +22,7 @@ If you switch often between official OpenAI accounts, relay backends, or OpenAI-
 - session files still exist on disk, but history feels fragmented after switching
 - manually editing config files is tedious and error-prone
 
-`codex-bar-helper` is meant to make that switching workflow feel like one continuous Codex workspace instead of several loosely related homes.
+`codexpanel` is meant to make that switching workflow feel like one continuous Codex workspace instead of several loosely related homes.
 
 ## Screenshots
 
@@ -33,7 +33,7 @@ These screenshots reflect the current product UI used by the README. The descrip
 The main menu surfaces the current mode, model, daily and 30-day cost summaries, account availability, and the timing signals that actually determine when an exhausted OpenAI account becomes usable again.
 
 <p align="center">
-  <img src="./docs/assets/readme-openai-accounts-view.png" alt="codex-bar-helper OpenAI accounts view" width="652" />
+  <img src="./docs/assets/readme-openai-accounts-view.png" alt="codexpanel OpenAI accounts view" width="652" />
 </p>
 
 ### Provider Management View
@@ -41,7 +41,7 @@ The main menu surfaces the current mode, model, daily and 30-day cost summaries,
 The provider section expands inline, so you can manage multiple OpenAI-compatible backends, multiple API-key accounts per backend, and the active default target without leaving the menu bar workflow.
 
 <p align="center">
-  <img src="./docs/assets/readme-provider-management-view.png" alt="codex-bar-helper providers view" width="652" />
+  <img src="./docs/assets/readme-provider-management-view.png" alt="codexpanel providers view" width="652" />
 </p>
 
 ### Settings Window
@@ -49,7 +49,7 @@ The provider section expands inline, so you can manage multiple OpenAI-compatibl
 The settings window consolidates account mode, ordering rules, manual activation behavior, preferred Codex Desktop path, and update-related controls into one dedicated surface.
 
 <p align="center">
-  <img src="./docs/assets/readme-settings-window.png" alt="codex-bar-helper settings window" width="1120" />
+  <img src="./docs/assets/readme-settings-window.png" alt="codexpanel settings window" width="1120" />
 </p>
 
 ## One Shared `~/.codex` Session Pool
@@ -60,7 +60,7 @@ Many multi-account workflows isolate each account by creating a separate `CODEX_
 - switching can feel like your previous context disappeared
 - finding the right session becomes harder
 
-`codex-bar-helper` takes the opposite approach:
+`codexpanel` takes the opposite approach:
 
 - keep a single `~/.codex`
 - preserve `~/.codex/sessions` and `~/.codex/archived_sessions` as one shared history pool
@@ -104,7 +104,7 @@ Fixed clients now scan the GitHub Releases list at runtime and choose the **firs
 The current boundary is intentionally narrow:
 
 - the stable feed is still in **guided download / install** mode
-- when a newer version exists, codex-bar-helper shows it in the menu/status UI so you can continue with the matching installer asset
+- when a newer version exists, codexpanel shows it in the menu/status UI so you can continue with the matching installer asset
 - runtime checks skip `draft`, `prerelease`, and any release that does not ship installable `dmg` or `zip` assets
 - the current build does **not** pretend that automatic app replacement and restart are already available
 - `release-feed/stable.json` is now only a one-time compatibility bridge for `1.1.8 -> 1.1.9`; it is no longer the runtime source of truth for fixed clients
@@ -116,7 +116,7 @@ See also:
 
 ## Who This Is For
 
-`codex-bar-helper` is useful if:
+`codexpanel` is useful if:
 
 - you use both official OpenAI accounts and third-party OpenAI-compatible providers
 - you keep multiple API keys under the same provider
@@ -126,19 +126,19 @@ See also:
 ## Star History
 
 <p align="center">
-  <a href="https://star-history.com/#Drswith/codex-bar-helper&Date">
+  <a href="https://star-history.com/#Drswith/codexpanel&Date">
     <picture>
       <source
         media="(prefers-color-scheme: dark)"
-        srcset="https://api.star-history.com/svg?repos=Drswith/codex-bar-helper&type=Date&theme=dark"
+        srcset="https://api.star-history.com/svg?repos=Drswith/codexpanel&type=Date&theme=dark"
       />
       <source
         media="(prefers-color-scheme: light)"
-        srcset="https://api.star-history.com/svg?repos=Drswith/codex-bar-helper&type=Date"
+        srcset="https://api.star-history.com/svg?repos=Drswith/codexpanel&type=Date"
       />
       <img
-        alt="codex-bar-helper Star History Chart"
-        src="https://api.star-history.com/svg?repos=Drswith/codex-bar-helper&type=Date"
+        alt="codexpanel Star History Chart"
+        src="https://api.star-history.com/svg?repos=Drswith/codexpanel&type=Date"
       />
     </picture>
   </a>
@@ -150,8 +150,8 @@ OpenAI login currently uses a browser-based authorization flow with localhost ca
 
 1. Click the login button
 2. Finish authorization in the browser
-3. When the browser reaches `http://localhost:1455/auth/callback?...`, codex-bar-helper captures the callback automatically
-4. codex-bar-helper completes token exchange and imports the account
+3. When the browser reaches `http://localhost:1455/auth/callback?...`, codexpanel captures the callback automatically
+4. codexpanel completes token exchange and imports the account
 
 If automatic capture fails, you can still paste the full callback URL or the raw `code` back into the window manually.
 
@@ -187,15 +187,15 @@ This repository does not bundle any private provider, API key, or personal accou
 ## Build Locally
 
 ```sh
-git clone https://github.com/Drswith/codex-bar-helper.git
-cd codex-bar-helper
-open codexbar.xcodeproj
+git clone https://github.com/Drswith/codexpanel.git
+cd codexpanel
+open codexpanel.xcodeproj
 ```
 
 Then:
 
 1. Select your signing team in Xcode
-2. Build and run the `codexbar` target
+2. Build and run the `codexpanel` target
 
 ## Acknowledgements
 

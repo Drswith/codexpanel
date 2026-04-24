@@ -4,7 +4,7 @@ Date: 2026-04-02
 
 ## Summary
 
-This document defines the next-generation Codex menu bar app built on top of the current `xmasdong/codexbar` codebase.
+This document defines the next-generation Codex Panel menu bar app built on top of the current `xmasdong/codexbar` codebase.
 
 The goal is to keep the lightweight OpenAI account-switching UX from the current app while adding:
 
@@ -79,7 +79,7 @@ This design intentionally relies on Codex Desktop's existing history and `resume
 
 The app owns a single configuration file:
 
-- `~/.codexbar/config.json`
+- `~/.codexpanel/config.json`
 
 This file stores:
 
@@ -91,8 +91,8 @@ This file stores:
 
 Derived files managed by the app:
 
-- `~/.codexbar/cost-cache.json`
-- `~/.codexbar/switch-journal.jsonl`
+- `~/.codexpanel/cost-cache.json`
+- `~/.codexpanel/switch-journal.jsonl`
 
 ### Config schema
 
@@ -285,8 +285,8 @@ Also remove:
 
 Before every synchronization pass:
 
-- copy `~/.codex/config.toml` to `~/.codex/config.toml.bak-codexbar-last`
-- copy `~/.codex/auth.json` to `~/.codex/auth.json.bak-codexbar-last`
+- copy `~/.codex/config.toml` to `~/.codex/config.toml.bak-codexpanel-last`
+- copy `~/.codex/auth.json` to `~/.codex/auth.json.bak-codexpanel-last`
 
 Then replace files atomically.
 
@@ -299,7 +299,7 @@ Then replace files atomically.
 
 ## Migration From Existing `codexapi`
 
-Migration is one-time and imports existing state into `~/.codexbar/config.json`.
+Migration is one-time and imports existing state into `~/.codexpanel/config.json`.
 
 ### Files read during migration
 
@@ -353,7 +353,7 @@ If the current `base_url` does not match a known imported preset, migration crea
 
 After import:
 
-- write `~/.codexbar/config.json`
+- write `~/.codexpanel/config.json`
 - immediately run one synchronization pass back into `config.toml` and `auth.json`
 
 This eliminates ambiguous mixed-state configurations left by older tools.
@@ -430,7 +430,7 @@ Adapt the local cost scanner approach from `steipete/CodexBar`:
 - parse Codex JSONL session logs
 - extract token counts and model markers
 - compute rolling daily totals
-- store cached derived results in `~/.codexbar/cost-cache.json`
+- store cached derived results in `~/.codexpanel/cost-cache.json`
 
 ### Output
 
@@ -462,11 +462,11 @@ Custom providers do not attempt remote quota fetching in v1.
 
 ## Security
 
-- all secrets live in `~/.codexbar/config.json`
+- all secrets live in `~/.codexpanel/config.json`
 - file permissions must be `0600`
 - app logs must never print raw API keys, OAuth tokens, or cookie headers
 - UI should show only masked API keys
-- backup files under `~/.codex/*.bak-codexbar-last` must also retain secure permissions
+- backup files under `~/.codex/*.bak-codexpanel-last` must also retain secure permissions
 
 ## Risks
 
@@ -495,7 +495,7 @@ Older tools may leave partially conflicting `auth.json` and `config.toml` conten
 
 ### Phase 1: Configuration foundation
 
-- add `~/.codexbar/config.json` model and persistence layer
+- add `~/.codexpanel/config.json` model and persistence layer
 - add migration from existing `codexapi` files
 - add synchronization service for `config.toml` and `auth.json`
 

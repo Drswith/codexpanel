@@ -8,13 +8,13 @@
 
 # 受影响文件
 
-- `codexBar/Localization.swift`
-- `codexBar/Models/CodexBarConfig.swift`
-- `codexBar/Models/OpenAIAccountListLayout.swift`
-- `codexBar/Services/CodexSyncService.swift`
-- `codexBar/Services/OpenAIAccountGatewayService.swift`
-- `codexBar/Views/MenuBarView.swift`
-- `codexBarTests/CodexBarOpenAIAccountUsageModeTests.swift`
-- `codexBarTests/CodexSyncServiceTests.swift`
-- `codexBarTests/OpenAIAccountGatewayServiceTests.swift`
-- `codexBarTests/OpenAIAccountListLayoutTests.swift`
+- `codexPanel/Localization.swift`
+- `codexPanel/Models/CodexPanelConfig.swift`
+- `codexPanel/Models/OpenAIAccountListLayout.swift`
+- `codexPanel/Services/CodexSyncService.swift`
+- `codexPanel/Services/OpenAIAccountGatewayService.swift`
+- `codexPanel/Views/MenuBarView.swift`
+- `codexPanelTests/CodexPanelOpenAIAccountUsageModeTests.swift`
+- `codexPanelTests/CodexSyncServiceTests.swift`
+- `codexPanelTests/OpenAIAccountGatewayServiceTests.swift`
+- `codexPanelTests/OpenAIAccountListLayoutTests.swift`

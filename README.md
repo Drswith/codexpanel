@@ -1,8 +1,8 @@
-# codex-bar-helper
+# codexpanel
 
 让 Codex Desktop 在多账号 / 多 provider 切换时，继续共用同一个 `~/.codex` 历史池。
 
-`codex-bar-helper` 是一个面向 macOS 的菜单栏工具。它不重做 Codex，而是把“切账号、切 provider 时最容易把上下文和历史切散”的那一段工作收回来。
+`codexpanel` 是一个面向 macOS 的菜单栏工具。它不重做 Codex，而是把“切账号、切 provider 时最容易把上下文和历史切散”的那一段工作收回来。
 
 > 切账号 / 切 provider，不等于把 Codex 原本的 session 池拆成几份。
 
@@ -24,7 +24,7 @@
 - 历史 session 还在磁盘里，却因为切账号 / 切 provider 变得不连贯
 - 反复手改配置文件很烦，恢复现场也麻烦
 
-`codex-bar-helper` 解决的不是“再造一个 Codex”，而是把这条切换链路变成一个更稳、更快、更少丢上下文的菜单栏工作流。
+`codexpanel` 解决的不是“再造一个 Codex”，而是把这条切换链路变成一个更稳、更快、更少丢上下文的菜单栏工作流。
 
 ## 界面截图
 
@@ -35,7 +35,7 @@
 主菜单里直接看到当前模式、模型、当日与 30 天成本、账号可用量，以及 5 小时 / 7 天窗口里真正决定恢复可用性的时间信息。
 
 <p align="center">
-  <img src="./docs/assets/readme-openai-accounts-view.png" alt="codex-bar-helper OpenAI accounts view" width="652" />
+  <img src="./docs/assets/readme-openai-accounts-view.png" alt="codexpanel OpenAI accounts view" width="652" />
 </p>
 
 ### Provider 管理视图
@@ -43,7 +43,7 @@
 同一菜单里展开 provider 列表后，可以直接维护多套 OpenAI 兼容后端，并在每个 provider 下管理多组 API key、默认目标和当前激活状态。
 
 <p align="center">
-  <img src="./docs/assets/readme-provider-management-view.png" alt="codex-bar-helper providers view" width="652" />
+  <img src="./docs/assets/readme-provider-management-view.png" alt="codexpanel providers view" width="652" />
 </p>
 
 ### 设置页
@@ -51,7 +51,7 @@
 设置页把账户模式、排序方式、手动激活行为、Codex Desktop 路径和更新相关入口整合在一个独立窗口里，不需要再手改配置文件。
 
 <p align="center">
-  <img src="./docs/assets/readme-settings-window.png" alt="codex-bar-helper settings window" width="1120" />
+  <img src="./docs/assets/readme-settings-window.png" alt="codexpanel settings window" width="1120" />
 </p>
 
 ## 不拆 `~/.codex`，保留同一个会话池
@@ -62,7 +62,7 @@
 - 切换之后很容易觉得“上下文没了”
 - 需要在不同账号环境之间来回找 session
 
-`codex-bar-helper` 选的是另一条路：
+`codexpanel` 选的是另一条路：
 
 - 仍然只保留一个 `~/.codex`
 - 保留 `~/.codex/sessions` 和 `~/.codex/archived_sessions` 这一套共享历史池
@@ -112,7 +112,7 @@
 但要特别说明当前边界：
 
 - 当前稳定版本默认仍是 **guided download / install**
-- 这表示发现新版本后，codex-bar-helper 会在菜单和更新状态里显示可用版本，由你继续打开匹配安装包下载链接
+- 这表示发现新版本后，codexpanel 会在菜单和更新状态里显示可用版本，由你继续打开匹配安装包下载链接
 - 运行时会跳过 `draft`、`prerelease`、以及不带 `dmg/zip` 资产的 release
 - 当前版本**不会假装**已经支持自动替换旧 app 并自动重启
 - `release-feed/stable.json` 只保留这一次 `1.1.8 -> 1.1.9` 的兼容桥接，不再是修复后客户端的运行时真相源
@@ -124,7 +124,7 @@
 
 ## 适合哪些用户
 
-如果你符合下面这些情况，`codex-bar-helper` 会比较有用：
+如果你符合下面这些情况，`codexpanel` 会比较有用：
 
 - 你会同时使用 OpenAI 官方账号和第三方 OpenAI 兼容 provider
 - 你同一个 provider 下会维护多组 API key
@@ -134,19 +134,19 @@
 ## Star 历史
 
 <p align="center">
-  <a href="https://star-history.com/#Drswith/codex-bar-helper&Date">
+  <a href="https://star-history.com/#Drswith/codexpanel&Date">
     <picture>
       <source
         media="(prefers-color-scheme: dark)"
-        srcset="https://api.star-history.com/svg?repos=Drswith/codex-bar-helper&type=Date&theme=dark"
+        srcset="https://api.star-history.com/svg?repos=Drswith/codexpanel&type=Date&theme=dark"
       />
       <source
         media="(prefers-color-scheme: light)"
-        srcset="https://api.star-history.com/svg?repos=Drswith/codex-bar-helper&type=Date"
+        srcset="https://api.star-history.com/svg?repos=Drswith/codexpanel&type=Date"
       />
       <img
-        alt="codex-bar-helper Star History Chart"
-        src="https://api.star-history.com/svg?repos=Drswith/codex-bar-helper&type=Date"
+        alt="codexpanel Star History Chart"
+        src="https://api.star-history.com/svg?repos=Drswith/codexpanel&type=Date"
       />
     </picture>
   </a>
@@ -158,8 +158,8 @@
 
 1. 点击登录按钮
 2. 在浏览器里完成授权
-3. 当浏览器跳到 `http://localhost:1455/auth/callback?...` 时，codex-bar-helper 会自动捕获回调
-4. codex-bar-helper 直接完成 token 交换并导入账号
+3. 当浏览器跳到 `http://localhost:1455/auth/callback?...` 时，codexpanel 会自动捕获回调
+4. codexpanel 直接完成 token 交换并导入账号
 
 如果自动捕获失败，仍然可以把完整回调 URL 或单独的 `code` 手工粘贴回窗口。
 
@@ -197,15 +197,15 @@
 ## 本地构建
 
 ```sh
-git clone https://github.com/Drswith/codex-bar-helper.git
-cd codex-bar-helper
-open codexbar.xcodeproj
+git clone https://github.com/Drswith/codexpanel.git
+cd codexpanel
+open codexpanel.xcodeproj
 ```
 
 然后：
 
 1. 在 Xcode 里选择自己的签名团队
-2. 构建并运行 `codexbar` target
+2. 构建并运行 `codexpanel` target
 
 ## 致谢
 

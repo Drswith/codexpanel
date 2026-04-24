@@ -1,4 +1,4 @@
-# codexbar 更新检测与 bridge rollout 约定
+# codexpanel 更新检测与 bridge rollout 约定
 
 ## 当前运行时语义
 
