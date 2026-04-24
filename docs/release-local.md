@@ -8,23 +8,31 @@
 可直接使用仓库脚本：
 
 ```sh
-scripts/release_local.sh
+scripts/release_local.sh minor
 ```
 
 上传到已存在 release：
 
 ```sh
-scripts/release_local.sh --upload upload
+scripts/release_local.sh patch --upload upload
 ```
 
 创建 release 并上传：
 
 ```sh
-scripts/release_local.sh --upload create --notes "Release 1.0.1"
+scripts/release_local.sh beta --upload create --notes "Release 1.0.1-beta.0"
 ```
 
 默认会读取 `codexpanel.xcodeproj/project.pbxproj` 中的 `MARKETING_VERSION`。  
-如果需要临时覆盖显示版本，再显式传 `--version x.y.z`。
+如果需要临时覆盖目标版本，再显式传 `--version x.y.z`。
+
+## 脚本行为（参考 bumpp 习惯）
+
+- 支持版本递增：`major` / `minor` / `patch` / `beta` / `alpha` / `rc`
+- 支持显式指定：`--version 1.2.3`
+- 默认开启 git 操作：`commit + tag + push`
+- 可用 `--no-commit` / `--no-tag` / `--no-push` 关闭
+- 默认会打包构建；可用 `--no-build` 仅做版本与 git 操作
 
 ## 0. 前置准备
 
