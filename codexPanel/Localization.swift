@@ -156,8 +156,8 @@ enum L {
     }
     static var settingsUpdatesReissueLimitNote: String {
         zh
-            ? "如果你已安装首发 1.1.9，同版本重发不会自动显示为可升级；需要手工下载重发 build。"
-            : "If you already installed the first 1.1.9 build, a same-version reissue will not show up as an upgrade automatically; you must download the reissued build manually."
+            ? "如果你已安装某个版本的较早构建，同版本重发通常不会自动显示为可升级；需要手工下载重发 build。"
+            : "If you already installed an earlier build with the same version number, a same-version reissue will usually not show up as an upgrade automatically; you must download the reissued build manually."
     }
     static func settingsUpdatesUpToDate(_ version: String) -> String {
         zh ? "当前版本 \(version) 已与 GitHub 上的最新稳定版本一致。" : "The current version \(version) already matches the latest stable version on GitHub."

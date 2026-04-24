@@ -107,8 +107,8 @@ The current boundary is intentionally narrow:
 - when a newer version exists, codexpanel shows it in the menu/status UI so you can continue with the matching installer asset
 - runtime checks skip `draft`, `prerelease`, and any release that does not ship installable `dmg` or `zip` assets
 - the current build does **not** pretend that automatic app replacement and restart are already available
-- `release-feed/stable.json` is now only a one-time compatibility bridge for `1.1.8 -> 1.1.9`; it is no longer the runtime source of truth for fixed clients
-- if you already installed the **first 1.1.9 build**, a same-version reissue will not appear as an upgrade automatically; you must download the reissued build manually
+- `release-feed/stable.json` is kept only as a compatibility bridge for older clients; it is no longer the runtime source of truth for fixed clients
+- if you already installed an earlier build with the same version number, a same-version reissue will usually not appear as an upgrade automatically; you must download the reissued build manually
 
 See also:
 
