@@ -819,9 +819,9 @@ struct MenuBarView: View {
 
                 Button {
                     switch L.languageOverride {
-                    case nil: L.languageOverride = true
-                    case true: L.languageOverride = false
-                    case false: L.languageOverride = nil
+                    case .none: L.languageOverride = true
+                    case .some(true): L.languageOverride = false
+                    case .some(false): L.languageOverride = nil
                     }
                     languageToggle.toggle()
                 } label: {
