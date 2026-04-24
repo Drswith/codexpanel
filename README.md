@@ -115,12 +115,7 @@
 - 这表示发现新版本后，codexpanel 会在菜单和更新状态里显示可用版本，由你继续打开匹配安装包下载链接
 - 运行时会跳过 `draft`、`prerelease`、以及不带 `dmg/zip` 资产的 release
 - 当前版本**不会假装**已经支持自动替换旧 app 并自动重启
-- `release-feed/stable.json` 仅作为旧客户端兼容桥接保留，不再是修复后客户端的运行时真相源
 - 如果你已经安装了某个版本的较早构建，同版本重发通常不会自动显示为可升级；需要手工下载重发 build
-
-更新 bridge / rollout 约定见：
-
-- [docs/update-feed-rollout.md](./docs/update-feed-rollout.md)
 
 ## 适合哪些用户
 
@@ -206,6 +201,18 @@ open codexpanel.xcodeproj
 
 1. 在 Xcode 里选择自己的签名团队
 2. 构建并运行 `codexpanel` target
+
+## 发版方式（本地）
+
+本仓库已移除 GitHub Actions 自动发版逻辑，发布统一改为本地打包后手动上传 GitHub Release。
+
+- 本地构建双架构 `Release` 产物并合并 `universal` app
+- 本地生成 `zip` / `dmg` 与 `sha256`
+- 使用 `gh release upload` 或 `gh release create` 上传资产
+
+完整步骤见：
+
+- [docs/release-local.md](./docs/release-local.md)
 
 ## 致谢
 

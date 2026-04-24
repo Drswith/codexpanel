@@ -325,29 +325,6 @@ final class UpdateCoordinatorTests: CodexPanelTestCase {
         XCTAssertEqual(checkedVersion, "1.1.9")
     }
 
-    func testStableFeedUsesGuidedDownloadArtifacts() throws {
-        let rootURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let feedURL = rootURL.appendingPathComponent("release-feed/stable.json")
-        let data = try Data(contentsOf: feedURL)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        let feed = try decoder.decode(AppUpdateFeed.self, from: data)
-        let releaseVersion = feed.release.version
-
-        XCTAssertFalse(releaseVersion.isEmpty)
-        XCTAssertEqual(feed.release.deliveryMode, .guidedDownload)
-        XCTAssertTrue(feed.release.downloadPageURL.absoluteString.contains("/releases/tag/v\(releaseVersion)"))
-        XCTAssertEqual(feed.release.artifacts.count, 2)
-        XCTAssertTrue(feed.release.artifacts.allSatisfy { $0.sha256?.isEmpty == false })
-        XCTAssertTrue(feed.release.artifacts.allSatisfy {
-            $0.downloadURL.absoluteString.contains("/releases/download/v\(releaseVersion)/")
-        })
-        XCTAssertEqual(Set(feed.release.artifacts.map(\.format)), Set([.dmg, .zip]))
-    }
-
     func testBootstrapGateKeeps115InGuidedMode() {
         let evaluator = DefaultAppUpdateCapabilityEvaluator(
             signatureInspector: MockSignatureInspector(

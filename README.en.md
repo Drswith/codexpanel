@@ -103,16 +103,11 @@ Fixed clients now scan the GitHub Releases list at runtime and choose the **firs
 
 The current boundary is intentionally narrow:
 
-- the stable feed is still in **guided download / install** mode
+- the current strategy is still **guided download / install**
 - when a newer version exists, codexpanel shows it in the menu/status UI so you can continue with the matching installer asset
 - runtime checks skip `draft`, `prerelease`, and any release that does not ship installable `dmg` or `zip` assets
 - the current build does **not** pretend that automatic app replacement and restart are already available
-- `release-feed/stable.json` is kept only as a compatibility bridge for older clients; it is no longer the runtime source of truth for fixed clients
 - if you already installed an earlier build with the same version number, a same-version reissue will usually not appear as an upgrade automatically; you must download the reissued build manually
-
-See also:
-
-- [docs/update-feed-rollout.md](./docs/update-feed-rollout.md)
 
 ## Who This Is For
 
@@ -196,6 +191,19 @@ Then:
 
 1. Select your signing team in Xcode
 2. Build and run the `codexpanel` target
+
+## Release Process (Local Only)
+
+This repository no longer uses GitHub Actions for release automation.  
+Releases are now produced locally and uploaded to GitHub Releases manually.
+
+- build dual-arch `Release` artifacts and assemble a universal app
+- generate local `zip` / `dmg` and `sha256` files
+- upload assets via `gh release upload` or `gh release create`
+
+See:
+
+- [docs/release-local.md](./docs/release-local.md)
 
 ## Acknowledgements
 

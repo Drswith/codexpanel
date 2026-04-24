@@ -45,6 +45,8 @@ fastlane/test_output
 .ufoo/
 .playwright-cli/
 output/
+.release-tmp/
+*.xcresult
 
 # Sensitive
 *.p12
