@@ -4,7 +4,7 @@ Date: 2026-04-02
 
 ## Summary
 
-This document defines the next-generation Codex Panel menu bar app built on top of the current `xmasdong/codexbar` codebase.
+This document defines the next-generation Codex Panel menu bar app built on top of the current internal Codex Panel codebase.
 
 The goal is to keep the lightweight OpenAI account-switching UX from the current app while adding:
 
@@ -32,7 +32,7 @@ The app will not replace Codex Desktop's own history UI. Instead, it will preser
 
 ## Non-Goals
 
-- Do not support the full `steipete/CodexBar` provider matrix.
+- Do not support a broad multi-provider matrix beyond this project's scope.
 - Do not build a replacement for Codex Desktop's native session history or resume picker.
 - Do not split session storage by provider or account.
 - Do not switch `CODEX_HOME`.
@@ -425,7 +425,7 @@ History and amount tracking are local-only in v1 for custom providers.
 
 ### Strategy
 
-Adapt the local cost scanner approach from `steipete/CodexBar`:
+Use the existing local cost scanner approach already implemented in this project:
 
 - parse Codex JSONL session logs
 - extract token counts and model markers
@@ -520,11 +520,10 @@ Older tools may leave partially conflicting `auth.json` and `config.toml` conten
 
 ## Recommended Implementation Base
 
-Use the current `xmasdong/codexbar` repository as the implementation base.
+Use the current Codex Panel repository as the implementation base.
 
 Rationale:
 
 - its OpenAI account-switching UX is already close to the desired interaction model
-- only selected `steipete/CodexBar` concepts need to be transplanted
-- adopting the full `steipete` architecture would introduce substantially more scope than required
-
+- only selected concepts from prior explorations need to be transplanted
+- adopting a full external architecture would introduce substantially more scope than required

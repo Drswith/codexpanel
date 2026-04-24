@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(rsync -av --exclude='.git' --exclude='ref' ~/temp/codexbar/ /Users/drs/workspaces/personal/codex-bar-helper/)"
-    ]
-  }
-}

@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  codexPanel
 //
-//  Created by xmasdong on 2026/3/25.
+//  Created on 2026/3/25.
 //
 
 import SwiftUI

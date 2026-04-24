@@ -19,7 +19,7 @@ struct MenuHostLegacyCleanupResult: Equatable {
 final class MenuHostBootstrapService {
     static let shared = MenuHostBootstrapService()
 
-    nonisolated static let helperBundleIdentifier = "lzhl.codexAppBar.menuhost"
+    nonisolated static let helperBundleIdentifier = "com.codexpanel.menuhost"
 
     private let fileManager = FileManager.default
     private let menuHostRootURL: URL

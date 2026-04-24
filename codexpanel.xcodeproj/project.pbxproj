@@ -12,14 +12,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		C0C16B682F74282500A2A16F /* Exceptions for "codexPanel" folder in "codexBar" target */ = {
+		C0C16B682F74282500A2A16F /* Exceptions for "codexPanel" folder in "codexpanel" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = C0C16B452F7423BE00A2A16F /* codexPanel */;
 		};
-			C0C16B6D2F7428A100A2A16F /* Exceptions for "codexPanel" folder in "codexbarTests" target */ = {
+			C0C16B6D2F7428A100A2A16F /* Exceptions for "codexPanel" folder in "codexpanelTests" target */ = {
 				isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 				membershipExceptions = (
 					Info.plist,
@@ -34,8 +34,8 @@
 			C0C16B482F7423BE00A2A16F /* codexPanel */ = {
 				isa = PBXFileSystemSynchronizedRootGroup;
 				exceptions = (
-					C0C16B682F74282500A2A16F /* Exceptions for "codexPanel" folder in "codexBar" target */,
-					C0C16B6D2F7428A100A2A16F /* Exceptions for "codexPanel" folder in "codexbarTests" target */,
+					C0C16B682F74282500A2A16F /* Exceptions for "codexPanel" folder in "codexpanel" target */,
+					C0C16B6D2F7428A100A2A16F /* Exceptions for "codexPanel" folder in "codexpanelTests" target */,
 				);
 				path = codexPanel;
 				sourceTree = "<group>";

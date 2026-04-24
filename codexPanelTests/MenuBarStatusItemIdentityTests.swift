@@ -76,15 +76,8 @@ final class MenuBarStatusItemIdentityTests: XCTestCase {
         )
     }
 
-    func testLegacyNamedVisibilityMigratesIntoCurrentIdentity() {
-        self.userDefaults.set(false, forKey: "NSStatusItem VisibleCC lzhl.codexAppBar.menu-bar-status-item")
-
-        MenuBarStatusItemIdentity.repairVisibilityIfNeeded(userDefaults: self.userDefaults)
-
-        XCTAssertEqual(
-            self.userDefaults.object(forKey: "NSStatusItem VisibleCC com.codexpanel.menu-bar-status-item") as? Bool,
-            false
-        )
+    func testLegacyNamedVisibilityKeysAreEmpty() {
+        XCTAssertTrue(MenuBarStatusItemIdentity.legacyNamedVisibleKeys.isEmpty)
     }
 
     func testMenuBarStatusItemControllerResolvedVisibilityUsesCurrentNamedPreference() {

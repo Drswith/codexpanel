@@ -9,9 +9,7 @@ enum MenuBarStatusItemIdentity {
     static let statusItemBehavior: NSStatusItem.Behavior = [
         .removalAllowed,
     ]
-    static let legacyStatusItemAutosaveNames: [NSStatusItem.AutosaveName] = [
-        "lzhl.codexAppBar.menu-bar-status-item",
-    ]
+    static let legacyStatusItemAutosaveNames: [NSStatusItem.AutosaveName] = []
     static let legacyVisibilityPreferenceKeys = [
         "menuBarExtra.isInserted",
         "codexpanel.menu-bar-extra.is-inserted",
