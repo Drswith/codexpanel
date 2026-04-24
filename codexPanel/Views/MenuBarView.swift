@@ -478,6 +478,7 @@ struct MenuBarView: View {
     @State private var countdownTimerConnection: Cancellable?
     @State private var runningThreadTimerConnection: Cancellable?
     @State private var runningThreadRefreshController = CoalescedBackgroundRefreshController<OpenAIRunningThreadAttribution>()
+    @State private var usageBackfillTask: Task<Void, Never>?
 
     private let countdownTimer = Timer.publish(every: 10, on: .main, in: .common)
     private let runningThreadTimer = Timer.publish(
@@ -485,6 +486,7 @@ struct MenuBarView: View {
         on: .main,
         in: .common
     )
+    private let backgroundUsageBackfillStepInterval: TimeInterval = 4
     private static let currencyFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
@@ -1756,7 +1758,42 @@ struct MenuBarView: View {
 
     private func triggerRefreshOnOpenIfNeeded() {
         guard openRefreshGate.shouldTriggerRefresh(isRefreshing: isRefreshing) else { return }
-        Task { await refresh(force: true, announceResult: false) }
+        Task { await refreshOnOpen() }
+    }
+
+    private func refreshOnOpen() async {
+        now = Date()
+        store.refreshLocalCostSummary(
+            force: true,
+            minimumInterval: 0,
+            refreshSessionCache: true
+        )
+        refreshRunningThreadAttribution()
+
+        guard store.activeProvider?.kind == .openAIOAuth else { return }
+
+        let activeAccount = store.activeAccount()
+        if let activeAccount,
+           activeAccount.isSuspended == false,
+           activeAccount.tokenExpired == false {
+            isRefreshing = true
+            refreshingAccounts.insert(activeAccount.id)
+            defer {
+                refreshingAccounts.remove(activeAccount.id)
+                isRefreshing = false
+            }
+
+            let outcome = await WhamService.shared.refreshOne(account: activeAccount, store: store)
+            store.load()
+            now = Date()
+            refreshRunningThreadAttribution()
+            self.applyRefreshFeedback(
+                announceResult: false,
+                message: self.refreshFailureMessage(for: activeAccount, outcome: outcome)
+            )
+        }
+
+        self.scheduleBackgroundUsageBackfill(excluding: activeAccount?.id)
     }
 
     private func refresh(force: Bool = true, announceResult: Bool = false) async {
@@ -1817,6 +1854,46 @@ struct MenuBarView: View {
             announceResult: announceResult,
             message: self.refreshFailureMessage(for: account, outcome: outcome)
         )
+    }
+
+    private func scheduleBackgroundUsageBackfill(excluding accountID: String?) {
+        let maxAge = self.usageRefreshInterval
+        let now = Date()
+        let candidates = self.store.accounts
+            .filter { account in
+                account.id != accountID &&
+                account.isSuspended == false &&
+                account.tokenExpired == false &&
+                account.isUsageSnapshotStale(maxAge: maxAge, now: now)
+            }
+            .sorted { lhs, rhs in
+                (lhs.usageSnapshotAge(now: now) ?? .infinity) > (rhs.usageSnapshotAge(now: now) ?? .infinity)
+            }
+
+        guard candidates.isEmpty == false else { return }
+
+        self.usageBackfillTask?.cancel()
+        let stepSleep = UInt64(max(self.backgroundUsageBackfillStepInterval, 0) * 1_000_000_000)
+        self.usageBackfillTask = Task {
+            for (index, account) in candidates.enumerated() {
+                if Task.isCancelled { return }
+                if index > 0 && stepSleep > 0 {
+                    do {
+                        try await Task.sleep(nanoseconds: stepSleep)
+                    } catch {
+                        return
+                    }
+                }
+
+                _ = await WhamService.shared.refreshOne(account: account, store: self.store)
+                if Task.isCancelled { return }
+                await MainActor.run {
+                    self.store.load()
+                    self.now = Date()
+                    self.refreshRunningThreadAttribution()
+                }
+            }
+        }
     }
 
     private func reauthAccount(_: TokenAccount) {
