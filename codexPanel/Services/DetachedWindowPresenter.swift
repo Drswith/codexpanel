@@ -25,6 +25,13 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
 
     private var windows: [String: NSWindow] = [:]
 
+    func hoverPanelFrames() -> [CGRect] {
+        self.windows.values.compactMap { window in
+            guard window is HoverPanelWindow else { return nil }
+            return window.frame
+        }
+    }
+
     func show<Content: View>(
         id: String,
         title: String,
