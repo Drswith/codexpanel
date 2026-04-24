@@ -19,26 +19,88 @@ private enum MenuBarGlobalShortcut {
 }
 
 enum MenuBarPopoverSizing {
-    static let defaultHeight: CGFloat = 520
+    private static let legacyDefaultHeight: CGFloat = 520
     static let minimumHeight: CGFloat = 1
-    static let maximumHeight: CGFloat = 640
+    private static let legacyMaximumHeight: CGFloat = 640
     static let verticalMargin: CGFloat = 12
-    static let topContentInset: CGFloat = 10
-    static let bottomContentInset: CGFloat = 12
+    private static let legacyTopContentInset: CGFloat = 10
+    private static let legacyBottomContentInset: CGFloat = 12
+    private static let macOS15TopContentInset: CGFloat = 16
+    private static let macOS15BottomContentInset: CGFloat = 18
+
+    static var defaultHeight: CGFloat {
+        self.defaultHeight(for: ProcessInfo.processInfo.operatingSystemVersion)
+    }
+
+    static var maximumHeight: CGFloat {
+        self.maximumHeight(for: ProcessInfo.processInfo.operatingSystemVersion)
+    }
+
+    static var topContentInset: CGFloat {
+        self.contentInsets(for: ProcessInfo.processInfo.operatingSystemVersion).top
+    }
+
+    static var bottomContentInset: CGFloat {
+        self.contentInsets(for: ProcessInfo.processInfo.operatingSystemVersion).bottom
+    }
 
     static func clampedHeight(desiredHeight: CGFloat, availableHeight: CGFloat?) -> CGFloat {
-        let maxHeight = max(self.minimumHeight, availableHeight ?? self.maximumHeight)
+        self.clampedHeight(
+            desiredHeight: desiredHeight,
+            availableHeight: availableHeight,
+            version: ProcessInfo.processInfo.operatingSystemVersion
+        )
+    }
+
+    static func clampedHeight(
+        desiredHeight: CGFloat,
+        availableHeight: CGFloat?,
+        version: OperatingSystemVersion
+    ) -> CGFloat {
+        let maxHeight = max(self.minimumHeight, availableHeight ?? self.maximumHeight(for: version))
         return min(max(desiredHeight, self.minimumHeight), maxHeight)
     }
 
     static func initialSize(availableHeight: CGFloat?) -> NSSize {
+        self.initialSize(
+            availableHeight: availableHeight,
+            version: ProcessInfo.processInfo.operatingSystemVersion
+        )
+    }
+
+    static func initialSize(
+        availableHeight: CGFloat?,
+        version: OperatingSystemVersion
+    ) -> NSSize {
         NSSize(
             width: MenuBarStatusItemIdentity.popoverContentWidth,
             height: self.clampedHeight(
-                desiredHeight: self.defaultHeight,
-                availableHeight: availableHeight
+                desiredHeight: self.defaultHeight(for: version),
+                availableHeight: availableHeight,
+                version: version
             )
         )
+    }
+
+    static func contentInsets(for version: OperatingSystemVersion) -> (top: CGFloat, bottom: CGFloat) {
+        guard version.majorVersion >= 15 else {
+            return (self.legacyTopContentInset, self.legacyBottomContentInset)
+        }
+        // macOS 15 popover chrome leaves less visible breathing room near the top and bottom.
+        return (self.macOS15TopContentInset, self.macOS15BottomContentInset)
+    }
+
+    static func defaultHeight(for version: OperatingSystemVersion) -> CGFloat {
+        self.legacyDefaultHeight + self.additionalVerticalInset(for: version)
+    }
+
+    static func maximumHeight(for version: OperatingSystemVersion) -> CGFloat {
+        self.legacyMaximumHeight + self.additionalVerticalInset(for: version)
+    }
+
+    private static func additionalVerticalInset(for version: OperatingSystemVersion) -> CGFloat {
+        let insets = self.contentInsets(for: version)
+        return (insets.top - self.legacyTopContentInset) + (insets.bottom - self.legacyBottomContentInset)
     }
 }
 

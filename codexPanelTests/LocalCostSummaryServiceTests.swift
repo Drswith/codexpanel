@@ -733,9 +733,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
         XCTAssertEqual(summary.dailyEntries[0].costUSD, expectedCost, accuracy: 1e-12)
 
         let data = try Data(contentsOf: home.appendingPathComponent(".codexpanel/test-cost-event-ledger.json"))
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let persisted = try decoder.decode(PersistedLedger.self, from: data)
+        let persisted = try self.makePersistedLedgerDecoder().decode(PersistedLedger.self, from: data)
         XCTAssertEqual(
             persisted.sessions["spark-archived"]?.model,
             "gpt-5.3-codex-spark"
@@ -1124,5 +1122,21 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             atomically: true,
             encoding: .utf8
         )
+    }
+
+    private func makePersistedLedgerDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            guard let date = ISO8601Parsing.parse(value) else {
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Expected date string to be ISO8601-formatted."
+                )
+            }
+            return date
+        }
+        return decoder
     }
 }
