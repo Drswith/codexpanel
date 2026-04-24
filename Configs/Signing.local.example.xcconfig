@@ -1,0 +1,9 @@
+// Copy this file to Configs/Signing.local.xcconfig and fill in your local values.
+// This file stays out of git so personal signing details do not enter the repo.
+
+CODEXPANEL_DEVELOPMENT_TEAM = YOUR_TEAM_ID
+
+// Optional overrides:
+// CODEXPANEL_CODE_SIGN_STYLE = Manual
+// CODEXPANEL_CODE_SIGN_IDENTITY = Apple Development
+// CODEXPANEL_PROVISIONING_PROFILE_SPECIFIER = Your Provisioning Profile

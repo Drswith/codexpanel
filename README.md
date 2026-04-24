@@ -194,12 +194,13 @@
 ```sh
 git clone https://github.com/Drswith/codexpanel.git
 cd codexpanel
+cp Configs/Signing.local.example.xcconfig Configs/Signing.local.xcconfig
 open codexpanel.xcodeproj
 ```
 
 然后：
 
-1. 在 Xcode 里选择自己的签名团队
+1. 编辑 `Configs/Signing.local.xcconfig`，填入自己的 `CODEXPANEL_DEVELOPMENT_TEAM`
 2. 构建并运行 `codexpanel` target
 
 ## 发版方式（本地）

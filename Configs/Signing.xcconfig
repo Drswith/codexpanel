@@ -1,0 +1,9 @@
+// Shared signing bridge for the Xcode project.
+// Keep personal Team IDs and signing identities in Signing.local.xcconfig.
+
+CODEXPANEL_CODE_SIGN_STYLE = Automatic
+CODEXPANEL_DEVELOPMENT_TEAM =
+CODEXPANEL_CODE_SIGN_IDENTITY =
+CODEXPANEL_PROVISIONING_PROFILE_SPECIFIER =
+
+#include? "Signing.local.xcconfig"

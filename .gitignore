@@ -52,3 +52,4 @@ output/
 *.p12
 *.mobileprovision
 *.provisionprofile
+Configs/Signing.local.xcconfig
