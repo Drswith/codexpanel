@@ -18,6 +18,19 @@ private enum MenuBarGlobalShortcut {
     static let identifier: UInt32 = 1
 }
 
+enum MenuBarPopoverClosePolicy {
+    private static let protectedFrameHitInset: CGFloat = 2
+
+    static func shouldClosePopover(
+        mouseLocation: CGPoint,
+        protectedWindowFrames: [CGRect]
+    ) -> Bool {
+        protectedWindowFrames
+            .map { $0.insetBy(dx: -self.protectedFrameHitInset, dy: -self.protectedFrameHitInset) }
+            .allSatisfy { $0.contains(mouseLocation) == false }
+    }
+}
+
 enum MenuBarPopoverSizing {
     private static let legacyDefaultHeight: CGFloat = 520
     static let minimumHeight: CGFloat = 1
@@ -198,6 +211,7 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private var statusItem: NSStatusItem?
     private var latestMeasuredContentHeight: CGFloat?
+    private var allowsProgrammaticPopoverClose = false
     private var cancellables: Set<AnyCancellable> = []
     private lazy var hotKeyController = StatusItemHotKeyController { [weak self] in
         self?.togglePopoverFromKeyboardShortcut()
@@ -401,6 +415,8 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
 
     private func closePopover(_ sender: AnyObject? = nil) {
         guard self.popover.isShown else { return }
+        self.allowsProgrammaticPopoverClose = true
+        defer { self.allowsProgrammaticPopoverClose = false }
         self.popover.performClose(sender)
     }
 
@@ -458,7 +474,41 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
         NotificationCenter.default.post(name: .codexpanelStatusItemMenuWillOpen, object: self)
     }
 
+    func popoverShouldClose(_ popover: NSPopover) -> Bool {
+        if self.allowsProgrammaticPopoverClose {
+            AppLifecycleDiagnostics.shared.recordEvent(
+                type: "status_item_menu_should_close",
+                fields: [
+                    "decision": "allow_programmatic",
+                    "hoverPanelCount": DetachedWindowPresenter.shared.hoverPanelFrames().count,
+                ]
+            )
+            return true
+        }
+
+        // Treat hover panels as part of the same transient surface as the menu popover.
+        let hoverPanelFrames = DetachedWindowPresenter.shared.hoverPanelFrames()
+        let shouldClose = MenuBarPopoverClosePolicy.shouldClosePopover(
+            mouseLocation: NSEvent.mouseLocation,
+            protectedWindowFrames: hoverPanelFrames
+        )
+        AppLifecycleDiagnostics.shared.recordEvent(
+            type: "status_item_menu_should_close",
+            fields: [
+                "decision": shouldClose ? "allow" : "deny",
+                "mouseX": NSEvent.mouseLocation.x,
+                "mouseY": NSEvent.mouseLocation.y,
+                "hoverPanelCount": hoverPanelFrames.count,
+            ]
+        )
+        return shouldClose
+    }
+
     func popoverDidClose(_ notification: Notification) {
+        AppLifecycleDiagnostics.shared.recordEvent(
+            type: "status_item_menu_closed",
+            fields: ["pid": getpid()]
+        )
         self.statusItem?.button?.highlight(false)
         NotificationCenter.default.post(name: .codexpanelStatusItemMenuDidClose, object: self)
     }

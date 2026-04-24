@@ -594,7 +594,16 @@ struct MenuBarView: View {
         .onReceive(runningThreadTimer) { _ in
             refreshRunningThreadAttribution()
         }
-        .onReceive(store.$localCostSummary) { _ in
+        .onReceive(store.$localCostSummary) { summary in
+            self.recordMenuDiagnostic(
+                type: "local_cost_summary_updated",
+                fields: [
+                    "updatedAt": summary.updatedAt as Any,
+                    "todayCostUSD": summary.todayCostUSD,
+                    "last30CostUSD": summary.last30DaysCostUSD,
+                    "costPanelPresented": self.isCostPanelPresented,
+                ]
+            )
             guard isCostPanelPresented else { return }
             showCostPanel()
         }
@@ -1270,6 +1279,10 @@ struct MenuBarView: View {
         }
     }
 
+    private func recordMenuDiagnostic(type: String, fields: [String: Any] = [:]) {
+        AppLifecycleDiagnostics.shared.recordEvent(type: type, fields: fields)
+    }
+
     private func resolveCostSummaryAnchor(_ view: NSView) {
         if self.costSummaryAnchorView !== view {
             self.costSummaryAnchorView = view
@@ -1280,6 +1293,14 @@ struct MenuBarView: View {
 
     private func setCostSummaryHover(_ hovering: Bool) {
         isCostSummaryHovered = hovering
+        self.recordMenuDiagnostic(
+            type: "cost_summary_hover_changed",
+            fields: [
+                "hovering": hovering,
+                "costPanelPresented": self.isCostPanelPresented,
+                "costPanelHovered": self.isCostPanelHovered,
+            ]
+        )
         if hovering {
             presentCostPanel()
         } else {
@@ -1289,6 +1310,14 @@ struct MenuBarView: View {
 
     private func setCostPanelHover(_ hovering: Bool) {
         isCostPanelHovered = hovering
+        self.recordMenuDiagnostic(
+            type: "cost_panel_hover_changed",
+            fields: [
+                "hovering": hovering,
+                "costPanelPresented": self.isCostPanelPresented,
+                "costSummaryHovered": self.isCostSummaryHovered,
+            ]
+        )
         if hovering {
             presentCostPanel()
         } else {
@@ -1300,14 +1329,29 @@ struct MenuBarView: View {
         pendingCostHide?.cancel()
         pendingCostHide = nil
         isCostPanelPresented = true
+        self.recordMenuDiagnostic(
+            type: "cost_panel_present_requested",
+            fields: [
+                "costSummaryHovered": self.isCostSummaryHovered,
+                "costPanelHovered": self.isCostPanelHovered,
+            ]
+        )
         showCostPanel()
     }
 
     private func scheduleCostPanelHideIfNeeded() {
         pendingCostHide?.cancel()
+        self.recordMenuDiagnostic(
+            type: "cost_panel_hide_scheduled",
+            fields: [
+                "costSummaryHovered": self.isCostSummaryHovered,
+                "costPanelHovered": self.isCostPanelHovered,
+            ]
+        )
         let work = DispatchWorkItem {
             if !isCostSummaryHovered && !isCostPanelHovered {
                 isCostPanelPresented = false
+                self.recordMenuDiagnostic(type: "cost_panel_closed_after_delay")
                 DetachedWindowPresenter.shared.close(id: costPanelID)
             }
         }
@@ -1338,6 +1382,17 @@ struct MenuBarView: View {
 
         var originY = anchorFrame.maxY - panelSize.height
         originY = min(max(originY, visibleFrame.minY + margin), visibleFrame.maxY - panelSize.height - margin)
+
+        self.recordMenuDiagnostic(
+            type: "cost_panel_presented",
+            fields: [
+                "originX": originX,
+                "originY": originY,
+                "width": panelSize.width,
+                "height": panelSize.height,
+                "hasHistory": !store.localCostSummary.dailyEntries.isEmpty,
+            ]
+        )
 
         DetachedWindowPresenter.shared.showHoverPanel(
             id: costPanelID,
@@ -1735,10 +1790,22 @@ struct MenuBarView: View {
         store.markActiveAccount()
         isProvidersExpanded = false
         refreshRunningThreadAttribution()
+        self.recordMenuDiagnostic(
+            type: "status_item_menu_opened_view_ready",
+            fields: ["activeProviderKind": store.activeProvider?.kind.rawValue as Any]
+        )
         triggerRefreshOnOpenIfNeeded()
     }
 
     private func handleMenuPresentationClosed() {
+        self.recordMenuDiagnostic(
+            type: "status_item_menu_view_closed",
+            fields: [
+                "costPanelPresented": self.isCostPanelPresented,
+                "costSummaryHovered": self.isCostSummaryHovered,
+                "costPanelHovered": self.isCostPanelHovered,
+            ]
+        )
         runningThreadRefreshController.reset()
         countdownTimerConnection?.cancel()
         countdownTimerConnection = nil
@@ -1757,11 +1824,23 @@ struct MenuBarView: View {
     }
 
     private func triggerRefreshOnOpenIfNeeded() {
-        guard openRefreshGate.shouldTriggerRefresh(isRefreshing: isRefreshing) else { return }
+        let shouldTrigger = openRefreshGate.shouldTriggerRefresh(isRefreshing: isRefreshing)
+        self.recordMenuDiagnostic(
+            type: "refresh_on_open_gate_evaluated",
+            fields: [
+                "shouldTrigger": shouldTrigger,
+                "isRefreshing": isRefreshing,
+            ]
+        )
+        guard shouldTrigger else { return }
         Task { await refreshOnOpen() }
     }
 
     private func refreshOnOpen() async {
+        self.recordMenuDiagnostic(
+            type: "refresh_on_open_started",
+            fields: ["activeProviderKind": store.activeProvider?.kind.rawValue as Any]
+        )
         now = Date()
         store.refreshLocalCostSummary(
             force: true,
@@ -1791,9 +1870,17 @@ struct MenuBarView: View {
                 announceResult: false,
                 message: self.refreshFailureMessage(for: activeAccount, outcome: outcome)
             )
+            self.recordMenuDiagnostic(
+                type: "refresh_on_open_active_account_finished",
+                fields: [
+                    "accountID": activeAccount.id,
+                    "outcome": String(describing: outcome),
+                ]
+            )
         }
 
         self.scheduleBackgroundUsageBackfill(excluding: activeAccount?.id)
+        self.recordMenuDiagnostic(type: "refresh_on_open_finished")
     }
 
     private func refresh(force: Bool = true, announceResult: Bool = false) async {
