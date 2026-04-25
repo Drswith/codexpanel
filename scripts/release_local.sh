@@ -58,6 +58,111 @@ require_cmd() {
   fi
 }
 
+prepare_dmg_staging_dir() {
+  local app_path="$1"
+  local staging_dir="$2"
+  local app_name="$3"
+  local background_script="$4"
+  local background_dir="$staging_dir/.background"
+  local background_path="$background_dir/background.png"
+
+  rm -rf "$staging_dir"
+  mkdir -p "$staging_dir" "$background_dir"
+  cp -R "$app_path" "$staging_dir/$app_name"
+  ln -s /Applications "$staging_dir/Applications"
+
+  swift "$background_script" "$background_path" "$app_name"
+}
+
+create_plain_dmg() {
+  local staging_dir="$1"
+  local output_path="$2"
+  local volume_name="$3"
+
+  hdiutil create \
+    -volname "$volume_name" \
+    -srcfolder "$staging_dir" \
+    -ov \
+    -format UDZO \
+    "$output_path"
+}
+
+create_installer_dmg() {
+  local staging_dir="$1"
+  local output_path="$2"
+  local volume_name="$3"
+  local app_name="$4"
+  local applescript_path="$5"
+  local temp_dmg="$6"
+  local attach_output=""
+  local attached_device=""
+  local attached_mount_point=""
+  local mounted_volume_name=""
+  local customize_failed="false"
+
+  rm -f "$temp_dmg" "$output_path"
+
+  hdiutil create \
+    -volname "$volume_name" \
+    -srcfolder "$staging_dir" \
+    -ov \
+    -format UDRW \
+    "$temp_dmg"
+
+  attach_output="$(
+    hdiutil attach \
+      -readwrite \
+      -noverify \
+      -noautoopen \
+      "$temp_dmg"
+  )"
+
+  attached_device="$(
+    printf '%s\n' "$attach_output" | awk -F '\t' '/^\/dev\/disk/ { print $1; exit }'
+  )"
+  attached_mount_point="$(
+    printf '%s\n' "$attach_output" | awk -F '\t' '/^\/dev\/disk/ && $NF ~ /^\/Volumes\// { mount=$NF } END { print mount }'
+  )"
+  mounted_volume_name="$(basename "$attached_mount_point")"
+
+  if [[ -z "$attached_device" || -z "$attached_mount_point" || -z "$mounted_volume_name" ]]; then
+    echo "Unable to determine mounted DMG device or mount point." >&2
+    rm -f "$temp_dmg"
+    exit 1
+  fi
+
+  if ! osascript "$applescript_path" "$mounted_volume_name" "$app_name"; then
+    customize_failed="true"
+    echo "Warning: Finder 布局定制失败，将回退到普通 DMG。" >&2
+  fi
+
+  sync
+
+  if ! hdiutil detach "$attached_device" >/dev/null 2>&1; then
+    sleep 2
+    if [[ -e "$attached_mount_point" ]]; then
+      hdiutil detach "$attached_mount_point" -force >/dev/null 2>&1 || true
+    else
+      hdiutil detach "$attached_device" -force >/dev/null 2>&1 || true
+    fi
+  fi
+
+  if [[ "$customize_failed" == "true" ]]; then
+    rm -f "$temp_dmg"
+    create_plain_dmg "$staging_dir" "$output_path" "$volume_name"
+    return
+  fi
+
+  hdiutil convert \
+    "$temp_dmg" \
+    -ov \
+    -format UDZO \
+    -imagekey zlib-level=9 \
+    -o "$output_path"
+
+  rm -f "$temp_dmg"
+}
+
 is_valid_semver() {
   local v="$1"
   [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
@@ -506,6 +611,7 @@ if [[ "$DO_BUILD" == "true" ]]; then
   require_cmd ditto
   require_cmd hdiutil
   require_cmd shasum
+  require_cmd swift
 fi
 if [[ "$DO_PUSH" == "true" || "$DO_TAG" == "true" || "$DO_COMMIT" == "true" || "$UPLOAD_MODE" != "none" ]]; then
   require_cmd git
@@ -587,6 +693,10 @@ DIST_DIR="$WORK_DIR/dist"
 STAGING_DIR="$WORK_DIR/staging"
 ZIP_NAME="${APP_BASENAME}-${TARGET_VERSION}-macOS.zip"
 DMG_NAME="${APP_BASENAME}-${TARGET_VERSION}-macOS.dmg"
+DMG_RW_NAME="${APP_BASENAME}-${TARGET_VERSION}-macOS-temp.dmg"
+DMG_VOLUME_NAME="codexpanel"
+DMG_BACKGROUND_SCRIPT="$(pwd)/scripts/generate_dmg_background.swift"
+DMG_LAYOUT_SCRIPT="$(pwd)/scripts/customize_dmg_layout.applescript"
 
 echo "==> Preparing workspace"
 rm -rf "$WORK_DIR"
@@ -654,13 +764,28 @@ done
 
 echo "==> Packaging artifacts"
 ditto -c -k --sequesterRsrc --keepParent "$UNIVERSAL_APP" "$DIST_DIR/$ZIP_NAME"
-cp -R "$UNIVERSAL_APP" "$STAGING_DIR/$APP_NAME"
-hdiutil create \
-  -volname "codexpanel" \
-  -srcfolder "$STAGING_DIR" \
-  -ov \
-  -format UDZO \
-  "$DIST_DIR/$DMG_NAME"
+prepare_dmg_staging_dir \
+  "$UNIVERSAL_APP" \
+  "$STAGING_DIR" \
+  "$APP_NAME" \
+  "$DMG_BACKGROUND_SCRIPT"
+
+if [[ "$FORCE_HEADLESS" == "true" ]]; then
+  echo "==> Headless 模式：生成带 Applications 快捷方式的普通 DMG"
+  create_plain_dmg \
+    "$STAGING_DIR" \
+    "$DIST_DIR/$DMG_NAME" \
+    "$DMG_VOLUME_NAME"
+else
+  echo "==> 生成带背景与拖拽引导的安装型 DMG"
+  create_installer_dmg \
+    "$STAGING_DIR" \
+    "$DIST_DIR/$DMG_NAME" \
+    "$DMG_VOLUME_NAME" \
+    "$APP_NAME" \
+    "$DMG_LAYOUT_SCRIPT" \
+    "$WORK_DIR/$DMG_RW_NAME"
+fi
 
 shasum -a 256 "$DIST_DIR/$ZIP_NAME" > "$DIST_DIR/$ZIP_NAME.sha256"
 shasum -a 256 "$DIST_DIR/$DMG_NAME" > "$DIST_DIR/$DMG_NAME.sha256"
