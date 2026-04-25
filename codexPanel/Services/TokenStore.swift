@@ -192,9 +192,12 @@ final class TokenStore: ObservableObject {
             }
             .store(in: &self.cancellables)
 
+        let injectedDebugMockData = self.injectDebugMockDataIfNeeded()
         self.publishState()
-        self.localCostSummary = self.loadCachedLocalCostSummary()
-        self.refreshLocalCostSummaryIfNeeded()
+        if injectedDebugMockData == false {
+            self.localCostSummary = self.loadCachedLocalCostSummary()
+            self.refreshLocalCostSummaryIfNeeded()
+        }
         self.refreshHistoricalModels()
         self.seedSwitchJournalIfNeeded()
         try? self.syncService.synchronize(config: self.config)
@@ -233,13 +236,16 @@ final class TokenStore: ObservableObject {
     func load() {
         if let loaded = try? self.configStore.loadOrMigrate() {
             self.config = loaded
+            let injectedDebugMockData = self.injectDebugMockDataIfNeeded()
             self.publishState()
-            self.localCostSummary = self.loadCachedLocalCostSummary()
+            self.localCostSummary = injectedDebugMockData ? self.localCostSummary : self.loadCachedLocalCostSummary()
             self.historicalModels = Self.mergedHistoricalModels(
                 preferredHistoricalModels: self.historicalModels,
                 fallbackHistoricalModels: Array(self.config.modelPricing.keys)
             )
-            self.refreshLocalCostSummaryIfNeeded()
+            if injectedDebugMockData == false {
+                self.refreshLocalCostSummaryIfNeeded()
+            }
             self.refreshHistoricalModels()
         }
     }
@@ -1179,6 +1185,191 @@ final class TokenStore: ObservableObject {
         summary.lifetimeTokens == 0 &&
         summary.dailyEntries.isEmpty
     }
+
+    #if DEBUG
+    private var shouldForceDebugMockData: Bool {
+        if UserDefaults.standard.bool(forKey: "codexpanel.debug.useMockData") {
+            return true
+        }
+
+        guard let rawValue = ProcessInfo.processInfo.environment["CODEXPANEL_DEBUG_MOCK_DATA"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased() else {
+            return false
+        }
+        return ["1", "true", "yes", "on"].contains(rawValue)
+    }
+
+    @discardableResult
+    private func injectDebugMockDataIfNeeded(now: Date = Date()) -> Bool {
+        let shouldInjectBecauseStoreIsEmpty = self.config.providers.isEmpty &&
+            self.isEffectivelyEmptyLocalCostSummary(self.localCostSummary)
+
+        guard self.shouldForceDebugMockData || shouldInjectBecauseStoreIsEmpty else {
+            return false
+        }
+
+        let primaryAccountID = "debug-openai-plus"
+        let secondaryAccountID = "debug-openai-team"
+        let oauthProviderID = "debug-openai-oauth"
+        let compatibleProviderID = "debug-compatible-provider"
+        let compatibleAccountID = "debug-compatible-account"
+        let openRouterProviderID = "debug-openrouter-provider"
+        let openRouterAccountID = "debug-openrouter-account"
+
+        let primaryAccount = CodexPanelProviderAccount(
+            id: primaryAccountID,
+            kind: .oauthTokens,
+            label: "phillipbrown2620@outlook.com",
+            email: "phillipbrown2620@outlook.com",
+            openAIAccountId: "org-debug-primary",
+            accessToken: "debug-access-token-primary",
+            refreshToken: "debug-refresh-token-primary",
+            idToken: "debug-id-token-primary",
+            expiresAt: now.addingTimeInterval(7 * 24 * 60 * 60),
+            oauthClientID: "debug-client-id",
+            tokenLastRefreshAt: now.addingTimeInterval(-90 * 60),
+            lastRefresh: now.addingTimeInterval(-90 * 60),
+            addedAt: now.addingTimeInterval(-14 * 24 * 60 * 60),
+            planType: "plus",
+            primaryUsedPercent: 89,
+            secondaryUsedPercent: 42,
+            primaryResetAt: now.addingTimeInterval(58 * 60),
+            secondaryResetAt: now.addingTimeInterval(2 * 24 * 60 * 60),
+            primaryLimitWindowSeconds: 5 * 60 * 60,
+            secondaryLimitWindowSeconds: 7 * 24 * 60 * 60,
+            lastChecked: now.addingTimeInterval(-50),
+            isSuspended: false,
+            tokenExpired: false,
+            organizationName: "OpenAI"
+        )
+
+        let secondaryAccount = CodexPanelProviderAccount(
+            id: secondaryAccountID,
+            kind: .oauthTokens,
+            label: "team-sandbox@example.com",
+            email: "team-sandbox@example.com",
+            openAIAccountId: "org-debug-team",
+            accessToken: "debug-access-token-team",
+            refreshToken: "debug-refresh-token-team",
+            idToken: "debug-id-token-team",
+            expiresAt: now.addingTimeInterval(9 * 24 * 60 * 60),
+            oauthClientID: "debug-client-id",
+            tokenLastRefreshAt: now.addingTimeInterval(-6 * 60 * 60),
+            lastRefresh: now.addingTimeInterval(-6 * 60 * 60),
+            addedAt: now.addingTimeInterval(-20 * 24 * 60 * 60),
+            planType: "team",
+            primaryUsedPercent: 23,
+            secondaryUsedPercent: 11,
+            primaryResetAt: now.addingTimeInterval(2 * 60 * 60 + 15 * 60),
+            secondaryResetAt: now.addingTimeInterval(3 * 24 * 60 * 60),
+            primaryLimitWindowSeconds: 5 * 60 * 60,
+            secondaryLimitWindowSeconds: 7 * 24 * 60 * 60,
+            lastChecked: now.addingTimeInterval(-32 * 60),
+            isSuspended: false,
+            tokenExpired: false,
+            organizationName: "Sandbox Team"
+        )
+
+        let compatibleProvider = CodexPanelProvider(
+            id: compatibleProviderID,
+            kind: .openAICompatible,
+            label: "Work Proxy",
+            baseURL: "https://api.internal.example.com/v1",
+            defaultModel: "gpt-4.1-mini",
+            activeAccountId: compatibleAccountID,
+            accounts: [
+                CodexPanelProviderAccount(
+                    id: compatibleAccountID,
+                    kind: .apiKey,
+                    label: "Work Key",
+                    apiKey: "sk-debug-compatible-1234567890",
+                    addedAt: now.addingTimeInterval(-10 * 24 * 60 * 60)
+                )
+            ]
+        )
+
+        let openRouterProvider = CodexPanelProvider(
+            id: openRouterProviderID,
+            kind: .openRouter,
+            label: "OpenRouter",
+            selectedModelID: "anthropic/claude-3.7-sonnet",
+            pinnedModelIDs: [
+                "anthropic/claude-3.7-sonnet",
+                "openai/gpt-4.1-mini"
+            ],
+            cachedModelCatalog: [
+                CodexPanelOpenRouterModel(id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet"),
+                CodexPanelOpenRouterModel(id: "openai/gpt-4.1-mini", name: "GPT-4.1 mini")
+            ],
+            modelCatalogFetchedAt: now.addingTimeInterval(-30 * 60),
+            activeAccountId: openRouterAccountID,
+            accounts: [
+                CodexPanelProviderAccount(
+                    id: openRouterAccountID,
+                    kind: .apiKey,
+                    label: "Router Key",
+                    apiKey: "sk-or-debug-0987654321",
+                    addedAt: now.addingTimeInterval(-8 * 24 * 60 * 60)
+                )
+            ]
+        )
+
+        self.config = CodexPanelConfig(
+            global: CodexPanelGlobalSettings(defaultModel: "gpt-5.4", reviewModel: "gpt-5.4", reasoningEffort: "high"),
+            active: CodexPanelActiveSelection(providerId: oauthProviderID, accountId: primaryAccountID),
+            modelPricing: [
+                "gpt-5.4": CodexPanelModelPricing(inputUSDPerToken: 0.00000125, cachedInputUSDPerToken: 0.000000125, outputUSDPerToken: 0.00001)
+            ],
+            openAI: CodexPanelOpenAISettings(
+                accountOrder: [primaryAccountID, secondaryAccountID],
+                accountUsageMode: .switchAccount,
+                switchModeSelection: CodexPanelActiveSelection(providerId: oauthProviderID, accountId: primaryAccountID),
+                accountOrderingMode: .manual,
+                manualActivationBehavior: .updateConfigOnly,
+                usageDisplayMode: .used
+            ),
+            providers: [
+                CodexPanelProvider(
+                    id: oauthProviderID,
+                    kind: .openAIOAuth,
+                    label: "OpenAI",
+                    defaultModel: "gpt-5.4",
+                    activeAccountId: primaryAccountID,
+                    accounts: [primaryAccount, secondaryAccount]
+                ),
+                compatibleProvider,
+                openRouterProvider
+            ]
+        )
+
+        let entries = (0..<14).map { offset in
+            let dayOffset = 13 - offset
+            let date = Calendar.current.date(byAdding: .day, value: -dayOffset, to: now) ?? now
+            let cost = [12.8, 18.4, 9.7, 21.3, 27.9, 15.6, 33.2, 19.4, 11.2, 26.8, 30.1, 17.9, 22.4, 29.6][offset]
+            let tokens = [3200000, 4100000, 2800000, 5200000, 6900000, 3600000, 8100000, 4700000, 3000000, 6200000, 7300000, 3900000, 5600000, 6800000][offset]
+            return DailyCostEntry(
+                id: "debug-day-\(offset)",
+                date: date,
+                costUSD: cost,
+                totalTokens: tokens
+            )
+        }
+
+        self.localCostSummary = LocalCostSummary(
+            todayCostUSD: 80.29,
+            todayTokens: 183_200_000,
+            last30DaysCostUSD: 1_270.80,
+            last30DaysTokens: 3_530_000_000,
+            lifetimeCostUSD: 8_942.61,
+            lifetimeTokens: 24_700_000_000,
+            dailyEntries: entries,
+            updatedAt: now
+        )
+
+        return true
+    }
+    #endif
 
     deinit {
         self.openRouterGatewayLeaseTimer?.invalidate()
