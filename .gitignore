@@ -13,6 +13,7 @@ dist/
 *.ipa
 *.dSYM.zip
 *.dSYM
+.derivedData
 
 # Swift Package Manager
 .build/
