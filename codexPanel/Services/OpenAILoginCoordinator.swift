@@ -66,7 +66,6 @@ final class OpenAILoginCoordinator {
     private let callbackServerFactory: (@escaping @MainActor (String) -> Void) -> any LocalhostOAuthCallbackServing
     private let openWindowAction: () -> Void
     private let closeWindowAction: () -> Void
-    private let openURLAction: (URL) -> Void
 
     private var callbackServer: (any LocalhostOAuthCallbackServing)?
 
@@ -74,8 +73,7 @@ final class OpenAILoginCoordinator {
         oauth: (any OpenAILoginOAuthManaging)? = nil,
         callbackServerFactory: ((@escaping @MainActor (String) -> Void) -> any LocalhostOAuthCallbackServing)? = nil,
         openWindowAction: (() -> Void)? = nil,
-        closeWindowAction: (() -> Void)? = nil,
-        openURLAction: ((URL) -> Void)? = nil
+        closeWindowAction: (() -> Void)? = nil
     ) {
         self.oauth = oauth ?? OAuthManager.shared
         self.callbackServerFactory = callbackServerFactory ?? {
@@ -83,7 +81,6 @@ final class OpenAILoginCoordinator {
         }
         self.openWindowAction = openWindowAction ?? Self.defaultOpenWindow
         self.closeWindowAction = closeWindowAction ?? Self.defaultCloseWindow
-        self.openURLAction = openURLAction ?? { NSWorkspace.shared.open($0) }
     }
 
     func start() {
@@ -118,9 +115,6 @@ final class OpenAILoginCoordinator {
 
         self.startCallbackServer()
         self.openWindowAction()
-        if let authURL = oauth.pendingAuthURL, let url = URL(string: authURL) {
-            self.openURLAction(url)
-        }
     }
 
     func cancel() {

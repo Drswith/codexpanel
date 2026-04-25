@@ -44,19 +44,17 @@ final class OpenAILoginCoordinatorTests: XCTestCase {
         }
     }
 
-    func testStartUsesInteractivePopupFlow() {
+    func testStartUsesInteractivePopupFlowWithoutAutoOpeningBrowser() {
         let oauth = OAuthManagerMock()
         oauth.pendingAuthURL = "https://auth.openai.com/oauth/authorize?client_id=test"
         let callbackServer = CallbackServerMock()
         var didOpenWindow = false
-        var openedURL: URL?
 
         let coordinator = OpenAILoginCoordinator(
             oauth: oauth,
             callbackServerFactory: { _ in callbackServer },
             openWindowAction: { didOpenWindow = true },
-            closeWindowAction: {},
-            openURLAction: { openedURL = $0 }
+            closeWindowAction: {}
         )
 
         coordinator.start()
@@ -64,7 +62,6 @@ final class OpenAILoginCoordinatorTests: XCTestCase {
         XCTAssertEqual(oauth.startCalls, [.init(openBrowser: false, activate: false)])
         XCTAssertEqual(callbackServer.startCallCount, 1)
         XCTAssertTrue(didOpenWindow)
-        XCTAssertEqual(openedURL?.absoluteString, oauth.pendingAuthURL)
     }
 
     func testCallbackServerFeedsCapturedURLBackIntoOAuthManager() {
@@ -80,8 +77,7 @@ final class OpenAILoginCoordinatorTests: XCTestCase {
                 return callbackServer
             },
             openWindowAction: {},
-            closeWindowAction: {},
-            openURLAction: { _ in }
+            closeWindowAction: {}
         )
 
         coordinator.start()
@@ -104,8 +100,7 @@ final class OpenAILoginCoordinatorTests: XCTestCase {
             oauth: oauth,
             callbackServerFactory: { _ in callbackServer },
             openWindowAction: {},
-            closeWindowAction: { didCloseWindow = true },
-            openURLAction: { _ in }
+            closeWindowAction: { didCloseWindow = true }
         )
 
         coordinator.start()
