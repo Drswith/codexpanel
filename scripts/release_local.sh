@@ -62,16 +62,20 @@ prepare_dmg_staging_dir() {
   local app_path="$1"
   local staging_dir="$2"
   local app_name="$3"
-  local background_script="$4"
-  local background_dir="$staging_dir/.background"
-  local background_path="$background_dir/background.png"
+  local include_background="$4"
+  local background_asset="$5"
 
   rm -rf "$staging_dir"
-  mkdir -p "$staging_dir" "$background_dir"
+  mkdir -p "$staging_dir"
   cp -R "$app_path" "$staging_dir/$app_name"
   ln -s /Applications "$staging_dir/Applications"
 
-  swift "$background_script" "$background_path" "$app_name"
+  if [[ "$include_background" == "true" ]]; then
+    local background_dir="$staging_dir/.background"
+    local background_path="$background_dir/background.png"
+    mkdir -p "$background_dir"
+    cp "$background_asset" "$background_path"
+  fi
 }
 
 create_plain_dmg() {
@@ -697,7 +701,7 @@ ZIP_NAME="${APP_BASENAME}-${TARGET_VERSION}-macOS.zip"
 DMG_NAME="${APP_BASENAME}-${TARGET_VERSION}-macOS.dmg"
 DMG_RW_NAME="${APP_BASENAME}-${TARGET_VERSION}-macOS-temp.dmg"
 DMG_VOLUME_NAME="codexpanel"
-DMG_BACKGROUND_SCRIPT="$(pwd)/scripts/generate_dmg_background.swift"
+DMG_BACKGROUND_ASSET="$(pwd)/scripts/assets/dmg-background.png"
 DMG_LAYOUT_SCRIPT="$(pwd)/scripts/customize_dmg_layout.applescript"
 
 echo "==> Preparing workspace"
@@ -770,7 +774,8 @@ prepare_dmg_staging_dir \
   "$UNIVERSAL_APP" \
   "$STAGING_DIR" \
   "$APP_NAME" \
-  "$DMG_BACKGROUND_SCRIPT"
+  "$([[ "$FORCE_HEADLESS" == "true" ]] && echo "false" || echo "true")" \
+  "$DMG_BACKGROUND_ASSET"
 
 if [[ "$FORCE_HEADLESS" == "true" ]]; then
   echo "==> Headless 模式：生成带 Applications 快捷方式的普通 DMG"
