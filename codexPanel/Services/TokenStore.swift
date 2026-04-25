@@ -1186,8 +1186,8 @@ final class TokenStore: ObservableObject {
         summary.dailyEntries.isEmpty
     }
 
-    #if DEBUG
     private var shouldForceDebugMockData: Bool {
+        #if DEBUG
         if UserDefaults.standard.bool(forKey: "codexpanel.debug.useMockData") {
             return true
         }
@@ -1198,10 +1198,14 @@ final class TokenStore: ObservableObject {
             return false
         }
         return ["1", "true", "yes", "on"].contains(rawValue)
+        #else
+        return false
+        #endif
     }
 
     @discardableResult
     private func injectDebugMockDataIfNeeded(now: Date = Date()) -> Bool {
+        #if DEBUG
         let shouldInjectBecauseStoreIsEmpty = self.config.providers.isEmpty &&
             self.isEffectivelyEmptyLocalCostSummary(self.localCostSummary)
 
@@ -1368,8 +1372,11 @@ final class TokenStore: ObservableObject {
         )
 
         return true
+        #else
+        _ = now
+        return false
+        #endif
     }
-    #endif
 
     deinit {
         self.openRouterGatewayLeaseTimer?.invalidate()
