@@ -61,15 +61,15 @@ struct AccountRowView: View {
                     .tint(.orange)
             } else if !account.isBanned {
                 Button(action: onRefresh) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 10))
-                        .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                        .animation(
-                            isRefreshing
-                                ? .linear(duration: 0.8).repeatForever(autoreverses: false)
-                                : .default,
-                            value: isRefreshing
-                        )
+                    if isRefreshing {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .scaleEffect(0.7)
+                            .frame(width: 10, height: 10)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10))
+                    }
                 }
                 .buttonStyle(.borderless)
                 .foregroundColor(isRefreshing ? .accentColor : .secondary)
@@ -83,9 +83,9 @@ struct AccountRowView: View {
                     ) {
                         onActivate(OpenAIAccountPresentation.primaryManualActivationTrigger)
                     }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.mini)
-                        .font(.system(size: 10, weight: .medium))
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.mini)
+                    .font(.system(size: 10, weight: .medium))
                 }
             }
         }
