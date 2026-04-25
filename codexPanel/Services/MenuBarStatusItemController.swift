@@ -59,6 +59,7 @@ enum MenuBarPopoverSizing {
     static let minimumHeight: CGFloat = 1
     private static let legacyMaximumHeight: CGFloat = 640
     private static let measuredContentWidthTolerance: CGFloat = 1
+    static let sectionHorizontalInset: CGFloat = 8
     static let verticalMargin: CGFloat = 12
     private static let legacyTopContentInset: CGFloat = 10
     private static let legacyBottomContentInset: CGFloat = 12
@@ -79,6 +80,10 @@ enum MenuBarPopoverSizing {
 
     static var bottomContentInset: CGFloat {
         self.contentInsets(for: ProcessInfo.processInfo.operatingSystemVersion).bottom
+    }
+
+    static var horizontalContentInset: CGFloat {
+        self.topContentInset
     }
 
     static func clampedHeight(desiredHeight: CGFloat, availableHeight: CGFloat?) -> CGFloat {

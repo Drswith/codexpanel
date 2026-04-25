@@ -90,7 +90,7 @@ struct CompatibleProviderRowView: View {
             }
         }
         .padding(.vertical, 5)
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isActiveProvider ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.05))

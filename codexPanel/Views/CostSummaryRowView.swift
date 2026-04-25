@@ -26,7 +26,7 @@ struct CostSummaryRowView: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 8)

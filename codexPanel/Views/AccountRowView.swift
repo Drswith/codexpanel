@@ -90,8 +90,7 @@ struct AccountRowView: View {
             }
         }
         .padding(.vertical, 5)
-        .padding(.leading, 16)   // indent under email header
-        .padding(.trailing, 8)
+        .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(rowBackgroundColor)

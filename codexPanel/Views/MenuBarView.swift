@@ -690,12 +690,13 @@ struct MenuBarView: View {
                 .foregroundColor(isRefreshing ? .accentColor : .secondary)
                 .disabled(isRefreshing)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
             .padding(.vertical, 8)
 
             if let activeProvider = store.activeProvider,
                let activeAccount = store.activeProviderAccount {
                 Divider()
+                    .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(self.activeProviderSummaryTitle(activeProvider: activeProvider, activeAccount: activeAccount))
@@ -713,16 +714,18 @@ struct MenuBarView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
                 .padding(.vertical, 8)
             }
 
             if let pendingAvailability = self.updateCoordinator.pendingAvailability {
                 Divider()
+                    .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
                 self.updateAvailableBanner(availability: pendingAvailability)
             }
 
             Divider()
+                .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
 
             if isCompletelyEmpty {
                 VStack(spacing: 8) {
@@ -766,6 +769,7 @@ struct MenuBarView: View {
 
             if let error = self.errorBanner?.message {
                 Divider()
+                    .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
                 HStack {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.yellow)
@@ -780,11 +784,12 @@ struct MenuBarView: View {
                     }
                     .buttonStyle(.borderless)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
                 .padding(.vertical, 6)
             }
 
             Divider()
+                .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
 
             HStack(spacing: 8) {
                 if let lastUpdate = store.accounts.compactMap({ $0.lastChecked }).max() {
@@ -865,10 +870,11 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.borderless)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
             .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MenuBarPopoverSizing.horizontalContentInset)
         .padding(.top, MenuBarPopoverSizing.topContentInset)
         .padding(.bottom, MenuBarPopoverSizing.bottomContentInset)
     }
@@ -895,7 +901,7 @@ struct MenuBarView: View {
             }
             .disabled(self.updateCoordinator.isChecking)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
         .padding(.vertical, 8)
     }
 
@@ -953,8 +959,7 @@ struct MenuBarView: View {
                 .accessibilityIdentifier("codexpanel.openai-mode-picker")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 4)
-            .padding(.trailing, 8)
+            .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
 
             if let manualSwitchBanner {
                 self.openAIStatusBanner(
@@ -984,7 +989,7 @@ struct MenuBarView: View {
                     .foregroundColor(runtimeRouteBanner.tone == .warning ? .orange : .secondary)
                     .help(L.aggregateRuntimeClearStaleStickyHint)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
             }
 
             if store.accounts.isEmpty {
@@ -995,7 +1000,7 @@ struct MenuBarView: View {
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
                 .padding(.vertical, 10)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
@@ -1043,8 +1048,7 @@ struct MenuBarView: View {
                             .foregroundColor(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, 4)
-                    .padding(.trailing, 8)
+                    .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -1173,7 +1177,7 @@ struct MenuBarView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, 4)
+        .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
     }
 
     private func openAIStatusBanner(
@@ -1220,7 +1224,7 @@ struct MenuBarView: View {
                 .foregroundColor(.secondary)
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
