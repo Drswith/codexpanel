@@ -356,8 +356,8 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = codexPanel/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Codex Panel";
-				INFOPLIST_KEY_CFBundleName = "Codex Panel";
+				INFOPLIST_KEY_CFBundleDisplayName = "Codex Panel DEV";
+				INFOPLIST_KEY_CFBundleName = "Codex Panel DEV";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";

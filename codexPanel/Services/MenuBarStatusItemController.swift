@@ -11,11 +11,34 @@ extension Notification.Name {
     static let codexpanelStatusItemMenuDidClose = Notification.Name("com.codexpanel.status-item-menu.did-close")
 }
 
-private enum MenuBarGlobalShortcut {
-    static let keyCode = UInt32(kVK_ANSI_B)
-    static let modifiers = UInt32(controlKey | optionKey | cmdKey)
+private struct MenuBarGlobalShortcut {
+    let keyCode: UInt32
+    let modifiers: UInt32
+    let identifier: UInt32
+
     static let signature: OSType = 0x43444252
-    static let identifier: UInt32 = 1
+
+    static let primary = Self(
+        keyCode: UInt32(kVK_ANSI_B),
+        modifiers: UInt32(controlKey | optionKey | cmdKey),
+        identifier: 1
+    )
+
+    #if DEBUG
+    static let debugAlternate = Self(
+        keyCode: UInt32(kVK_ANSI_D),
+        modifiers: UInt32(controlKey | optionKey | cmdKey),
+        identifier: 2
+    )
+    #endif
+
+    static var all: [Self] {
+        var shortcuts = [Self.primary]
+        #if DEBUG
+        shortcuts.append(.debugAlternate)
+        #endif
+        return shortcuts
+    }
 }
 
 enum MenuBarPopoverClosePolicy {
@@ -119,7 +142,7 @@ enum MenuBarPopoverSizing {
 
 private final class StatusItemHotKeyController {
     private let action: () -> Void
-    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyRefs: [EventHotKeyRef] = []
     private var eventHandler: EventHandlerRef?
 
     init(action: @escaping () -> Void) {
@@ -131,7 +154,7 @@ private final class StatusItemHotKeyController {
     }
 
     func start() {
-        guard self.hotKeyRef == nil else { return }
+        guard self.hotKeyRefs.isEmpty else { return }
 
         var eventType = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
@@ -154,7 +177,7 @@ private final class StatusItemHotKeyController {
                 )
                 guard status == noErr,
                       hotKeyID.signature == MenuBarGlobalShortcut.signature,
-                      hotKeyID.id == MenuBarGlobalShortcut.identifier else {
+                      MenuBarGlobalShortcut.all.contains(where: { $0.identifier == hotKeyID.id }) else {
                     return noErr
                 }
 
@@ -171,32 +194,40 @@ private final class StatusItemHotKeyController {
         )
         guard installStatus == noErr else { return }
 
-        let hotKeyID = EventHotKeyID(
-            signature: MenuBarGlobalShortcut.signature,
-            id: MenuBarGlobalShortcut.identifier
-        )
-        let registerStatus = RegisterEventHotKey(
-            MenuBarGlobalShortcut.keyCode,
-            MenuBarGlobalShortcut.modifiers,
-            hotKeyID,
-            GetApplicationEventTarget(),
-            0,
-            &self.hotKeyRef
-        )
-        if registerStatus != noErr {
+        for shortcut in MenuBarGlobalShortcut.all {
+            var hotKeyRef: EventHotKeyRef?
+            let hotKeyID = EventHotKeyID(
+                signature: MenuBarGlobalShortcut.signature,
+                id: shortcut.identifier
+            )
+            let registerStatus = RegisterEventHotKey(
+                shortcut.keyCode,
+                shortcut.modifiers,
+                hotKeyID,
+                GetApplicationEventTarget(),
+                0,
+                &hotKeyRef
+            )
+            guard registerStatus == noErr, let hotKeyRef else {
+                self.stop()
+                return
+            }
+            self.hotKeyRefs.append(hotKeyRef)
+        }
+
+        if self.hotKeyRefs.isEmpty {
             if let eventHandler = self.eventHandler {
                 RemoveEventHandler(eventHandler)
                 self.eventHandler = nil
             }
-            self.hotKeyRef = nil
         }
     }
 
     func stop() {
-        if let hotKeyRef = self.hotKeyRef {
+        for hotKeyRef in self.hotKeyRefs {
             UnregisterEventHotKey(hotKeyRef)
-            self.hotKeyRef = nil
         }
+        self.hotKeyRefs.removeAll()
         if let eventHandler = self.eventHandler {
             RemoveEventHandler(eventHandler)
             self.eventHandler = nil
