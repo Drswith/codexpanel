@@ -691,7 +691,7 @@ struct MenuBarView: View {
                 .disabled(isRefreshing)
             }
             .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-            .padding(.vertical, 8)
+            .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
 
             if let activeProvider = store.activeProvider,
                let activeAccount = store.activeProviderAccount {
@@ -715,7 +715,7 @@ struct MenuBarView: View {
                         .truncationMode(.middle)
                 }
                 .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-                .padding(.vertical, 8)
+                .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
             }
 
             if let pendingAvailability = self.updateCoordinator.pendingAvailability {
@@ -763,8 +763,8 @@ struct MenuBarView: View {
                     providersSection
 
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
+                .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
+                .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
             }
 
             if let error = self.errorBanner?.message {
@@ -785,7 +785,7 @@ struct MenuBarView: View {
                     .buttonStyle(.borderless)
                 }
                 .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-                .padding(.vertical, 6)
+                .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
             }
 
             Divider()
@@ -871,7 +871,7 @@ struct MenuBarView: View {
                 .buttonStyle(.borderless)
             }
             .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-            .padding(.vertical, 8)
+            .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MenuBarPopoverSizing.horizontalContentInset)
