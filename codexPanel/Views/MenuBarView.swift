@@ -110,11 +110,11 @@ private struct AdaptiveMenuScrollContainer<Content: View>: NSViewRepresentable {
 }
 
 private struct AdaptiveMenuHeightReportingContainer<Content: View>: NSViewRepresentable {
-    let onMeasuredHeightChange: ((CGFloat) -> Void)?
+    let onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)?
     let content: Content
 
     init(
-        onMeasuredHeightChange: ((CGFloat) -> Void)? = nil,
+        onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.onMeasuredHeightChange = onMeasuredHeightChange
@@ -188,11 +188,11 @@ private final class AdaptiveMenuHeightReportingHost: NSView {
     private var lastReportedHeight: CGFloat?
     private var isMeasuring = false
     private var lastMeasuredWidth: CGFloat = 0
-    private var onMeasuredHeightChange: ((CGFloat) -> Void)?
+    private var onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)?
 
     init(
         rootView: AnyView,
-        onMeasuredHeightChange: ((CGFloat) -> Void)?
+        onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)?
     ) {
         self.onMeasuredHeightChange = onMeasuredHeightChange
         super.init(frame: .zero)
@@ -231,7 +231,7 @@ private final class AdaptiveMenuHeightReportingHost: NSView {
 
     func update(
         rootView: AnyView,
-        onMeasuredHeightChange: ((CGFloat) -> Void)?
+        onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)?
     ) {
         self.onMeasuredHeightChange = onMeasuredHeightChange
         self.hostingView.rootView = rootView
@@ -256,10 +256,24 @@ private final class AdaptiveMenuHeightReportingHost: NSView {
 
         let fittingHeight = max(self.hostingView.fittingSize.height, 1)
         self.hostingView.setFrameSize(NSSize(width: width, height: fittingHeight))
+        let acceptsWidth = MenuBarPopoverSizing.acceptsMeasuredContentWidth(width)
+        #if DEBUG
+        AppLifecycleDiagnostics.shared.recordEvent(
+            type: "status_item_menu_height_reporter_measured",
+            fields: [
+                "width": width,
+                "boundsHeight": self.bounds.height,
+                "fittingHeight": fittingHeight,
+                "acceptedWidth": acceptsWidth,
+                "windowAttached": self.window != nil,
+            ]
+        )
+        #endif
+        guard acceptsWidth else { return }
 
         if abs((self.lastReportedHeight ?? 0) - fittingHeight) > 1 {
             self.lastReportedHeight = fittingHeight
-            self.onMeasuredHeightChange?(fittingHeight)
+            self.onMeasuredHeightChange?(fittingHeight, width)
         }
 
         guard abs(self.measuredHeight - fittingHeight) > 1 else { return }
@@ -1262,11 +1276,14 @@ struct MenuBarView: View {
         Self.shortDayFormatter.string(from: date)
     }
 
-    private func reportMeasuredMenuHeight(_ height: CGFloat) {
+    private func reportMeasuredMenuHeight(_ height: CGFloat, width: CGFloat) {
         NotificationCenter.default.post(
             name: .codexpanelStatusItemMeasuredHeightDidChange,
             object: nil,
-            userInfo: ["height": height]
+            userInfo: [
+                "height": height,
+                "width": width,
+            ]
         )
     }
 

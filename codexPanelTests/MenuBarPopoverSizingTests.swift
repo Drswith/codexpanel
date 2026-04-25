@@ -67,6 +67,20 @@ final class MenuBarPopoverSizingTests: XCTestCase {
         )
     }
 
+    func testMeasuredContentWidthMustMatchPopoverWidth() {
+        XCTAssertTrue(
+            MenuBarPopoverSizing.acceptsMeasuredContentWidth(
+                MenuBarStatusItemIdentity.popoverContentWidth
+            )
+        )
+        XCTAssertFalse(MenuBarPopoverSizing.acceptsMeasuredContentWidth(1))
+        XCTAssertFalse(
+            MenuBarPopoverSizing.acceptsMeasuredContentWidth(
+                MenuBarStatusItemIdentity.popoverContentWidth + 4
+            )
+        )
+    }
+
     func testMacOS15UsesRoomierTopAndBottomInsets() {
         XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS14).top, 10)
         XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS14).bottom, 12)
