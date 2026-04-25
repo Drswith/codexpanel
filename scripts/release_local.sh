@@ -16,7 +16,7 @@ Options:
   --preid <id>              Pre-release identifier. Default: beta
   --project <path>          Xcode project. Default: codexpanel.xcodeproj
   --scheme <name>           Xcode scheme. Default: codexpanel
-  --app-name <name>         App bundle name. Default: codexpanel.app
+  --app-name <name>         App bundle name. Default: Codex Panel.app
   --app-basename <name>     Artifact base name. Default: codexpanel
   --build-number <value>    Build number. Default: YYYYMMDDHHMM
   --work-dir <path>         Build working dir. Default: .release-tmp
@@ -275,8 +275,9 @@ git_worktree_dirty() {
 
 PROJECT="codexpanel.xcodeproj"
 SCHEME="codexpanel"
-APP_NAME="codexpanel.app"
+APP_NAME="Codex Panel.app"
 APP_BASENAME="codexpanel"
+APP_EXECUTABLE_NAME="${APP_NAME%.app}"
 WORK_DIR=""
 BUILD_NUMBER=""
 PREID="beta"
@@ -329,6 +330,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --app-name)
       APP_NAME="${2:-}"
+      APP_EXECUTABLE_NAME="${APP_NAME%.app}"
       shift 2
       ;;
     --app-basename)
@@ -748,8 +750,8 @@ fi
 echo "==> Assembling universal app"
 cp -R "$ARM64_APP" "$UNIVERSAL_APP"
 for binary in \
-  "Contents/MacOS/codexpanel" \
-  "Contents/MacOS/codexpanel.debug.dylib" \
+  "Contents/MacOS/$APP_EXECUTABLE_NAME" \
+  "Contents/MacOS/$APP_EXECUTABLE_NAME.debug.dylib" \
   "Contents/MacOS/__preview.dylib"
 do
   if [[ ! -f "$ARM64_APP/$binary" || ! -f "$X64_APP/$binary" ]]; then

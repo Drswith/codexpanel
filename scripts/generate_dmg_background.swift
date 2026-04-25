@@ -111,7 +111,7 @@ struct DMGBackgroundRenderer {
 }
 
 let outputPath = CommandLine.arguments.dropFirst().first
-let appName = CommandLine.arguments.dropFirst(2).first ?? "codexpanel.app"
+let appName = CommandLine.arguments.dropFirst(2).first ?? "Codex Panel.app"
 let displayName = appName.hasSuffix(".app") ? String(appName.dropLast(4)) : appName
 
 guard let outputPath else {

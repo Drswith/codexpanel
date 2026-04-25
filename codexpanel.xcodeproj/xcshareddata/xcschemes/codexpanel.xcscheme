@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "C0C16B452F7423BE00A2A16F"
-               BuildableName = "codexpanel.app"
+               BuildableName = "Codex Panel.app"
                BlueprintName = "codexpanel"
                ReferencedContainer = "container:codexpanel.xcodeproj">
             </BuildableReference>
@@ -55,7 +55,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "C0C16B452F7423BE00A2A16F"
-            BuildableName = "codexpanel.app"
+            BuildableName = "Codex Panel.app"
             BlueprintName = "codexpanel"
             ReferencedContainer = "container:codexpanel.xcodeproj">
          </BuildableReference>
@@ -72,7 +72,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "C0C16B452F7423BE00A2A16F"
-            BuildableName = "codexpanel.app"
+            BuildableName = "Codex Panel.app"
             BlueprintName = "codexpanel"
             ReferencedContainer = "container:codexpanel.xcodeproj">
          </BuildableReference>

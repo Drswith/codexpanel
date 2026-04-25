@@ -63,8 +63,9 @@ BUILD_NUMBER="$(date +%Y%m%d%H%M)"
 ```sh
 PROJECT="codexpanel.xcodeproj"
 SCHEME="codexpanel"
-APP_NAME="codexpanel.app"
+APP_NAME="Codex Panel.app"
 APP_BASENAME="codexpanel"
+APP_EXECUTABLE_NAME="${APP_NAME%.app}"
 
 WORK_DIR="$(pwd)/.release-tmp"
 ARM64_DERIVED="$WORK_DIR/derived-arm64"
@@ -114,8 +115,8 @@ UNIVERSAL_APP="$UNIVERSAL_DIR/$APP_NAME"
 cp -R "$ARM64_APP" "$UNIVERSAL_APP"
 
 for binary in \
-  "Contents/MacOS/codexpanel" \
-  "Contents/MacOS/codexpanel.debug.dylib" \
+  "Contents/MacOS/$APP_EXECUTABLE_NAME" \
+  "Contents/MacOS/$APP_EXECUTABLE_NAME.debug.dylib" \
   "Contents/MacOS/__preview.dylib"
 do
   lipo -create \
@@ -124,7 +125,7 @@ do
     -output "$UNIVERSAL_APP/$binary"
 done
 
-file "$UNIVERSAL_APP/Contents/MacOS/codexpanel"
+file "$UNIVERSAL_APP/Contents/MacOS/$APP_EXECUTABLE_NAME"
 ```
 
 ## 4. 可选：签名与公证

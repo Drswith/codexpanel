@@ -9,7 +9,7 @@
 /* Begin PBXFileReference section */
 		9F23A0013C5A4B7200A00001 /* Signing.local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.local.example.xcconfig; sourceTree = "<group>"; };
 		9F23A0023C5A4B7200A00001 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
-		C0C16B462F7423BE00A2A16F /* codexpanel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = codexpanel.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0C16B462F7423BE00A2A16F /* Codex Panel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Codex Panel.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 			C0C16B6B2F7428A100A2A16F /* codexpanelTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = codexpanelTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -96,7 +96,7 @@
 			C0C16B472F7423BE00A2A16F /* Products */ = {
 				isa = PBXGroup;
 				children = (
-					C0C16B462F7423BE00A2A16F /* codexpanel.app */,
+					C0C16B462F7423BE00A2A16F /* Codex Panel.app */,
 					C0C16B6B2F7428A100A2A16F /* codexpanelTests.xctest */,
 				);
 				name = Products;
@@ -124,7 +124,7 @@
 			packageProductDependencies = (
 			);
 			productName = codexpanel;
-			productReference = C0C16B462F7423BE00A2A16F /* codexpanel.app */;
+			productReference = C0C16B462F7423BE00A2A16F /* Codex Panel.app */;
 			productType = "com.apple.product-type.application";
 		};
 			C0C16B782F7428A100A2A16F /* codexpanelTests */ = {
@@ -368,7 +368,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codexpanel;
-				PRODUCT_NAME = codexpanel;
+				PRODUCT_NAME = "Codex Panel DEV";
 				PROVISIONING_PROFILE_SPECIFIER = "$(CODEXPANEL_PROVISIONING_PROFILE_SPECIFIER)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -410,7 +410,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.codexpanel;
-				PRODUCT_NAME = codexpanel;
+				PRODUCT_NAME = "Codex Panel";
 				PROVISIONING_PROFILE_SPECIFIER = "$(CODEXPANEL_PROVISIONING_PROFILE_SPECIFIER)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
