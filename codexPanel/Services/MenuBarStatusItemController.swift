@@ -429,7 +429,16 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
 
         self.updateAppearance()
         let availableHeight = self.availablePopoverHeightBelowStatusItem()
-        self.popover.contentSize = MenuBarPopoverSizing.initialSize(availableHeight: availableHeight)
+        let measuredContentHeight = self.measurePopoverContentHeight(
+            availableHeight: availableHeight
+        ) ?? self.latestMeasuredContentHeight
+        self.popover.contentSize = NSSize(
+            width: MenuBarStatusItemIdentity.popoverContentWidth,
+            height: MenuBarPopoverSizing.clampedHeight(
+                desiredHeight: measuredContentHeight ?? MenuBarPopoverSizing.defaultHeight,
+                availableHeight: availableHeight
+            )
+        )
         NSApp.activate(ignoringOtherApps: true)
         self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)
@@ -483,6 +492,25 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
                 availableHeight: availableHeight
             )
         )
+    }
+
+    private func measurePopoverContentHeight(availableHeight: CGFloat?) -> CGFloat? {
+        guard let view = self.popover.contentViewController?.view else { return nil }
+
+        let targetWidth = MenuBarStatusItemIdentity.popoverContentWidth
+        let fallbackHeight = MenuBarPopoverSizing.clampedHeight(
+            desiredHeight: self.latestMeasuredContentHeight ?? MenuBarPopoverSizing.defaultHeight,
+            availableHeight: availableHeight
+        )
+        let previousFrame = view.frame
+
+        view.setFrameSize(NSSize(width: targetWidth, height: max(previousFrame.height, fallbackHeight, 1)))
+        view.layoutSubtreeIfNeeded()
+
+        let fittingHeight = max(view.fittingSize.height, 1)
+        view.setFrameSize(previousFrame.size)
+
+        return fittingHeight
     }
 
     private func availablePopoverHeightBelowStatusItem() -> CGFloat? {
