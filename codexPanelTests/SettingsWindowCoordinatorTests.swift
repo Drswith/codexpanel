@@ -716,6 +716,43 @@ final class DetachedWindowPresenterTests: XCTestCase {
         XCTAssertEqual(self.contentSize(of: window), CGSize(width: 820, height: 620))
     }
 
+    func testExistingSettingsWindowReplaysConfigurationWithoutResettingUserSizedContent() throws {
+        let presenter = DetachedWindowPresenter()
+        let id = "openai-settings-\(UUID().uuidString)"
+        defer { presenter.close(id: id) }
+
+        presenter.show(
+            id: id,
+            title: "Settings",
+            size: CGSize(width: 820, height: 620),
+            configuration: .openAISettings
+        ) {
+            EmptyView()
+        }
+        self.awaitDetachedWindow(
+            presenter: presenter,
+            id: id,
+            requiredContentMinSize: CGSize(width: 760, height: 560),
+            contentSizeAtLeast: CGSize(width: 820, height: 620)
+        )
+
+        let existingWindow = try self.window(withID: id, presenter: presenter)
+        existingWindow.setContentSize(CGSize(width: 940, height: 700))
+
+        presenter.show(
+            id: id,
+            title: "Settings",
+            size: CGSize(width: 820, height: 620),
+            configuration: .openAISettings
+        ) {
+            Text("Updated")
+        }
+
+        XCTAssertTrue(existingWindow.styleMask.contains(.resizable))
+        XCTAssertEqual(existingWindow.contentMinSize, CGSize(width: 760, height: 560))
+        XCTAssertEqual(self.contentSize(of: existingWindow), CGSize(width: 940, height: 700))
+    }
+
     func testDefaultWindowReuseStillResetsContentSize() throws {
         let presenter = DetachedWindowPresenter()
         let id = "detached-window-\(UUID().uuidString)"
@@ -745,6 +782,43 @@ final class DetachedWindowPresenterTests: XCTestCase {
         XCTAssertFalse(existingWindow.styleMask.contains(.resizable))
         XCTAssertEqual(existingWindow.contentMinSize, .zero)
         XCTAssertEqual(self.contentSize(of: existingWindow), CGSize(width: 420, height: 320))
+    }
+
+    func testCloseCancelsPendingDetachedWindowPresentation() {
+        let presenter = DetachedWindowPresenter()
+        let id = "detached-window-\(UUID().uuidString)"
+
+        presenter.show(
+            id: id,
+            title: "Default",
+            size: CGSize(width: 420, height: 320)
+        ) {
+            EmptyView()
+        }
+        presenter.close(id: id)
+
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+
+        XCTAssertNil(presenter.windowSnapshotForTesting(id: id))
+        XCTAssertFalse(NSApp.windows.contains { $0.identifier?.rawValue == id })
+    }
+
+    func testHoverPanelPresentationIsSynchronousForPopoverCloseProtection() throws {
+        let presenter = DetachedWindowPresenter()
+        let id = "hover-panel-\(UUID().uuidString)"
+        defer { presenter.close(id: id) }
+
+        presenter.showHoverPanel(
+            id: id,
+            size: CGSize(width: 272, height: 196),
+            origin: CGPoint(x: 400, y: 220)
+        ) {
+            EmptyView()
+        }
+
+        let window = try XCTUnwrap(presenter.windowSnapshotForTesting(id: id))
+        XCTAssertTrue(window is NSPanel)
+        XCTAssertEqual(window.frame.origin, CGPoint(x: 400, y: 220))
     }
 
     private func window(withID id: String, presenter: DetachedWindowPresenter) throws -> NSWindow {

@@ -27,6 +27,8 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
     static let shared = DetachedWindowPresenter()
 
     private var windows: [String: NSWindow] = [:]
+    private var pendingDetachedWindowPresentations: [String: DispatchWorkItem] = [:]
+    private var pendingDetachedWindowPresentationTokens: [String: UUID] = [:]
 
     func hoverPanelFrames() -> [CGRect] {
         self.windows.values.compactMap { window in
@@ -42,7 +44,26 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
         configuration: DetachedWindowConfiguration = .standard,
         @ViewBuilder content: @escaping () -> Content
     ) {
-        DispatchQueue.main.async { [self] in
+        self.pendingDetachedWindowPresentations[id]?.cancel()
+        self.pendingDetachedWindowPresentations.removeValue(forKey: id)
+        self.pendingDetachedWindowPresentationTokens.removeValue(forKey: id)
+        if self.windows[id] != nil {
+            let anyView = AnyView(content())
+            self.presentDetachedWindow(
+                id: id,
+                title: title,
+                size: size,
+                configuration: configuration,
+                rootView: anyView
+            )
+            return
+        }
+        let token = UUID()
+        self.pendingDetachedWindowPresentationTokens[id] = token
+        let workItem = DispatchWorkItem { [self] in
+            guard self.pendingDetachedWindowPresentationTokens[id] == token else { return }
+            self.pendingDetachedWindowPresentations.removeValue(forKey: id)
+            self.pendingDetachedWindowPresentationTokens.removeValue(forKey: id)
             let anyView = AnyView(content())
             self.presentDetachedWindow(
                 id: id,
@@ -52,18 +73,18 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
                 rootView: anyView
             )
         }
+        self.pendingDetachedWindowPresentations[id] = workItem
+        DispatchQueue.main.async(execute: workItem)
     }
 
     func showHoverPanel<Content: View>(
         id: String,
         size: CGSize,
         origin: CGPoint,
-        @ViewBuilder content: @escaping () -> Content
+        @ViewBuilder content: () -> Content
     ) {
-        DispatchQueue.main.async { [self] in
-            let anyView = AnyView(content())
-            self.presentHoverPanelWindow(id: id, size: size, origin: origin, rootView: anyView)
-        }
+        let anyView = AnyView(content())
+        self.presentHoverPanelWindow(id: id, size: size, origin: origin, rootView: anyView)
     }
 
     private func presentDetachedWindow(
@@ -79,30 +100,17 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
             if configuration.resetsContentSizeOnReuse {
                 existing.setContentSize(size)
             }
-            let preservedContentRect: NSRect? = configuration.resetsContentSizeOnReuse
-                ? nil
-                : existing.contentRect(forFrameRect: existing.frame)
             if let controller = existing.contentViewController as? NSHostingController<AnyView> {
                 controller.rootView = rootView
             } else {
                 existing.contentViewController = NSHostingController(rootView: rootView)
             }
-            if let preservedContentRect {
-                let frame = existing.frameRect(forContentRect: preservedContentRect)
-                existing.setFrame(frame, display: true)
-            }
             NSApp?.activate(ignoringOtherApps: true)
             existing.makeKeyAndOrderFront(nil)
             self.applyStandardWindowConfiguration(configuration, to: existing)
             let windowForTailApply = existing
-            let contentRectSnapshot = preservedContentRect
-            DispatchQueue.main.async {
-                let presenter = DetachedWindowPresenter.shared
-                presenter.applyStandardWindowConfiguration(configuration, to: windowForTailApply)
-                if let rect = contentRectSnapshot {
-                    let frame = windowForTailApply.frameRect(forContentRect: rect)
-                    windowForTailApply.setFrame(frame, display: true)
-                }
+            DispatchQueue.main.async { [weak self] in
+                self?.applyStandardWindowConfiguration(configuration, to: windowForTailApply)
             }
             return
         }
@@ -124,8 +132,8 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
         // SwiftUI 宿主在首帧布局后可能改写 contentMinSize；在 order front 之后再应用一次配置以稳定测试与系统行为。
         self.applyStandardWindowConfiguration(configuration, to: window)
         let windowForConfigTailApply = window
-        DispatchQueue.main.async {
-            DetachedWindowPresenter.shared.applyStandardWindowConfiguration(configuration, to: windowForConfigTailApply)
+        DispatchQueue.main.async { [weak self] in
+            self?.applyStandardWindowConfiguration(configuration, to: windowForConfigTailApply)
         }
     }
 
@@ -169,6 +177,9 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
     }
 
     func close(id: String) {
+        self.pendingDetachedWindowPresentations[id]?.cancel()
+        self.pendingDetachedWindowPresentations.removeValue(forKey: id)
+        self.pendingDetachedWindowPresentationTokens.removeValue(forKey: id)
         guard let window = self.windows[id] else { return }
         window.close()
         self.windows.removeValue(forKey: id)
