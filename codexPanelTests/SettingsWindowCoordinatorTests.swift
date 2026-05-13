@@ -643,6 +643,34 @@ final class DetachedWindowPresenterTests: XCTestCase {
         _ = NSApplication.shared
     }
 
+    /// `DetachedWindowPresenter.show` 将建窗推迟到 main runloop；属性可能在后续若干帧才稳定。
+    private func awaitDetachedWindow(
+        presenter: DetachedWindowPresenter,
+        id: String,
+        requiredContentMinSize: CGSize? = nil,
+        contentSizeAtLeast: CGSize? = nil
+    ) {
+        let deadline = Date().addingTimeInterval(8)
+        while Date() < deadline {
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+            let window = presenter.windowSnapshotForTesting(id: id)
+                ?? NSApp.windows.first(where: { $0.identifier?.rawValue == id })
+            guard let window else { continue }
+            window.layoutIfNeeded()
+            if let requiredContentMinSize {
+                guard window.contentMinSize.width >= requiredContentMinSize.width - 0.5,
+                      window.contentMinSize.height >= requiredContentMinSize.height - 0.5 else { continue }
+            }
+            if let contentSizeAtLeast {
+                let sz = self.contentSize(of: window)
+                guard sz.width >= contentSizeAtLeast.width - 0.5,
+                      sz.height >= contentSizeAtLeast.height - 0.5 else { continue }
+            }
+            return
+        }
+        XCTFail("DetachedWindowPresenter 异步建窗超时: id=\(id)")
+    }
+
     func testDefaultWindowRemainsNonResizable() throws {
         let presenter = DetachedWindowPresenter()
         let id = "detached-window-\(UUID().uuidString)"
@@ -655,8 +683,9 @@ final class DetachedWindowPresenterTests: XCTestCase {
         ) {
             EmptyView()
         }
+        self.awaitDetachedWindow(presenter: presenter, id: id)
 
-        let window = try self.window(withID: id)
+        let window = try self.window(withID: id, presenter: presenter)
         XCTAssertFalse(window.styleMask.contains(.resizable))
         XCTAssertEqual(window.contentMinSize, .zero)
     }
@@ -674,8 +703,14 @@ final class DetachedWindowPresenterTests: XCTestCase {
         ) {
             EmptyView()
         }
+        self.awaitDetachedWindow(
+            presenter: presenter,
+            id: id,
+            requiredContentMinSize: CGSize(width: 760, height: 560),
+            contentSizeAtLeast: CGSize(width: 820, height: 620)
+        )
 
-        let window = try self.window(withID: id)
+        let window = try self.window(withID: id, presenter: presenter)
         XCTAssertTrue(window.styleMask.contains(.resizable))
         XCTAssertEqual(window.contentMinSize, CGSize(width: 760, height: 560))
         XCTAssertEqual(self.contentSize(of: window), CGSize(width: 820, height: 620))
@@ -694,8 +729,14 @@ final class DetachedWindowPresenterTests: XCTestCase {
         ) {
             EmptyView()
         }
+        self.awaitDetachedWindow(
+            presenter: presenter,
+            id: id,
+            requiredContentMinSize: CGSize(width: 760, height: 560),
+            contentSizeAtLeast: CGSize(width: 820, height: 620)
+        )
 
-        let existingWindow = try self.window(withID: id)
+        let existingWindow = try self.window(withID: id, presenter: presenter)
         existingWindow.setContentSize(CGSize(width: 940, height: 700))
 
         presenter.show(
@@ -724,8 +765,9 @@ final class DetachedWindowPresenterTests: XCTestCase {
         ) {
             EmptyView()
         }
+        self.awaitDetachedWindow(presenter: presenter, id: id, contentSizeAtLeast: CGSize(width: 420, height: 320))
 
-        let existingWindow = try self.window(withID: id)
+        let existingWindow = try self.window(withID: id, presenter: presenter)
         existingWindow.setContentSize(CGSize(width: 610, height: 510))
 
         presenter.show(
@@ -735,14 +777,52 @@ final class DetachedWindowPresenterTests: XCTestCase {
         ) {
             EmptyView()
         }
+        self.awaitDetachedWindow(presenter: presenter, id: id, contentSizeAtLeast: CGSize(width: 420, height: 320))
 
         XCTAssertFalse(existingWindow.styleMask.contains(.resizable))
         XCTAssertEqual(existingWindow.contentMinSize, .zero)
         XCTAssertEqual(self.contentSize(of: existingWindow), CGSize(width: 420, height: 320))
     }
 
-    private func window(withID id: String) throws -> NSWindow {
-        try XCTUnwrap(NSApp.windows.first { $0.identifier?.rawValue == id })
+    func testCloseCancelsPendingDetachedWindowPresentation() {
+        let presenter = DetachedWindowPresenter()
+        let id = "detached-window-\(UUID().uuidString)"
+
+        presenter.show(
+            id: id,
+            title: "Default",
+            size: CGSize(width: 420, height: 320)
+        ) {
+            EmptyView()
+        }
+        presenter.close(id: id)
+
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+
+        XCTAssertNil(presenter.windowSnapshotForTesting(id: id))
+        XCTAssertFalse(NSApp.windows.contains { $0.identifier?.rawValue == id })
+    }
+
+    func testHoverPanelPresentationIsSynchronousForPopoverCloseProtection() throws {
+        let presenter = DetachedWindowPresenter()
+        let id = "hover-panel-\(UUID().uuidString)"
+        defer { presenter.close(id: id) }
+
+        presenter.showHoverPanel(
+            id: id,
+            size: CGSize(width: 272, height: 196),
+            origin: CGPoint(x: 400, y: 220)
+        ) {
+            EmptyView()
+        }
+
+        let window = try XCTUnwrap(presenter.windowSnapshotForTesting(id: id))
+        XCTAssertTrue(window is NSPanel)
+        XCTAssertEqual(window.frame.origin, CGPoint(x: 400, y: 220))
+    }
+
+    private func window(withID id: String, presenter: DetachedWindowPresenter) throws -> NSWindow {
+        try XCTUnwrap(presenter.windowSnapshotForTesting(id: id))
     }
 
     private func contentSize(of window: NSWindow) -> CGSize {
