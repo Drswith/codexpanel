@@ -21,16 +21,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16
+      - name: Select Xcode 26
         run: |
-          if [ -d /Applications/Xcode_16.4.app ]; then
-            sudo xcode-select -switch /Applications/Xcode_16.4.app/Contents/Developer
-          elif [ -d /Applications/Xcode_16.3.app ]; then
-            sudo xcode-select -switch /Applications/Xcode_16.3.app/Contents/Developer
-          elif [ -d /Applications/Xcode_16.2.app ]; then
-            sudo xcode-select -switch /Applications/Xcode_16.2.app/Contents/Developer
+          if [ -d /Applications/Xcode_26.3.app ]; then
+            sudo xcode-select -switch /Applications/Xcode_26.3.app/Contents/Developer
+          elif [ -d /Applications/Xcode_26.2.app ]; then
+            sudo xcode-select -switch /Applications/Xcode_26.2.app/Contents/Developer
+          elif [ -d /Applications/Xcode_26.1.1.app ]; then
+            sudo xcode-select -switch /Applications/Xcode_26.1.1.app/Contents/Developer
+          elif [ -d /Applications/Xcode_26.0.1.app ]; then
+            sudo xcode-select -switch /Applications/Xcode_26.0.1.app/Contents/Developer
           else
-            echo "No Xcode 16.x found on runner." >&2
+            echo "No Xcode 26.x found on runner." >&2
             ls -1 /Applications | rg '^Xcode' || true
             exit 1
           fi
