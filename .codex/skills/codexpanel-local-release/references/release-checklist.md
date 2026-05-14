@@ -10,6 +10,7 @@ gh auth status
 
 - 确认当前分支与工作区状态符合预期。
 - 确认 `xcodebuild`、`gh`、`git` 可用。
+- 确认仓库 `main` 分支保护已开启，且必需检查包含 `build`。
 
 ## 2. 执行发版
 
@@ -66,6 +67,15 @@ cp "<dist>/updates.json" docs/updates.json
 
 - `CodexPanelUpdateFeedURL` 应指向：
   `https://github.com/Drswith/codexpanel/releases/latest/download/updates.json`
+
+## 4.1 PR 与 CI 门禁校验（涉及仓库改动时）
+
+```bash
+gh pr checks <pr-number>
+```
+
+- 至少确认 `build` 检查通过后再推进合并。
+- 不要以绕过保护规则的方式合并到 `main`。
 
 ## 5. 发布后清理与可见性核对
 

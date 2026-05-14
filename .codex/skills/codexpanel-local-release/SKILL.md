@@ -15,6 +15,7 @@ description: |
 - 维护更新源优先级：`updates.json -> releases/latest -> Releases API`。
 - 默认运行时更新源使用 `https://github.com/Drswith/codexpanel/releases/latest/download/updates.json`，不要改为 `raw.githubusercontent.com/.../main/...`。
 - 仅接受稳定 release：非 draft、非 prerelease、且包含可安装 `dmg/zip`。
+- 遵守仓库 `main` 保护：禁止直推，必须通过 PR；合并前需通过必需检查 `build` 且满足审批要求。
 - 任务涉及本地安装/替换 `codexpanel.app` 时，必须做安装残留清理与可见性核对。
 
 ## 执行流程
@@ -48,6 +49,7 @@ cp "<dist>/updates.json" docs/updates.json
 
 5. 输出闭环报告。
 - 汇报版本号、tag、release URL、资产完整性、更新检查结论、清理结果。
+- 若本次改动涉及仓库文件（如 docs / scripts / skill），同步汇报 PR 状态与 `build` 检查结果。
 - 明确未完成项（例如未执行签名/公证、未推送、未上传）。
 
 ## 故障处理规则
@@ -67,4 +69,10 @@ cp "<dist>/updates.json" docs/updates.json
 
 - 不要把 runtime 更新源改成 `main` 分支 raw 文件地址。
 - 不要跳过发版后校验与安装清理就结束任务。
+- 不要绕过 `main` 分支保护直接推送。
 - 不要在汇报里泄露敏感 token。
+
+## 调用方式
+
+- 显式调用请使用 `$codexpanel-local-release`。
+- 如果界面 `/` 菜单未列出该 skill，不影响使用 `$skill-name` 触发。
