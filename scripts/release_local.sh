@@ -91,6 +91,46 @@ create_plain_dmg() {
     "$output_path"
 }
 
+resolve_setfile_cmd() {
+  if command -v SetFile >/dev/null 2>&1; then
+    command -v SetFile
+    return 0
+  fi
+
+  if command -v xcrun >/dev/null 2>&1; then
+    local setfile_path=""
+    if setfile_path="$(xcrun -find SetFile 2>/dev/null)" && [[ -n "$setfile_path" ]]; then
+      echo "$setfile_path"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+apply_volume_icon() {
+  local app_bundle_path="$1"
+  local mounted_volume_path="$2"
+  local app_icon_path="$app_bundle_path/Contents/Resources/AppIcon.icns"
+  local volume_icon_path="$mounted_volume_path/.VolumeIcon.icns"
+  local setfile_cmd=""
+
+  if [[ ! -f "$app_icon_path" ]]; then
+    echo "Warning: 未找到 AppIcon.icns，跳过 DMG 卷图标设置。" >&2
+    return 1
+  fi
+
+  if ! setfile_cmd="$(resolve_setfile_cmd)"; then
+    echo "Warning: 未找到 SetFile，跳过 DMG 卷图标设置。" >&2
+    return 1
+  fi
+
+  cp -f "$app_icon_path" "$volume_icon_path"
+  "$setfile_cmd" -a C "$mounted_volume_path"
+  "$setfile_cmd" -a V "$volume_icon_path"
+  return 0
+}
+
 create_installer_dmg() {
   local staging_dir="$1"
   local output_path="$2"
@@ -138,6 +178,10 @@ create_installer_dmg() {
   if ! osascript "$applescript_path" "$mounted_volume_name" "$app_name"; then
     customize_failed="true"
     echo "Warning: Finder 布局定制失败，将回退到普通 DMG。" >&2
+  fi
+
+  if [[ "$customize_failed" != "true" ]] && ! apply_volume_icon "$attached_mount_point/$app_name" "$attached_mount_point"; then
+    echo "Warning: DMG 卷图标设置失败，将继续使用默认磁盘图标。" >&2
   fi
 
   sync

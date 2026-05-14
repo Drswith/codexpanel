@@ -33,6 +33,7 @@ scripts/release_local.sh beta --upload create --notes "Release 1.0.1-beta.0"
 - 默认开启 git 操作：`commit + tag + push`
 - 可用 `--no-commit` / `--no-tag` / `--no-push` 关闭
 - 默认会打包构建；可用 `--no-build` 仅做版本与 git 操作
+- 生成安装型 DMG 时会自动复用 `codexpanel.app` 内置 `AppIcon.icns` 作为挂载卷图标
 - 支持交互模式：无版本参数时在终端 TTY 自动进入交互；也可显式 `--interactive`
 - 需要纯参数模式时可显式 `--headless`
 
