@@ -47,6 +47,8 @@ protocol AppUpdateEnvironmentProviding {
     var currentVersion: String { get }
     var bundleURL: URL { get }
     var architecture: UpdateArtifactArchitecture { get }
+    var updateFeedURL: URL? { get }
+    var githubLatestReleaseURL: URL? { get }
     var githubReleasesURL: URL? { get }
 }
 
@@ -152,35 +154,180 @@ struct LiveAppUpdateEnvironment: AppUpdateEnvironmentProviding {
         #endif
     }
 
+    var updateFeedURL: URL? {
+        self.infoURL(forKey: "CodexPanelUpdateFeedURL")
+    }
+
+    var githubLatestReleaseURL: URL? {
+        self.infoURL(forKey: "CodexPanelGitHubLatestReleaseURL")
+            ?? Self.derivedLatestReleaseURL(from: self.githubReleasesURL)
+    }
+
     var githubReleasesURL: URL? {
-        guard let rawValue = Bundle.main.object(forInfoDictionaryKey: "CodexPanelGitHubReleasesURL") as? String,
+        self.infoURL(forKey: "CodexPanelGitHubReleasesURL")
+    }
+
+    private func infoURL(forKey key: String) -> URL? {
+        guard let rawValue = Bundle.main.object(forInfoDictionaryKey: key) as? String,
               rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
             return nil
         }
         return URL(string: rawValue)
     }
+
+    private static func derivedLatestReleaseURL(from releasesURL: URL?) -> URL? {
+        guard let releasesURL else { return nil }
+        guard releasesURL.host?.lowercased() == "api.github.com" else { return nil }
+
+        let components = releasesURL.path.split(separator: "/").map(String.init)
+        guard components.count >= 4,
+              components[0] == "repos",
+              components[3] == "releases" else {
+            return nil
+        }
+
+        let owner = components[1]
+        let repository = components[2]
+        return URL(string: "https://github.com/\(owner)/\(repository)/releases/latest")
+    }
 }
 
 struct LiveGitHubReleasesUpdateLoader: AppUpdateReleaseLoading {
+    private static let userAgent = "codexpanel"
+
+    private struct SourceEndpoints {
+        var updateFeedURL: URL?
+        var latestReleaseURL: URL?
+        var releasesAPIURL: URL?
+
+        var hasAtLeastOneSource: Bool {
+            self.updateFeedURL != nil || self.latestReleaseURL != nil || self.releasesAPIURL != nil
+        }
+    }
+
     var environment: AppUpdateEnvironmentProviding
     var session: URLSession = .shared
 
     func loadLatestRelease() async throws -> AppUpdateRelease {
-        guard let releasesURL = self.environment.githubReleasesURL else {
+        let endpoints = SourceEndpoints(
+            updateFeedURL: self.environment.updateFeedURL,
+            latestReleaseURL: self.environment.githubLatestReleaseURL,
+            releasesAPIURL: self.environment.githubReleasesURL
+        )
+
+        guard endpoints.hasAtLeastOneSource else {
             throw AppUpdateError.missingReleasesURL
         }
 
-        var request = URLRequest(url: releasesURL)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("codexpanel", forHTTPHeaderField: "User-Agent")
+        var lastError: Error?
 
-        let (data, response) = try await self.session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
+        if let updateFeedURL = endpoints.updateFeedURL {
+            do {
+                return try await self.loadLatestReleaseFromUpdateFeed(updateFeedURL)
+            } catch {
+                if error is CancellationError {
+                    throw error
+                }
+                lastError = error
+            }
+        }
+
+        if let latestReleaseURL = endpoints.latestReleaseURL {
+            do {
+                return try await self.loadLatestReleaseFromLatestReleaseURL(latestReleaseURL)
+            } catch {
+                if error is CancellationError {
+                    throw error
+                }
+                lastError = error
+            }
+        }
+
+        if let releasesAPIURL = endpoints.releasesAPIURL {
+            do {
+                return try await self.loadLatestReleaseFromReleasesAPI(releasesAPIURL)
+            } catch {
+                if error is CancellationError {
+                    throw error
+                }
+                lastError = error
+            }
+        }
+
+        if let lastError {
+            throw lastError
+        }
+        throw AppUpdateError.missingReleasesURL
+    }
+
+    private func loadLatestReleaseFromUpdateFeed(_ updateFeedURL: URL) async throws -> AppUpdateRelease {
+        let (data, _) = try await self.fetch(url: updateFeedURL, accept: "application/json")
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let feed: AppUpdateFeed
+        do {
+            feed = try decoder.decode(AppUpdateFeed.self, from: data)
+        } catch {
             throw AppUpdateError.invalidResponse
         }
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw AppUpdateError.unexpectedStatusCode(httpResponse.statusCode)
+
+        guard feed.release.artifacts.isEmpty == false else {
+            throw AppUpdateError.noInstallableStableRelease
         }
+
+        return feed.release
+    }
+
+    private func loadLatestReleaseFromLatestReleaseURL(_ latestReleaseURL: URL) async throws -> AppUpdateRelease {
+        let (_, response) = try await self.fetch(
+            url: latestReleaseURL,
+            accept: "text/html,application/xhtml+xml"
+        )
+
+        let resolvedURL = response.url ?? latestReleaseURL
+        guard let metadata = Self.latestReleaseMetadata(from: resolvedURL) else {
+            throw AppUpdateError.invalidResponse
+        }
+
+        let normalizedVersion = metadata.tagName.hasPrefix("v")
+            ? String(metadata.tagName.dropFirst())
+            : metadata.tagName
+
+        let bundleName = "codexpanel-\(normalizedVersion)-macOS"
+        let downloadRoot = metadata.repositoryURL.appendingPathComponent(
+            "releases/latest/download",
+            isDirectory: true
+        )
+        let artifacts: [AppUpdateArtifact] = [
+            AppUpdateArtifact(
+                architecture: .universal,
+                format: .dmg,
+                downloadURL: downloadRoot.appendingPathComponent("\(bundleName).dmg"),
+                sha256: nil
+            ),
+            AppUpdateArtifact(
+                architecture: .universal,
+                format: .zip,
+                downloadURL: downloadRoot.appendingPathComponent("\(bundleName).zip"),
+                sha256: nil
+            ),
+        ]
+
+        return AppUpdateRelease(
+            version: normalizedVersion,
+            publishedAt: nil,
+            summary: nil,
+            releaseNotesURL: metadata.releaseTagURL,
+            downloadPageURL: metadata.releaseTagURL,
+            deliveryMode: .guidedDownload,
+            minimumAutomaticUpdateVersion: nil,
+            artifacts: artifacts
+        )
+    }
+
+    private func loadLatestReleaseFromReleasesAPI(_ releasesURL: URL) async throws -> AppUpdateRelease {
+        let (data, _) = try await self.fetch(url: releasesURL, accept: "application/vnd.github+json")
 
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -197,6 +344,44 @@ struct LiveGitHubReleasesUpdateLoader: AppUpdateReleaseLoading {
         }
 
         return release
+    }
+
+    private func fetch(url: URL, accept: String) async throws -> (Data, HTTPURLResponse) {
+        var request = URLRequest(url: url)
+        request.setValue(accept, forHTTPHeaderField: "Accept")
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await self.session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AppUpdateError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw AppUpdateError.unexpectedStatusCode(httpResponse.statusCode)
+        }
+
+        return (data, httpResponse)
+    }
+
+    private static func latestReleaseMetadata(from releaseTagURL: URL) -> (tagName: String, repositoryURL: URL, releaseTagURL: URL)? {
+        let components = releaseTagURL.path.split(separator: "/").map(String.init)
+        guard components.count >= 5,
+              components[2] == "releases",
+              components[3] == "tag" else {
+            return nil
+        }
+
+        let owner = components[0]
+        let repository = components[1]
+        let tagName = components[4]
+        guard tagName.isEmpty == false else {
+            return nil
+        }
+
+        guard let repositoryURL = URL(string: "https://github.com/\(owner)/\(repository)") else {
+            return nil
+        }
+
+        return (tagName: tagName, repositoryURL: repositoryURL, releaseTagURL: releaseTagURL)
     }
 }
 

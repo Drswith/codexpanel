@@ -219,6 +219,7 @@ final class UpdateCoordinatorTests: CodexPanelTestCase {
         MockURLProtocol.handler = { request in
             XCTAssertEqual(request.url, releasesURL)
             XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/vnd.github+json")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "codexpanel")
 
             let body = """
             [
@@ -302,6 +303,188 @@ final class UpdateCoordinatorTests: CodexPanelTestCase {
         XCTAssertEqual(release.artifacts[1].architecture, .x86_64)
         XCTAssertEqual(release.artifacts[1].format, .zip)
         XCTAssertEqual(release.artifacts[1].sha256, "def456")
+    }
+
+    func testGitHubReleasesLoaderPrefersUpdatesFeed() async throws {
+        let updatesFeedURL = URL(string: "https://raw.githubusercontent.com/Drswith/codexpanel/main/docs/updates.json")!
+        let latestReleaseURL = URL(string: "https://github.com/Drswith/codexpanel/releases/latest")!
+        let releasesAPIURL = URL(string: "https://api.github.com/repos/Drswith/codexpanel/releases")!
+        let session = self.makeMockSession()
+        var requestedURLs: [URL] = []
+
+        MockURLProtocol.handler = { request in
+            requestedURLs.append(try XCTUnwrap(request.url))
+            XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "codexpanel")
+            guard request.url == updatesFeedURL else {
+                return (
+                    HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 404, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            }
+
+            let body = """
+            {
+              "schemaVersion": 1,
+              "channel": "stable",
+              "release": {
+                "version": "1.4.2",
+                "publishedAt": "2026-05-13T16:06:50Z",
+                "summary": "v1.4.2",
+                "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.4.2",
+                "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.4.2",
+                "deliveryMode": "guidedDownload",
+                "minimumAutomaticUpdateVersion": null,
+                "artifacts": [
+                  {
+                    "architecture": "universal",
+                    "format": "dmg",
+                    "downloadURL": "https://example.com/codexpanel-1.4.2.dmg",
+                    "sha256": "abc123"
+                  }
+                ]
+              }
+            }
+            """
+
+            return (
+                HTTPURLResponse(url: updatesFeedURL, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data(body.utf8)
+            )
+        }
+
+        let loader = LiveGitHubReleasesUpdateLoader(
+            environment: MockUpdateEnvironment(
+                currentVersion: "1.4.1",
+                architecture: .arm64,
+                updateFeedURL: updatesFeedURL,
+                githubLatestReleaseURL: latestReleaseURL,
+                githubReleasesURL: releasesAPIURL
+            ),
+            session: session
+        )
+
+        let release = try await loader.loadLatestRelease()
+        XCTAssertEqual(release.version, "1.4.2")
+        XCTAssertEqual(requestedURLs, [updatesFeedURL])
+    }
+
+    func testGitHubReleasesLoaderFallsBackToLatestReleaseURLWhenUpdatesFeedFails() async throws {
+        let updatesFeedURL = URL(string: "https://raw.githubusercontent.com/Drswith/codexpanel/main/docs/updates.json")!
+        let latestReleaseURL = URL(string: "https://github.com/Drswith/codexpanel/releases/latest")!
+        let latestTagURL = URL(string: "https://github.com/Drswith/codexpanel/releases/tag/v1.4.2")!
+        let session = self.makeMockSession()
+        var requestedURLs: [URL] = []
+
+        MockURLProtocol.handler = { request in
+            let requestURL = try XCTUnwrap(request.url)
+            requestedURLs.append(requestURL)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "codexpanel")
+
+            if requestURL == updatesFeedURL {
+                return (
+                    HTTPURLResponse(url: updatesFeedURL, statusCode: 503, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            }
+
+            if requestURL == latestReleaseURL {
+                return (
+                    HTTPURLResponse(url: latestTagURL, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            }
+
+            return (
+                HTTPURLResponse(url: requestURL, statusCode: 404, httpVersion: nil, headerFields: nil)!,
+                Data()
+            )
+        }
+
+        let loader = LiveGitHubReleasesUpdateLoader(
+            environment: MockUpdateEnvironment(
+                currentVersion: "1.4.1",
+                architecture: .arm64,
+                updateFeedURL: updatesFeedURL,
+                githubLatestReleaseURL: latestReleaseURL
+            ),
+            session: session
+        )
+
+        let release = try await loader.loadLatestRelease()
+        XCTAssertEqual(release.version, "1.4.2")
+        XCTAssertEqual(release.releaseNotesURL, latestTagURL)
+        XCTAssertEqual(requestedURLs, [updatesFeedURL, latestReleaseURL])
+        XCTAssertEqual(release.artifacts.count, 2)
+        XCTAssertEqual(
+            release.artifacts[0].downloadURL.absoluteString,
+            "https://github.com/Drswith/codexpanel/releases/latest/download/codexpanel-1.4.2-macOS.dmg"
+        )
+    }
+
+    func testGitHubReleasesLoaderFallsBackToReleasesAPIWhenLatestReleaseURLCannotResolveTag() async throws {
+        let latestReleaseURL = URL(string: "https://github.com/Drswith/codexpanel/releases/latest")!
+        let releasesURL = URL(string: "https://api.github.com/repos/Drswith/codexpanel/releases")!
+        let session = self.makeMockSession()
+        var requestedURLs: [URL] = []
+
+        MockURLProtocol.handler = { request in
+            let requestURL = try XCTUnwrap(request.url)
+            requestedURLs.append(requestURL)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "codexpanel")
+
+            if requestURL == latestReleaseURL {
+                let unresolvedURL = URL(string: "https://github.com/Drswith/codexpanel/releases")!
+                return (
+                    HTTPURLResponse(url: unresolvedURL, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    Data()
+                )
+            }
+
+            if requestURL == releasesURL {
+                let body = """
+                [
+                  {
+                    "tag_name": "v1.4.2",
+                    "name": "v1.4.2",
+                    "body": "stable",
+                    "html_url": "https://github.com/Drswith/codexpanel/releases/tag/v1.4.2",
+                    "draft": false,
+                    "prerelease": false,
+                    "published_at": "2026-05-13T16:06:50Z",
+                    "assets": [
+                      {
+                        "name": "codexpanel-1.4.2-macOS.dmg",
+                        "browser_download_url": "https://example.com/universal.dmg"
+                      }
+                    ]
+                  }
+                ]
+                """
+                return (
+                    HTTPURLResponse(url: releasesURL, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                    Data(body.utf8)
+                )
+            }
+
+            return (
+                HTTPURLResponse(url: requestURL, statusCode: 404, httpVersion: nil, headerFields: nil)!,
+                Data()
+            )
+        }
+
+        let loader = LiveGitHubReleasesUpdateLoader(
+            environment: MockUpdateEnvironment(
+                currentVersion: "1.4.1",
+                architecture: .arm64,
+                githubLatestReleaseURL: latestReleaseURL,
+                githubReleasesURL: releasesURL
+            ),
+            session: session
+        )
+
+        let release = try await loader.loadLatestRelease()
+        XCTAssertEqual(release.version, "1.4.2")
+        XCTAssertEqual(requestedURLs, [latestReleaseURL, releasesURL])
     }
 
     func testManualCheckDoesNotTreatReissued119AsUpgradeable() async {
@@ -471,6 +654,8 @@ private struct MockUpdateEnvironment: AppUpdateEnvironmentProviding {
     var currentVersion: String
     var bundleURL: URL = URL(fileURLWithPath: "/Applications/codexpanel.app")
     var architecture: UpdateArtifactArchitecture
+    var updateFeedURL: URL? = nil
+    var githubLatestReleaseURL: URL? = nil
     var githubReleasesURL: URL? = URL(string: "https://api.github.com/repos/Drswith/codexpanel/releases")
 }
 

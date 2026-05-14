@@ -99,7 +99,7 @@ enum L {
             : "The current install location is \(pathDescription), which is not yet in the supported auto-replace matrix."
     }
     static var updateErrorMissingReleasesURL: String {
-        zh ? "未配置 GitHub Releases API 地址。" : "The GitHub Releases API URL is not configured."
+        zh ? "未配置可用的更新来源地址。" : "No update source URL is configured."
     }
     static func updateErrorInvalidCurrentVersion(_ version: String) -> String {
         zh ? "当前版本号无效：\(version)" : "Invalid current version: \(version)"
@@ -108,13 +108,13 @@ enum L {
         zh ? "最新稳定版本号无效：\(version)" : "Invalid latest stable version: \(version)"
     }
     static var updateErrorInvalidResponse: String {
-        zh ? "GitHub Releases 响应无效。" : "The GitHub Releases response is invalid."
+        zh ? "更新来源响应无效。" : "The update source response is invalid."
     }
     static func updateErrorUnexpectedStatusCode(_ statusCode: Int) -> String {
-        zh ? "GitHub Releases API 返回异常状态码：\(statusCode)" : "The GitHub Releases API returned status code \(statusCode)."
+        zh ? "更新来源返回异常状态码：\(statusCode)" : "The update source returned status code \(statusCode)."
     }
     static var updateErrorNoInstallableStableRelease: String {
-        zh ? "GitHub Releases 中未找到可安装的正式稳定版本。" : "No installable stable release was found on GitHub Releases."
+        zh ? "未找到可安装的正式稳定版本。" : "No installable stable release was found."
     }
     static func updateErrorNoCompatibleArtifact(_ architecture: String) -> String {
         zh ? "最新稳定版本中缺少适用于 \(architecture) 的安装包。" : "The latest stable release does not contain a compatible installer for \(architecture)."
@@ -138,21 +138,21 @@ enum L {
     static var settingsUpdatesPageTitle: String { zh ? "更新" : "Updates" }
     static var settingsUpdatesPageHint: String {
         zh
-            ? "从这里检查 GitHub Releases 上首个可安装的正式稳定版本，并继续下载或安装当前可用更新。"
-            : "Check the first installable stable release on GitHub Releases here, then continue to download or install the current update."
+            ? "从这里检查最新稳定版本，并继续下载或安装当前可用更新。"
+            : "Check the latest stable version here, then continue to download or install the current update."
     }
     static var settingsUpdatesCurrentVersionTitle: String { zh ? "当前版本" : "Current Version" }
-    static var settingsUpdatesLatestVersionTitle: String { zh ? "GitHub 最新稳定版本" : "Latest Stable Version on GitHub" }
+    static var settingsUpdatesLatestVersionTitle: String { zh ? "最新稳定版本" : "Latest Stable Version" }
     static var settingsUpdatesStatusTitle: String { zh ? "更新状态" : "Update Status" }
     static var settingsUpdatesUnknownVersion: String { zh ? "尚未检查" : "Not Checked Yet" }
-    static var settingsUpdatesCheckAction: String { zh ? "检查 GitHub 上的最新稳定版本" : "Check the Latest Stable Version on GitHub" }
+    static var settingsUpdatesCheckAction: String { zh ? "检查最新稳定版本" : "Check the Latest Stable Version" }
     static var settingsUpdatesInstallAction: String { zh ? "继续下载或安装更新" : "Continue Download or Install" }
-    static var settingsUpdatesChecking: String { zh ? "正在检查 GitHub 上的最新稳定版本…" : "Checking the latest stable version on GitHub..." }
+    static var settingsUpdatesChecking: String { zh ? "正在检查最新稳定版本…" : "Checking the latest stable version..." }
     static var settingsUpdatesIdle: String { zh ? "尚未发起更新检查。" : "No update check has been started yet." }
     static var settingsUpdatesSourceNote: String {
         zh
-            ? "运行时会扫描 GitHub Releases 列表，只认非 draft、非 prerelease、且带 dmg/zip 安装包的正式 release。"
-            : "Runtime checks scan the GitHub Releases list and only accept non-draft, non-prerelease releases that ship installable dmg/zip assets."
+            ? "更新检查优先读取 updates.json；若失败则回退到 GitHub releases/latest，最后才回退到 Releases API。仅接受非预发布且带 dmg/zip 安装包的正式版本。"
+            : "Update checks prefer updates.json, then fall back to GitHub releases/latest, and finally to the Releases API. Only non-prerelease releases with installable dmg/zip assets are accepted."
     }
     static var settingsUpdatesReissueLimitNote: String {
         zh
@@ -160,10 +160,10 @@ enum L {
             : "If you already installed an earlier build with the same version number, a same-version reissue will usually not show up as an upgrade automatically; you must download the reissued build manually."
     }
     static func settingsUpdatesUpToDate(_ version: String) -> String {
-        zh ? "当前版本 \(version) 已与 GitHub 上的最新稳定版本一致。" : "The current version \(version) already matches the latest stable version on GitHub."
+        zh ? "当前版本 \(version) 已与最新稳定版本一致。" : "The current version \(version) already matches the latest stable version."
     }
     static func settingsUpdatesAvailable(_ currentVersion: String, _ latestVersion: String) -> String {
-        zh ? "当前版本 \(currentVersion)，GitHub 上可用最新稳定版本 \(latestVersion)。" : "Current version \(currentVersion); the latest stable version on GitHub is \(latestVersion)."
+        zh ? "当前版本 \(currentVersion)，可用最新稳定版本 \(latestVersion)。" : "Current version \(currentVersion); the latest stable version is \(latestVersion)."
     }
     static func settingsUpdatesExecuting(_ version: String) -> String {
         zh ? "正在处理 \(version) 的更新动作。" : "Processing the update action for \(version)."

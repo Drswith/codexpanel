@@ -15,5 +15,9 @@
 	</array>
 	<key>CodexPanelGitHubReleasesURL</key>
 	<string>https://api.github.com/repos/Drswith/codexpanel/releases</string>
+	<key>CodexPanelGitHubLatestReleaseURL</key>
+	<string>https://github.com/Drswith/codexpanel/releases/latest</string>
+	<key>CodexPanelUpdateFeedURL</key>
+	<string>https://github.com/Drswith/codexpanel/releases/latest/download/updates.json</string>
 </dict>
 </plist>

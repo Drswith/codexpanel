@@ -703,6 +703,10 @@ DMG_RW_NAME="${APP_BASENAME}-${TARGET_VERSION}-macOS-temp.dmg"
 DMG_VOLUME_NAME="codexpanel"
 DMG_BACKGROUND_ASSET="$(pwd)/scripts/assets/dmg-background.png"
 DMG_LAYOUT_SCRIPT="$(pwd)/scripts/customize_dmg_layout.applescript"
+UPDATES_JSON_NAME="updates.json"
+UPDATES_JSON_PATH="$DIST_DIR/$UPDATES_JSON_NAME"
+RELEASE_URL="https://github.com/Drswith/codexpanel/releases/tag/$TAG"
+DOWNLOAD_ROOT="https://github.com/Drswith/codexpanel/releases/download/$TAG"
 
 echo "==> Preparing workspace"
 rm -rf "$WORK_DIR"
@@ -797,9 +801,44 @@ fi
 shasum -a 256 "$DIST_DIR/$ZIP_NAME" > "$DIST_DIR/$ZIP_NAME.sha256"
 shasum -a 256 "$DIST_DIR/$DMG_NAME" > "$DIST_DIR/$DMG_NAME.sha256"
 
+ZIP_SHA256="$(awk '{print $1}' "$DIST_DIR/$ZIP_NAME.sha256")"
+DMG_SHA256="$(awk '{print $1}' "$DIST_DIR/$DMG_NAME.sha256")"
+PUBLISHED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+cat > "$UPDATES_JSON_PATH" <<EOF
+{
+  "schemaVersion": 1,
+  "channel": "stable",
+  "release": {
+    "version": "$TARGET_VERSION",
+    "publishedAt": "$PUBLISHED_AT",
+    "summary": "$TAG",
+    "releaseNotesURL": "$RELEASE_URL",
+    "downloadPageURL": "$RELEASE_URL",
+    "deliveryMode": "guidedDownload",
+    "minimumAutomaticUpdateVersion": null,
+    "artifacts": [
+      {
+        "architecture": "universal",
+        "format": "dmg",
+        "downloadURL": "$DOWNLOAD_ROOT/$DMG_NAME",
+        "sha256": "$DMG_SHA256"
+      },
+      {
+        "architecture": "universal",
+        "format": "zip",
+        "downloadURL": "$DOWNLOAD_ROOT/$ZIP_NAME",
+        "sha256": "$ZIP_SHA256"
+      }
+    ]
+  }
+}
+EOF
+
 if [[ "$UPLOAD_MODE" == "upload" ]]; then
   echo "==> Uploading assets to existing release: $TAG"
   gh release upload "$TAG" \
+    "$UPDATES_JSON_PATH" \
     "$DIST_DIR/$ZIP_NAME" \
     "$DIST_DIR/$ZIP_NAME.sha256" \
     "$DIST_DIR/$DMG_NAME" \
@@ -808,6 +847,7 @@ if [[ "$UPLOAD_MODE" == "upload" ]]; then
 elif [[ "$UPLOAD_MODE" == "create" ]]; then
   echo "==> Creating release and uploading assets: $TAG"
   gh release create "$TAG" \
+    "$UPDATES_JSON_PATH" \
     "$DIST_DIR/$ZIP_NAME" \
     "$DIST_DIR/$ZIP_NAME.sha256" \
     "$DIST_DIR/$DMG_NAME" \
@@ -822,5 +862,9 @@ echo "  ZIP: $DIST_DIR/$ZIP_NAME"
 echo "  ZIP SHA256: $DIST_DIR/$ZIP_NAME.sha256"
 echo "  DMG: $DIST_DIR/$DMG_NAME"
 echo "  DMG SHA256: $DIST_DIR/$DMG_NAME.sha256"
+echo "  Update feed template: $UPDATES_JSON_PATH"
+echo
+echo "Next step:"
+echo "  cp \"$UPDATES_JSON_PATH\" \"$(pwd)/docs/updates.json\""
 echo
 echo "Done."
