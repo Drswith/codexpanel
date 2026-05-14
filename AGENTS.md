@@ -51,3 +51,11 @@ For OpenAI OAuth account import, use the menu bar app and its localhost callback
 - 默认必须核对最终可见性：`mdfind`、`lsregister` 或等价检查应只剩目标安装副本，通常是 `/Applications/codexpanel.app`。
 - 如果系统仍显示重复入口，代理必须继续清理 Launch Services / Spotlight 残留，直到重复入口消失或确认只剩用户明确保留的副本。
 - 不要擅自删除用户主动保存的归档、DMG、备份或仓库外长期保存副本；只有对临时构建产物和明确残留才默认清理。遇到非临时、非生成目录中的额外副本时，先说明再处理。
+
+## 仓库内 Skill 调用提示
+
+- 不要依赖 `/` 菜单能枚举出所有本地 skill。
+- 对仓库内 skill，优先使用 `$skill-name` 显式触发。
+- 本仓库常用示例：
+- `$codexpanel-local-release 按仓库约定执行一次本地发版闭环并汇报结果。`
+- `$codexpanel 执行 OpenAI OAuth 账户登录/导入/激活相关操作。`
