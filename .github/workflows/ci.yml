@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: |
+          if [ -d /Applications/Xcode_16.4.app ]; then
+            sudo xcode-select -switch /Applications/Xcode_16.4.app/Contents/Developer
+          elif [ -d /Applications/Xcode_16.3.app ]; then
+            sudo xcode-select -switch /Applications/Xcode_16.3.app/Contents/Developer
+          elif [ -d /Applications/Xcode_16.2.app ]; then
+            sudo xcode-select -switch /Applications/Xcode_16.2.app/Contents/Developer
+          else
+            echo "No Xcode 16.x found on runner." >&2
+            ls -1 /Applications | rg '^Xcode' || true
+            exit 1
+          fi
+          xcodebuild -version
+
+      - name: Build
+        run: |
+          xcodebuild \
+            -project codexpanel.xcodeproj \
+            -scheme codexpanel \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build

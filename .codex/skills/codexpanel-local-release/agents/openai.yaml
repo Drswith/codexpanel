@@ -1,0 +1,4 @@
+interface:
+  display_name: "CodexPanel 本地发版"
+  short_description: "按仓库约定执行本地构建、上传、校验与清理的发版闭环"
+  default_prompt: "Use $codexpanel-local-release 按仓库约定执行一次本地发版闭环（构建、上传、校验、安装清理）并汇报结果。"
