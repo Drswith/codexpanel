@@ -14,17 +14,17 @@ Use this skill when the user wants an agent to operate the installed Codex Panel
 This skill's canonical source is:
 
 ```text
-.agent/skills/codexpanel-cli-driver/SKILL.md
+.agents/skills/codexpanel-cli-driver/SKILL.md
 ```
 
 Codex and Cursor integrations should consume the same source through symlinks:
 
 ```text
-.codex/skills/codexpanel-cli-driver -> ../../.agent/skills/codexpanel-cli-driver
-.cursor/skills/codexpanel-cli-driver -> ../../.agent/skills/codexpanel-cli-driver
+.codex/skills/codexpanel-cli-driver -> ../../.agents/skills/codexpanel-cli-driver
+.cursor/skills/codexpanel-cli-driver -> ../../.agents/skills/codexpanel-cli-driver
 ```
 
-When updating this skill, edit the `.agent` source and keep the symlinks intact.
+When updating this skill, edit the `.agents` source and keep the symlinks intact.
 
 ## Scope
 

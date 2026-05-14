@@ -60,9 +60,9 @@ V1 supports `view`, `state`, `snapshot`, and `doctor`; it does not support gener
 
 - 不要依赖 `/` 菜单能枚举出所有本地 skill。
 - 对仓库内 skill，优先使用 `$skill-name` 显式触发。
-- 项目级通用 skill 源文件统一放在 `.agent/skills/<skill-name>/SKILL.md`。
-- `.codex/skills/<skill-name>` 与 `.cursor/skills/<skill-name>` 可以作为 symlink 指向 `.agent/skills/<skill-name>`，让 Codex 与 Cursor 开发者共用同一份说明。
-- 修改共享 skill 时，优先编辑 `.agent/skills/...` 下的源文件，不要分别维护 `.codex` 与 `.cursor` 两份拷贝。
+- 项目级通用 skill 源文件统一放在 `.agents/skills/<skill-name>/SKILL.md`。
+- `.codex/skills/<skill-name>` 与 `.cursor/skills/<skill-name>` 可以作为 symlink 指向 `.agents/skills/<skill-name>`，让 Codex 与 Cursor 开发者共用同一份说明。
+- 修改共享 skill 时，优先编辑 `.agents/skills/...` 下的源文件，不要分别维护 `.codex` 与 `.cursor` 两份拷贝。
 
 本仓库常用示例：
 
