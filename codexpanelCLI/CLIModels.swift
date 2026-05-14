@@ -23,7 +23,7 @@ enum CLISettingsPage: String {
     case accounts
     case records
     case usage
-    case updates
+    case about
 }
 
 enum SnapshotFormat: String {

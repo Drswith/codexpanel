@@ -3,7 +3,7 @@ import Foundation
 enum CLIUsage {
     static let text = """
 Usage:
-  codexpanel view open settings [--page accounts|records|usage|updates] [--wait <sec>] [--json]
+  codexpanel view open settings [--page accounts|records|usage|about] [--wait <sec>] [--json]
   codexpanel view open menu [--wait <sec>] [--json]
   codexpanel view open login [--wait <sec>] [--json]
   codexpanel view close settings|menu|login|all [--wait <sec>] [--json]
@@ -96,7 +96,8 @@ enum CLIArgumentParser {
                     )
                 }
                 let rawPage = arguments[index + 1]
-                guard let parsedPage = CLISettingsPage(rawValue: rawPage) else {
+                let normalizedPage = rawPage == "updates" ? "about" : rawPage
+                guard let parsedPage = CLISettingsPage(rawValue: normalizedPage) else {
                     throw CLIError(
                         code: .invalidArguments,
                         message: "Invalid settings page: \(rawPage)",

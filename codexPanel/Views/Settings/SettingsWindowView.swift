@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import SwiftUI
 
@@ -38,47 +39,41 @@ struct SettingsWindowView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            NavigationSplitView {
-                self.sidebar
-            } detail: {
-                self.detail
-            }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 10) {
-                if let validationMessage = self.coordinator.validationMessage {
-                    Text(validationMessage)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.red)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
-                HStack {
-                    Spacer()
-
-                    Button(L.cancel) {
-                        self.coordinator.cancelAndClose(onClose: self.onClose)
-                    }
-                    .keyboardShortcut(.cancelAction)
-
-                    Button(L.save) {
-                        self.coordinator.saveAndClose(
-                            using: self.store,
-                            onClose: self.onClose
-                        )
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(self.coordinator.hasChanges == false)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(Color(NSColor.windowBackgroundColor))
+        NavigationSplitView {
+            self.sidebar
+        } detail: {
+            self.detail
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("codexpanel.settings.window")
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button {
+                    self.coordinator.cancelAndClose(onClose: self.onClose)
+                } label: {
+                    SettingsToolbarActionButtonLabel(title: L.cancel)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button {
+                    self.coordinator.saveAndClose(
+                        using: self.store,
+                        onClose: self.onClose
+                    )
+                } label: {
+                    SettingsToolbarActionButtonLabel(
+                        title: L.save,
+                        isEnabled: self.coordinator.hasChanges
+                    )
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.defaultAction)
+                .disabled(self.coordinator.hasChanges == false)
+            }
+        }
         .onReceive(self.store.$config.dropFirst()) { config in
             self.coordinator.reconcileExternalState(
                 config: config,
@@ -103,28 +98,65 @@ struct SettingsWindowView: View {
     }
 
     private var sidebar: some View {
-        List(SettingsPage.allCases, selection: SettingsSidebarSelectionAdapter.binding(for: self.coordinator)) { page in
-            SettingsSidebarRow(page: page)
-                .tag(Optional(page))
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    SettingsSidebarSelectionAdapter.apply(page, to: self.coordinator)
+        ZStack {
+            SettingsSidebarBackground()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(SettingsSidebarGroup.allCases) { group in
+                        VStack(alignment: .leading, spacing: 5) {
+                            if let title = group.title {
+                                Text(title)
+                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 8)
+                            }
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                ForEach(group.pages) { page in
+                                    Button {
+                                        SettingsSidebarSelectionAdapter.apply(page, to: self.coordinator)
+                                    } label: {
+                                        SettingsSidebarRow(
+                                            page: page,
+                                            isSelected: self.coordinator.selectedPage == page
+                                        )
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
         }
-        .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 300)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 230)
     }
 
     private var detail: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(L.settingsWindowTitle)
+                VStack(alignment: .leading, spacing: self.coordinator.selectedPage == .about ? 0 : 6) {
+                    Text("Codex Panel \(L.settings)")
                         .font(.system(size: 20, weight: .semibold))
-                    Text(L.settingsWindowHint)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if self.coordinator.selectedPage != .about {
+                        Text(L.settingsWindowHint)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                if let validationMessage = self.coordinator.validationMessage {
+                    Text(validationMessage)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 switch self.coordinator.selectedPage {
@@ -135,12 +167,12 @@ struct SettingsWindowView: View {
                     )
                 case .records:
                     SettingsRecordsPage(recordsModel: self.recordsModel) {
-                        SettingsSidebarSelectionAdapter.apply(.usage, to: self.coordinator)
+                        SettingsSidebarSelectionAdapter.apply(SettingsPage.usage, to: self.coordinator)
                     }
                 case .usage:
                     SettingsUsagePage(coordinator: self.coordinator)
-                case .updates:
-                    SettingsUpdatesPage(updateCoordinator: self.updateCoordinator)
+                case .about:
+                    SettingsAboutPage(updateCoordinator: self.updateCoordinator)
                 }
             }
             .padding(20)
@@ -167,13 +199,80 @@ enum SettingsSidebarSelectionAdapter {
     }
 }
 
+private struct SettingsSidebarGroup: Identifiable {
+    let id: String
+    let title: String?
+    let pages: [SettingsPage]
+
+    static let allCases: [SettingsSidebarGroup] = [
+        SettingsSidebarGroup(
+            id: "primary",
+            title: nil,
+            pages: [SettingsPage.accounts, SettingsPage.records, SettingsPage.usage]
+        ),
+        SettingsSidebarGroup(
+            id: "product",
+            title: "Codex Panel",
+            pages: [SettingsPage.about]
+        ),
+    ]
+}
+
 private struct SettingsSidebarRow: View {
     let page: SettingsPage
+    let isSelected: Bool
 
     var body: some View {
-        Label(self.page.title, systemImage: self.page.iconName)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 4)
+        HStack(spacing: 9) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(self.page.iconTint.gradient)
+                    .frame(width: 20, height: 20)
+                Image(systemName: self.page.iconName)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+
+            Text(self.page.title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(self.isSelected ? .white : .primary)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: 34)
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(self.isSelected ? Color.accentColor.opacity(0.92) : .clear)
+        )
+    }
+}
+
+private struct SettingsSidebarBackground: View {
+    var body: some View {
+        SettingsSidebarMaterialView()
+            .overlay(Color.white.opacity(0.015))
+    }
+}
+
+private struct SettingsSidebarMaterialView: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.isEmphasized = false
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = .sidebar
+        nsView.blendingMode = .behindWindow
+        nsView.state = .active
+        nsView.isEmphasized = false
     }
 }
 
@@ -258,11 +357,13 @@ private struct SettingsUsagePage: View {
     }
 }
 
-private struct SettingsUpdatesPage: View {
+private struct SettingsAboutPage: View {
     @ObservedObject var updateCoordinator: UpdateCoordinator
     @State private var cliInstallMessage: String?
 
     private let cliInstallService = CodexPanelCLIInstallService()
+    private let repositoryURL = URL(string: "https://github.com/Drswith/codexpanel")
+    private let issuesURL = URL(string: "https://github.com/Drswith/codexpanel/issues")
 
     private var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
@@ -324,122 +425,226 @@ private struct SettingsUpdatesPage: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(SettingsPage.updates.title)
-                .font(.system(size: 16, weight: .semibold))
+        VStack {
+            Spacer(minLength: 12)
 
-            Text(L.settingsUpdatesPageHint)
-                .font(.system(size: 11))
+            VStack(spacing: 22) {
+                SettingsAboutAppIcon()
+
+                VStack(spacing: 6) {
+                    Text("Codex Panel")
+                        .font(.system(size: 28, weight: .bold))
+                    Text("\(L.settingsAboutVersionPrefix) \(self.currentVersion)")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(spacing: 4) {
+                    Text(L.settingsAboutDescriptionLine1)
+                    Text(L.settingsAboutDescriptionLine2)
+                }
+                .font(.system(size: 12))
                 .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.center)
 
-            VStack(alignment: .leading, spacing: 10) {
-                SettingsUpdatesInfoRow(
-                    title: L.settingsUpdatesCurrentVersionTitle,
-                    value: self.currentVersion
-                )
-                SettingsUpdatesInfoRow(
-                    title: L.settingsUpdatesLatestVersionTitle,
-                    value: self.latestVersion
-                )
-                SettingsUpdatesInfoRow(
-                    title: L.settingsUpdatesStatusTitle,
-                    value: self.statusText
-                )
-            }
-
-            HStack(spacing: 10) {
-                Button(L.settingsUpdatesCheckAction) {
-                    Task { await self.updateCoordinator.checkForUpdates(trigger: .manual) }
-                }
-                .disabled(self.updateCoordinator.isChecking)
-
-                if self.updateCoordinator.pendingAvailability != nil {
-                    Button(L.settingsUpdatesInstallAction) {
-                        Task { await self.updateCoordinator.handleToolbarAction() }
+                HStack(spacing: 12) {
+                    SettingsAboutActionButton(
+                        title: L.settingsAboutGitHubAction,
+                        icon: "chevron.left.forwardslash.chevron.right"
+                    ) {
+                        self.open(self.repositoryURL)
                     }
-                    .disabled(self.updateCoordinator.isChecking)
+                    SettingsAboutActionButton(
+                        title: L.settingsAboutIssuesAction,
+                        icon: "ladybug"
+                    ) {
+                        self.open(self.issuesURL)
+                    }
                 }
-            }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text(L.codexPanelCLIInstallTitle)
-                    .font(.system(size: 12, weight: .medium))
+                VStack(alignment: .leading, spacing: 14) {
+                    SettingsAboutInfoRow(
+                        title: L.settingsUpdatesCurrentVersionTitle,
+                        value: self.currentVersion
+                    )
+                    SettingsAboutInfoRow(
+                        title: L.settingsUpdatesLatestVersionTitle,
+                        value: self.latestVersion
+                    )
+                    SettingsAboutInfoRow(
+                        title: L.settingsAboutUpdateStatusTitle,
+                        value: self.statusText
+                    )
 
-                Text(L.codexPanelCLIInstallHint)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 10) {
+                        SettingsAboutActionButton(
+                            title: L.settingsUpdatesCheckAction,
+                            icon: "arrow.triangle.2.circlepath"
+                        ) {
+                            Task { await self.updateCoordinator.checkForUpdates(trigger: .manual) }
+                        }
+                        .disabled(self.updateCoordinator.isChecking)
 
-                SettingsUpdatesInfoRow(
-                    title: L.codexPanelCLIInstallStatusTitle,
-                    value: self.cliStatusText
-                )
-
-                HStack(spacing: 10) {
-                    Button(L.codexPanelCLIInstallAction) {
-                        do {
-                            let result = try self.cliInstallService.installSymlink()
-                            self.cliInstallMessage = L.codexPanelCLIInstallSucceeded(
-                                installPath: result.installPath,
-                                helperPath: result.helperPath
-                            )
-                        } catch {
-                            self.cliInstallMessage = error.localizedDescription
+                        if self.updateCoordinator.pendingAvailability != nil {
+                            SettingsAboutActionButton(
+                                title: L.settingsUpdatesInstallAction,
+                                icon: "arrow.down.to.line"
+                            ) {
+                                Task { await self.updateCoordinator.handleToolbarAction() }
+                            }
+                            .disabled(self.updateCoordinator.isChecking)
                         }
                     }
-                    .disabled({
-                        if case .helperMissing = self.cliStatus {
-                            return true
-                        }
-                        return false
-                    }())
+                }
+                .frame(maxWidth: 560)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                )
 
-                    if let cliInstallMessage = self.cliInstallMessage {
-                        Text(cliInstallMessage)
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 12) {
+                    SettingsAboutInfoRow(
+                        title: L.settingsAboutCLIStatusTitle,
+                        value: self.cliStatusText
+                    )
+
+                    Text(L.codexPanelCLIInstallHint)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 10) {
+                        SettingsAboutActionButton(
+                            title: L.codexPanelCLIInstallAction,
+                            icon: "terminal"
+                        ) {
+                            do {
+                                let result = try self.cliInstallService.installSymlink()
+                                self.cliInstallMessage = L.codexPanelCLIInstallSucceeded(
+                                    installPath: result.installPath,
+                                    helperPath: result.helperPath
+                                )
+                            } catch {
+                                self.cliInstallMessage = error.localizedDescription
+                            }
+                        }
+                        .disabled({
+                            if case .helperMissing = self.cliStatus {
+                                return true
+                            }
+                            return false
+                        }())
+
+                        if let cliInstallMessage = self.cliInstallMessage {
+                            Text(cliInstallMessage)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
+                .frame(maxWidth: 560, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                )
             }
+            .frame(maxWidth: .infinity)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(L.settingsUpdatesSourceNote)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(L.settingsUpdatesReissueLimitNote)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, minHeight: 420)
+    }
+
+    private func open(_ url: URL?) {
+        guard let url else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 
-private struct SettingsUpdatesInfoRow: View {
+private struct SettingsAboutAppIcon: View {
+    var body: some View {
+        Image(nsImage: NSApplication.shared.applicationIconImage)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: 92, height: 92)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.18), radius: 20, y: 12)
+    }
+}
+
+private struct SettingsAboutInfoRow: View {
     let title: String
     let value: String
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Text(self.title)
-                .font(.system(size: 11, weight: .medium))
-                .frame(width: 160, alignment: .leading)
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: 92, alignment: .leading)
+
             Text(self.value)
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(0.06))
+    }
+}
+
+private struct SettingsAboutActionButton: View {
+    let title: String
+    let icon: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: self.action) {
+            SettingsCapsuleButtonLabel(title: self.title, icon: self.icon)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct SettingsToolbarActionButtonLabel: View {
+    let title: String
+    var isEnabled: Bool = true
+
+    var body: some View {
+        SettingsCapsuleButtonLabel(
+            title: self.title,
+            isEnabled: self.isEnabled
         )
+    }
+}
+
+private struct SettingsCapsuleButtonLabel: View {
+    let title: String
+    var icon: String? = nil
+    var isEnabled: Bool = true
+
+    var body: some View {
+        HStack(spacing: self.icon == nil ? 0 : 6) {
+            if let icon = self.icon {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+
+            Text(self.title)
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .foregroundColor(self.isEnabled ? .primary : Color.secondary.opacity(0.9))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+        .background(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(Color.white.opacity(self.isEnabled ? 0.06 : 0.03))
+        )
+        .opacity(self.isEnabled ? 1.0 : 0.78)
     }
 }
 
@@ -983,8 +1188,8 @@ private extension SettingsPage {
             return L.settingsRecordsPageTitle
         case .usage:
             return L.settingsUsagePageTitle
-        case .updates:
-            return L.settingsUpdatesPageTitle
+        case .about:
+            return L.settingsAboutPageTitle
         }
     }
 
@@ -996,8 +1201,21 @@ private extension SettingsPage {
             return "clock.arrow.circlepath"
         case .usage:
             return "chart.bar"
-        case .updates:
-            return "arrow.trianglehead.2.clockwise"
+        case .about:
+            return "info.circle.fill"
+        }
+    }
+
+    var iconTint: Color {
+        switch self {
+        case .accounts:
+            return Color(red: 0.40, green: 0.63, blue: 1.00)
+        case .records:
+            return Color(red: 0.99, green: 0.65, blue: 0.16)
+        case .usage:
+            return Color(red: 0.20, green: 0.76, blue: 0.86)
+        case .about:
+            return Color(red: 0.45, green: 0.76, blue: 0.97)
         }
     }
 }
