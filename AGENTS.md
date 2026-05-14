@@ -38,6 +38,10 @@ This repository ships a single operator surface:
 
 For OpenAI OAuth account import, use the menu bar app and its localhost callback listener.
 
+The app also ships an agent-facing native CLI driver named `codexpanel`.
+Use it for top-level UI intent routing and native Accessibility inspection instead of visual simulation when possible.
+V1 supports `view`, `state`, `snapshot`, and `doctor`; it does not support generic `click` / `fill` / `press` operations or MCP.
+
 ## Safety rules
 
 - Do not manually edit `~/.codex/auth.json` or `~/.codex/config.toml` when Codex Panel can perform the operation.
@@ -56,6 +60,30 @@ For OpenAI OAuth account import, use the menu bar app and its localhost callback
 
 - 不要依赖 `/` 菜单能枚举出所有本地 skill。
 - 对仓库内 skill，优先使用 `$skill-name` 显式触发。
-- 本仓库常用示例：
+- 项目级通用 skill 源文件统一放在 `.agent/skills/<skill-name>/SKILL.md`。
+- `.codex/skills/<skill-name>` 与 `.cursor/skills/<skill-name>` 可以作为 symlink 指向 `.agent/skills/<skill-name>`，让 Codex 与 Cursor 开发者共用同一份说明。
+- 修改共享 skill 时，优先编辑 `.agent/skills/...` 下的源文件，不要分别维护 `.codex` 与 `.cursor` 两份拷贝。
+
+本仓库常用示例：
+
+- `$codexpanel-cli-driver 打开 Codex Panel 设置页、读取 state/snapshot，或排查 CLI 安装与 Accessibility 权限。`
 - `$codexpanel-local-release 按仓库约定执行一次本地发版闭环并汇报结果。`
-- `$codexpanel 执行 OpenAI OAuth 账户登录/导入/激活相关操作。`
+- `$codexpanel 用作 Codex Panel 仓库通用入口，并根据任务转向更具体的 repo-local skill。`
+
+## Codex Panel CLI Driver 使用边界
+
+- 已安装 CLI 命令名是 `codexpanel`，不是旧的 `codexpanel-ctl`。
+- 需要 agent 友好地操作界面时，优先使用 `$codexpanel-cli-driver`。
+- `snapshot` 与 `view --wait` 依赖 macOS Accessibility 授权；未授权时应明确说明权限阻塞，不要退回到截图/OCR 伪装成功。
+- V1 只能打开/关闭已知视图并读取原生结构；不要承诺任意控件点击、输入或 ref action。
+
+常用命令：
+
+```bash
+codexpanel view open settings --page usage --wait 3 --json
+codexpanel view open menu --wait 3 --json
+codexpanel view close all --wait 3 --json
+codexpanel state --json
+codexpanel snapshot --format tree --target auto
+codexpanel doctor --json
+```
