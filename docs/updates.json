@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "channel": "stable",
+  "release": {
+    "version": "1.4.2",
+    "publishedAt": "2026-05-13T16:06:50Z",
+    "summary": "v1.4.2",
+    "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.4.2",
+    "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.4.2",
+    "deliveryMode": "guidedDownload",
+    "minimumAutomaticUpdateVersion": null,
+    "artifacts": [
+      {
+        "architecture": "universal",
+        "format": "dmg",
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.4.2/codexpanel-1.4.2-macOS.dmg",
+        "sha256": "8b4255a57ee13094d28154a914bd0af3f6f4a8c2b32f64ffd4be2fc0304a1d8a"
+      },
+      {
+        "architecture": "universal",
+        "format": "zip",
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.4.2/codexpanel-1.4.2-macOS.zip",
+        "sha256": "7e45745bc3dffa125bf784696860dcc1f2d77fbaf7cc4be8b83084f9e6b710be"
+      }
+    ]
+  }
+}

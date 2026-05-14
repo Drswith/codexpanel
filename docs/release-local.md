@@ -181,8 +181,17 @@ gh release create "$TAG" \
   --notes "Release $VERSION"
 ```
 
+发版脚本会在产物目录额外生成 `updates.json`，并在 `--upload upload/create` 时自动作为 release asset 上传。  
+客户端默认读取 `https://github.com/Drswith/codexpanel/releases/latest/download/updates.json`，因此不会受 `main` 分支提前修改影响。  
+如需保留仓库内可读副本，可额外同步覆盖 `docs/updates.json`：
+
+```sh
+cp "$DIST_DIR/updates.json" docs/updates.json
+```
+
 ## 7. 发版后核对
 
 - GitHub release 页面存在 `dmg` 和 `zip` 资产
 - `sha256` 文件与对应资产匹配
-- 客户端“检查更新”可识别该正式 release
+- 更新仓库内 `docs/updates.json`，并确保 `version`、下载 URL、`sha256` 与本次 release 一致
+- 客户端“检查更新”可识别该正式 release（优先读 `updates.json`，失败后回退 `releases/latest`，最后兜底 Releases API）
