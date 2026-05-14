@@ -1633,8 +1633,7 @@ struct MenuBarView: View {
     }
 
     private func startOAuthLogin() {
-        self.requestCloseStatusItemMenu()
-        OpenAILoginCoordinator.shared.start()
+        CodexPanelUICommandRouter.shared.openLogin()
     }
 
     private func exportOpenAIAccountsCSV() {
@@ -1685,20 +1684,7 @@ struct MenuBarView: View {
     }
 
     private func openSettingsWindow() {
-        self.requestCloseStatusItemMenu()
-        DetachedWindowPresenter.shared.show(
-            id: "openai-settings",
-            title: L.settingsWindowTitle,
-            size: CGSize(width: 820, height: 620),
-            configuration: .openAISettings
-        ) {
-            SettingsWindowView(
-                store: self.store,
-                codexAppPathPanelService: self.codexAppPathPanelService
-            ) {
-                DetachedWindowPresenter.shared.close(id: "openai-settings")
-            }
-        }
+        CodexPanelUICommandRouter.shared.openSettings()
     }
 
     private func openAddProviderWindow(defaultPreset: AddProviderPreset = .custom) {

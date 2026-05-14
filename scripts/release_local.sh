@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -769,8 +771,6 @@ xcodebuild \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   ONLY_ACTIVE_ARCH=YES \
   ARCHS=arm64 \
-  SWIFT_COMPILATION_MODE=singlefile \
-  SWIFT_OPTIMIZATION_LEVEL=-Onone \
   build
 
 echo "==> Building x86_64 release"
@@ -786,8 +786,6 @@ xcodebuild \
   CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   ONLY_ACTIVE_ARCH=YES \
   ARCHS=x86_64 \
-  SWIFT_COMPILATION_MODE=singlefile \
-  SWIFT_OPTIMIZATION_LEVEL=-Onone \
   build
 
 ARM64_APP="$ARM64_DERIVED/Build/Products/Release/$APP_NAME"
@@ -801,13 +799,19 @@ fi
 
 echo "==> Assembling universal app"
 cp -R "$ARM64_APP" "$UNIVERSAL_APP"
-for binary in \
-  "Contents/MacOS/$APP_EXECUTABLE_NAME" \
-  "Contents/MacOS/$APP_EXECUTABLE_NAME.debug.dylib" \
+
+required_binaries=(
+  "Contents/MacOS/$APP_EXECUTABLE_NAME"
+  "Contents/Helpers/codexpanel"
+)
+optional_binaries=(
+  "Contents/MacOS/$APP_EXECUTABLE_NAME.debug.dylib"
   "Contents/MacOS/__preview.dylib"
-do
+)
+
+for binary in "${required_binaries[@]}"; do
   if [[ ! -f "$ARM64_APP/$binary" || ! -f "$X64_APP/$binary" ]]; then
-    echo "Missing binary for lipo: $binary" >&2
+    echo "Missing required binary for lipo: $binary" >&2
     exit 1
   fi
   lipo -create \
@@ -815,6 +819,27 @@ do
     "$X64_APP/$binary" \
     -output "$UNIVERSAL_APP/$binary"
 done
+
+for binary in "${optional_binaries[@]}"; do
+  if [[ -f "$ARM64_APP/$binary" && -f "$X64_APP/$binary" ]]; then
+    lipo -create \
+      "$ARM64_APP/$binary" \
+      "$X64_APP/$binary" \
+      -output "$UNIVERSAL_APP/$binary"
+  else
+    rm -f "$UNIVERSAL_APP/$binary"
+    echo "Skipping optional binary for lipo: $binary"
+  fi
+done
+
+CLI_HELPER_PATH="$UNIVERSAL_APP/Contents/Helpers/codexpanel"
+if [[ ! -f "$CLI_HELPER_PATH" ]]; then
+  echo "Bundled CLI helper missing: $CLI_HELPER_PATH" >&2
+  exit 1
+fi
+if [[ ! -x "$CLI_HELPER_PATH" ]]; then
+  chmod +x "$CLI_HELPER_PATH"
+fi
 
 echo "==> Packaging artifacts"
 ditto -c -k --sequesterRsrc --keepParent "$UNIVERSAL_APP" "$DIST_DIR/$ZIP_NAME"
@@ -878,6 +903,9 @@ cat > "$UPDATES_JSON_PATH" <<EOF
   }
 }
 EOF
+
+echo "==> Verifying packaged artifacts"
+"$SCRIPT_DIR/verify_release_artifacts.sh" "$UNIVERSAL_APP" "$DIST_DIR"
 
 if [[ "$UPLOAD_MODE" == "upload" ]]; then
   echo "==> Uploading assets to existing release: $TAG"

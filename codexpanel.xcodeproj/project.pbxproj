@@ -6,11 +6,40 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		D1D100010000000000000001 /* codexpanel in Copy CLI Helper */ = {isa = PBXBuildFile; fileRef = D1D100020000000000000001 /* codexpanel */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D1D100070000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C0C16B3E2F7423BE00A2A16F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D1D100090000000000000001;
+			remoteInfo = codexpanelCLI;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D1D100060000000000000001 /* Copy CLI Helper */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "Contents/Helpers";
+			dstSubfolderSpec = 1;
+			files = (
+				D1D100010000000000000001 /* codexpanel in Copy CLI Helper */,
+			);
+			name = "Copy CLI Helper";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		9F23A0013C5A4B7200A00001 /* Signing.local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.local.example.xcconfig; sourceTree = "<group>"; };
 		9F23A0023C5A4B7200A00001 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		C0C16B462F7423BE00A2A16F /* Codex Panel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Codex Panel.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-			C0C16B6B2F7428A100A2A16F /* codexpanelTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = codexpanelTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0C16B6B2F7428A100A2A16F /* codexpanelTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = codexpanelTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1D100020000000000000001 /* codexpanel */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = codexpanel; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -30,23 +59,38 @@
 				);
 				target = C0C16B782F7428A100A2A16F /* codexpanelTests */;
 			};
+			D1D1000D0000000000000001 /* Exceptions for "codexpanelCLI" folder in "codexpanelTests" target */ = {
+				isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+				membershipExceptions = (
+					main.swift,
+				);
+				target = C0C16B782F7428A100A2A16F /* codexpanelTests */;
+			};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-			C0C16B482F7423BE00A2A16F /* codexPanel */ = {
-				isa = PBXFileSystemSynchronizedRootGroup;
-				exceptions = (
-					C0C16B682F74282500A2A16F /* Exceptions for "codexPanel" folder in "codexpanel" target */,
-					C0C16B6D2F7428A100A2A16F /* Exceptions for "codexPanel" folder in "codexpanelTests" target */,
-				);
-				path = codexPanel;
-				sourceTree = "<group>";
-			};
-			C0C16B6F2F7428A100A2A16F /* codexPanelTests */ = {
-				isa = PBXFileSystemSynchronizedRootGroup;
-				path = codexPanelTests;
+		C0C16B482F7423BE00A2A16F /* codexPanel */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C0C16B682F74282500A2A16F /* Exceptions for "codexPanel" folder in "codexpanel" target */,
+				C0C16B6D2F7428A100A2A16F /* Exceptions for "codexPanel" folder in "codexpanelTests" target */,
+			);
+			path = codexPanel;
 			sourceTree = "<group>";
 		};
+		C0C16B6F2F7428A100A2A16F /* codexPanelTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = codexPanelTests;
+			sourceTree = "<group>";
+		};
+			D1D100030000000000000001 /* codexpanelCLI */ = {
+				isa = PBXFileSystemSynchronizedRootGroup;
+				exceptions = (
+					D1D1000D0000000000000001 /* Exceptions for "codexpanelCLI" folder in "codexpanelTests" target */,
+				);
+				path = codexpanelCLI;
+				sourceTree = "<group>";
+			};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,6 +115,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D1D100040000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -83,43 +134,47 @@
 			path = Configs;
 			sourceTree = "<group>";
 		};
-			C0C16B3D2F7423BE00A2A16F = {
-				isa = PBXGroup;
-				children = (
-					9F23A0033C5A4B7200A00001 /* Configs */,
-					C0C16B482F7423BE00A2A16F /* codexPanel */,
-					C0C16B6F2F7428A100A2A16F /* codexPanelTests */,
-					C0C16B472F7423BE00A2A16F /* Products */,
-				);
+		C0C16B3D2F7423BE00A2A16F = {
+			isa = PBXGroup;
+			children = (
+				9F23A0033C5A4B7200A00001 /* Configs */,
+				C0C16B482F7423BE00A2A16F /* codexPanel */,
+				C0C16B6F2F7428A100A2A16F /* codexPanelTests */,
+				D1D100030000000000000001 /* codexpanelCLI */,
+				C0C16B472F7423BE00A2A16F /* Products */,
+			);
 			sourceTree = "<group>";
 		};
-			C0C16B472F7423BE00A2A16F /* Products */ = {
-				isa = PBXGroup;
-				children = (
-					C0C16B462F7423BE00A2A16F /* Codex Panel.app */,
-					C0C16B6B2F7428A100A2A16F /* codexpanelTests.xctest */,
-				);
-				name = Products;
+		C0C16B472F7423BE00A2A16F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C0C16B462F7423BE00A2A16F /* Codex Panel.app */,
+				C0C16B6B2F7428A100A2A16F /* codexpanelTests.xctest */,
+				D1D100020000000000000001 /* codexpanel */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-			C0C16B452F7423BE00A2A16F /* codexpanel */ = {
-				isa = PBXNativeTarget;
-				buildConfigurationList = C0C16B512F7423BF00A2A16F /* Build configuration list for PBXNativeTarget "codexpanel" */;
-				buildPhases = (
-					C0C16B422F7423BE00A2A16F /* Sources */,
-					C0C16B432F7423BE00A2A16F /* Frameworks */,
-					C0C16B442F7423BE00A2A16F /* Resources */,
-				);
-				buildRules = (
-				);
-				dependencies = (
-				);
-				fileSystemSynchronizedGroups = (
-					C0C16B482F7423BE00A2A16F /* codexPanel */,
-				);
+		C0C16B452F7423BE00A2A16F /* codexpanel */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0C16B512F7423BF00A2A16F /* Build configuration list for PBXNativeTarget "codexpanel" */;
+			buildPhases = (
+				C0C16B422F7423BE00A2A16F /* Sources */,
+				C0C16B432F7423BE00A2A16F /* Frameworks */,
+				C0C16B442F7423BE00A2A16F /* Resources */,
+				D1D100060000000000000001 /* Copy CLI Helper */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D1D100080000000000000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C0C16B482F7423BE00A2A16F /* codexPanel */,
+			);
 			name = codexpanel;
 			packageProductDependencies = (
 			);
@@ -127,9 +182,9 @@
 			productReference = C0C16B462F7423BE00A2A16F /* Codex Panel.app */;
 			productType = "com.apple.product-type.application";
 		};
-			C0C16B782F7428A100A2A16F /* codexpanelTests */ = {
-				isa = PBXNativeTarget;
-				buildConfigurationList = C0C16B832F7428A100A2A16F /* Build configuration list for PBXNativeTarget "codexpanelTests" */;
+		C0C16B782F7428A100A2A16F /* codexpanelTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0C16B832F7428A100A2A16F /* Build configuration list for PBXNativeTarget "codexpanelTests" */;
 			buildPhases = (
 				C0C16B732F7428A100A2A16F /* Sources */,
 				C0C16B742F7428A100A2A16F /* Frameworks */,
@@ -138,17 +193,39 @@
 			buildRules = (
 			);
 			dependencies = (
-				);
+			);
 				fileSystemSynchronizedGroups = (
 					C0C16B482F7423BE00A2A16F /* codexPanel */,
 					C0C16B6F2F7428A100A2A16F /* codexPanelTests */,
+					D1D100030000000000000001 /* codexpanelCLI */,
 				);
-				name = codexpanelTests;
+			name = codexpanelTests;
 			packageProductDependencies = (
 			);
 			productName = codexpanelTests;
 			productReference = C0C16B6B2F7428A100A2A16F /* codexpanelTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D1D100090000000000000001 /* codexpanelCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D1D1000A0000000000000001 /* Build configuration list for PBXNativeTarget "codexpanelCLI" */;
+			buildPhases = (
+				D1D100050000000000000001 /* Sources */,
+				D1D100040000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D1D100030000000000000001 /* codexpanelCLI */,
+			);
+			name = codexpanelCLI;
+			packageProductDependencies = (
+			);
+			productName = codexpanel;
+			productReference = D1D100020000000000000001 /* codexpanel */;
+			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
 
@@ -160,12 +237,15 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
-						C0C16B452F7423BE00A2A16F = {
-							CreatedOnToolsVersion = 26.3;
-						};
-						C0C16B782F7428A100A2A16F = {
-							CreatedOnToolsVersion = 26.3;
-						};
+					C0C16B452F7423BE00A2A16F = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					C0C16B782F7428A100A2A16F = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					D1D100090000000000000001 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 				};
 			};
 			buildConfigurationList = C0C16B412F7423BE00A2A16F /* Build configuration list for PBXProject "codexpanel" */;
@@ -180,12 +260,13 @@
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C0C16B472F7423BE00A2A16F /* Products */;
 			projectDirPath = "";
-				projectRoot = "";
-				targets = (
-					C0C16B452F7423BE00A2A16F /* codexpanel */,
-					C0C16B782F7428A100A2A16F /* codexpanelTests */,
-				);
-			};
+			projectRoot = "";
+			targets = (
+				C0C16B452F7423BE00A2A16F /* codexpanel */,
+				C0C16B782F7428A100A2A16F /* codexpanelTests */,
+				D1D100090000000000000001 /* codexpanelCLI */,
+			);
+		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -213,7 +294,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D1D100050000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		D1D100080000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D1D100090000000000000001 /* codexpanelCLI */;
+			targetProxy = D1D100070000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		C0C16B4F2F7423BF00A2A16F /* Debug */ = {
@@ -454,6 +550,38 @@
 			};
 			name = Release;
 		};
+		D1D1000B0000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.codexpanel.cli;
+				PRODUCT_NAME = codexpanel;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D1D1000C0000000000000001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.codexpanel.cli;
+				PRODUCT_NAME = codexpanel;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -475,11 +603,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-			C0C16B832F7428A100A2A16F /* Build configuration list for PBXNativeTarget "codexpanelTests" */ = {
-				isa = XCConfigurationList;
-				buildConfigurations = (
+		C0C16B832F7428A100A2A16F /* Build configuration list for PBXNativeTarget "codexpanelTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
 				C0C16B7E2F7428A100A2A16F /* Debug */,
 				C0C16B7F2F7428A100A2A16F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D1D1000A0000000000000001 /* Build configuration list for PBXNativeTarget "codexpanelCLI" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D1D1000B0000000000000001 /* Debug */,
+				D1D1000C0000000000000001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

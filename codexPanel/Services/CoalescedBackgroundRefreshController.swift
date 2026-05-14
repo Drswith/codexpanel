@@ -20,6 +20,9 @@ final class CoalescedBackgroundRefreshController<Result> {
         self.queue = queue
     }
 
+    @_optimize(none)
+    deinit {}
+
     func requestRefresh(
         now: Date = Date(),
         load: @escaping Loader,

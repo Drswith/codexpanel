@@ -3,16 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.codexpanel.oauth</string>
-			</array>
-		</dict>
-	</array>
+		<array>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>com.codexpanel.oauth</string>
+					<string>codexpanel</string>
+				</array>
+			</dict>
+		</array>
 	<key>CodexPanelGitHubReleasesURL</key>
 	<string>https://api.github.com/repos/Drswith/codexpanel/releases</string>
 	<key>CodexPanelGitHubLatestReleaseURL</key>

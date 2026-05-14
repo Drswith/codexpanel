@@ -159,6 +159,44 @@ enum L {
             ? "如果你已安装某个版本的较早构建，同版本重发通常不会自动显示为可升级；需要手工下载重发 build。"
             : "If you already installed an earlier build with the same version number, a same-version reissue will usually not show up as an upgrade automatically; you must download the reissued build manually."
     }
+    static var codexPanelCLIInstallTitle: String { zh ? "CLI 安装" : "CLI Install" }
+    static var codexPanelCLIInstallHint: String {
+        zh
+            ? "把 App 内置的 codexpanel helper 链接到 ~/.local/bin/codexpanel，便于终端和 agent 直接调用。"
+            : "Link the bundled codexpanel helper to ~/.local/bin/codexpanel for terminal and agent use."
+    }
+    static var codexPanelCLIInstallStatusTitle: String { zh ? "CLI 状态" : "CLI Status" }
+    static var codexPanelCLIInstallAction: String { zh ? "安装或更新 CLI 链接" : "Install or Update CLI Link" }
+    static func codexPanelCLIInstallNotInstalled(_ installPath: String) -> String {
+        zh ? "尚未安装：\(installPath)" : "Not installed: \(installPath)"
+    }
+    static func codexPanelCLIInstallInstalled(installPath: String, linkedTarget: String?, helperPath: String) -> String {
+        if zh {
+            let resolved = linkedTarget ?? helperPath
+            return "已安装：\(installPath) -> \(resolved)"
+        }
+        let resolved = linkedTarget ?? helperPath
+        return "Installed: \(installPath) -> \(resolved)"
+    }
+    static func codexPanelCLIInstallSucceeded(installPath: String, helperPath: String) -> String {
+        zh
+            ? "已安装 CLI：\(installPath) -> \(helperPath)"
+            : "CLI installed: \(installPath) -> \(helperPath)"
+    }
+    static func codexPanelCLIInstallHelperMissing(_ helperPath: String) -> String {
+        zh
+            ? "未找到内置 CLI helper：\(helperPath)"
+            : "Bundled CLI helper not found: \(helperPath)"
+    }
+    static func codexPanelCLIInstallCreateDirectoryFailed(_ path: String, _ message: String) -> String {
+        zh ? "创建 CLI 目录失败：\(path)，\(message)" : "Failed to create CLI directory \(path): \(message)"
+    }
+    static func codexPanelCLIInstallRemoveExistingFailed(_ path: String, _ message: String) -> String {
+        zh ? "移除旧 CLI 链接失败：\(path)，\(message)" : "Failed to remove existing CLI link \(path): \(message)"
+    }
+    static func codexPanelCLIInstallCreateSymlinkFailed(_ path: String, _ message: String) -> String {
+        zh ? "创建 CLI 链接失败：\(path)，\(message)" : "Failed to create CLI link \(path): \(message)"
+    }
     static func settingsUpdatesUpToDate(_ version: String) -> String {
         zh ? "当前版本 \(version) 已与最新稳定版本一致。" : "The current version \(version) already matches the latest stable version."
     }
