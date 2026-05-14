@@ -15,6 +15,7 @@ struct SettingsWindowView: View {
         store: TokenStore,
         updateCoordinator: UpdateCoordinator? = nil,
         codexAppPathPanelService: CodexAppPathPanelService,
+        initialPage: SettingsPage = .accounts,
         onClose: @escaping () -> Void
     ) {
         self._store = ObservedObject(wrappedValue: store)
@@ -25,7 +26,8 @@ struct SettingsWindowView: View {
             wrappedValue: SettingsWindowCoordinator(
                 config: store.config,
                 accounts: store.accounts,
-                historicalModels: store.historicalModels
+                historicalModels: store.historicalModels,
+                selectedPage: initialPage
             )
         )
         self._recordsModel = StateObject(
@@ -76,6 +78,7 @@ struct SettingsWindowView: View {
             .background(Color(NSColor.windowBackgroundColor))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("codexpanel.settings.window")
         .onReceive(self.store.$config.dropFirst()) { config in
             self.coordinator.reconcileExternalState(
                 config: config,
@@ -257,6 +260,9 @@ private struct SettingsUsagePage: View {
 
 private struct SettingsUpdatesPage: View {
     @ObservedObject var updateCoordinator: UpdateCoordinator
+    @State private var cliInstallMessage: String?
+
+    private let cliInstallService = CodexPanelCLIInstallService()
 
     private var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
@@ -298,6 +304,25 @@ private struct SettingsUpdatesPage: View {
         }
     }
 
+    private var cliStatus: CodexPanelCLIInstallStatus {
+        self.cliInstallService.status()
+    }
+
+    private var cliStatusText: String {
+        switch self.cliStatus {
+        case .helperMissing(let helperPath, _):
+            return L.codexPanelCLIInstallHelperMissing(helperPath)
+        case .notInstalled(_, let installPath):
+            return L.codexPanelCLIInstallNotInstalled(installPath)
+        case .installed(let helperPath, let installPath, let linkedTarget):
+            return L.codexPanelCLIInstallInstalled(
+                installPath: installPath,
+                linkedTarget: linkedTarget,
+                helperPath: helperPath
+            )
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text(SettingsPage.updates.title)
@@ -334,6 +359,48 @@ private struct SettingsUpdatesPage: View {
                         Task { await self.updateCoordinator.handleToolbarAction() }
                     }
                     .disabled(self.updateCoordinator.isChecking)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text(L.codexPanelCLIInstallTitle)
+                    .font(.system(size: 12, weight: .medium))
+
+                Text(L.codexPanelCLIInstallHint)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                SettingsUpdatesInfoRow(
+                    title: L.codexPanelCLIInstallStatusTitle,
+                    value: self.cliStatusText
+                )
+
+                HStack(spacing: 10) {
+                    Button(L.codexPanelCLIInstallAction) {
+                        do {
+                            let result = try self.cliInstallService.installSymlink()
+                            self.cliInstallMessage = L.codexPanelCLIInstallSucceeded(
+                                installPath: result.installPath,
+                                helperPath: result.helperPath
+                            )
+                        } catch {
+                            self.cliInstallMessage = error.localizedDescription
+                        }
+                    }
+                    .disabled({
+                        if case .helperMissing = self.cliStatus {
+                            return true
+                        }
+                        return false
+                    }())
+
+                    if let cliInstallMessage = self.cliInstallMessage {
+                        Text(cliInstallMessage)
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
 
