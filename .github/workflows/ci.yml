@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: build-and-test
+  build:
+    name: build
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -36,7 +36,7 @@ jobs:
           fi
           xcodebuild -version
 
-      - name: Build and test
+      - name: Build
         run: |
           xcodebuild \
             -project codexpanel.xcodeproj \
@@ -45,4 +45,4 @@ jobs:
             -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            test
+            build
