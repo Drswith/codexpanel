@@ -101,6 +101,16 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     private struct RefreshedCachedSessions {
         let records: [CachedSessionRecord]
         let warnings: [RecordsSnapshotWarning]
+        let stats: RecordsSnapshotLoadStats
+    }
+
+    private struct RecordsSnapshotLoadStats {
+        let fileCount: Int
+        let totalBytes: Int
+        let cacheHitCount: Int
+        let parsedFileCount: Int
+        let changedFileCount: Int
+        let warningCount: Int
     }
 
     private struct SessionFileScanResult {
@@ -170,6 +180,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     private let persistedCacheURL: URL
     private let persistedUsageLedgerURL: URL
     private let billableCostCalculator: (String, Usage, Usage) -> Double?
+    private let recordsDiagnosticsRecorder: (String, [String: Any]) -> Void
     private let queue = DispatchQueue(label: "com.codexpanel.session-log-store", qos: .utility)
     private let persistedCacheVersion = 4
     private let persistedUsageLedgerVersion = 2
@@ -184,6 +195,9 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         codexRootURL: URL = CodexPaths.codexRoot,
         persistedCacheURL: URL = CodexPaths.costSessionCacheURL,
         persistedUsageLedgerURL: URL? = nil,
+        recordsDiagnosticsRecorder: @escaping (String, [String: Any]) -> Void = { type, fields in
+            AppLifecycleDiagnostics.shared.recordEvent(type: type, fields: fields)
+        },
         billableCostCalculator: @escaping (String, Usage, Usage) -> Double? = { model, usage, sessionUsage in
             LocalCostPricing.costUSD(model: model, usage: usage, sessionUsage: sessionUsage)
         }
@@ -193,6 +207,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         self.persistedCacheURL = persistedCacheURL
         self.persistedUsageLedgerURL = persistedUsageLedgerURL
             ?? persistedCacheURL.deletingLastPathComponent().appendingPathComponent("cost-event-ledger.json")
+        self.recordsDiagnosticsRecorder = recordsDiagnosticsRecorder
         self.billableCostCalculator = billableCostCalculator
 
         let loadedSessionCache = self.loadPersistedCache()
@@ -259,10 +274,39 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     ) async throws -> RecordsSourceSnapshot {
         try await withCheckedThrowingContinuation { continuation in
             self.queue.async {
+                let startedAt = Date()
+                self.recordsDiagnosticsRecorder(
+                    "records_snapshot_load_started",
+                    self.recordsSnapshotDiagnosticFields(
+                        refreshMode: refreshMode,
+                        durationMs: 0,
+                        stats: nil
+                    )
+                )
                 do {
-                    let snapshot = try self.loadRecordsSourceSnapshotLocked(refreshMode: refreshMode)
+                    let result = try self.loadRecordsSourceSnapshotLocked(refreshMode: refreshMode)
+                    let durationMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                    self.recordsDiagnosticsRecorder(
+                        "records_snapshot_load_finished",
+                        self.recordsSnapshotDiagnosticFields(
+                            refreshMode: refreshMode,
+                            durationMs: durationMs,
+                            stats: result.stats
+                        )
+                    )
+                    let snapshot = result.snapshot
                     continuation.resume(returning: snapshot)
                 } catch {
+                    let durationMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+                    self.recordsDiagnosticsRecorder(
+                        "records_snapshot_load_failed",
+                        self.recordsSnapshotDiagnosticFields(
+                            refreshMode: refreshMode,
+                            durationMs: durationMs,
+                            stats: nil,
+                            errorDescription: error.localizedDescription
+                        )
+                    )
                     continuation.resume(throwing: error)
                 }
             }
@@ -373,6 +417,10 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
 
         var warnings = scanResult.warnings
         warnings.reserveCapacity(files.count)
+        var totalBytes = 0
+        var cacheHitCount = 0
+        var parsedFileCount = 0
+        var changedFileCount = 0
 
         for fileURL in files {
             autoreleasepool {
@@ -388,15 +436,23 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
                     }
                     return
                 }
+                totalBytes += max(0, fingerprint.fileSize)
 
                 if let cached = previousSessionCache[fileURL],
                    cached.fingerprint == fingerprint,
                    collectWarnings == false || cached.record != nil {
                     nextSessionCache[fileURL] = cached
                     cachedSessions.append(cached)
+                    cacheHitCount += 1
                     return
                 }
 
+                parsedFileCount += 1
+                if let previous = previousSessionCache[fileURL], previous.fingerprint != fingerprint {
+                    changedFileCount += 1
+                } else if previousSessionCache[fileURL] == nil {
+                    changedFileCount += 1
+                }
                 let parsed = self.parseSession(
                     fileURL,
                     fingerprint: fingerprint,
@@ -423,13 +479,21 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
                     return lhs.kind.rawValue < rhs.kind.rawValue
                 }
                 return lhs.message < rhs.message
-            }
+            },
+            stats: RecordsSnapshotLoadStats(
+                fileCount: files.count,
+                totalBytes: totalBytes,
+                cacheHitCount: cacheHitCount,
+                parsedFileCount: parsedFileCount,
+                changedFileCount: changedFileCount,
+                warningCount: warnings.count
+            )
         )
     }
 
     private func loadRecordsSourceSnapshotLocked(
         refreshMode: RecordsRefreshMode
-    ) throws -> RecordsSourceSnapshot {
+    ) throws -> (snapshot: RecordsSourceSnapshot, stats: RecordsSnapshotLoadStats) {
         let refreshed = try self.refreshCachedSessionsLocked(
             rebuildAll: refreshMode == .rebuildAll,
             collectWarnings: true
@@ -439,12 +503,46 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
             self.refreshUsageLedgerLocked(using: refreshed.records)
         }
 
-        return RecordsSourceSnapshot(
-            generatedAt: Date(),
-            refreshMode: refreshMode,
-            sessions: self.historicalSessionRecords(from: refreshed.records),
-            warnings: refreshed.warnings
+        return (
+            snapshot: RecordsSourceSnapshot(
+                generatedAt: Date(),
+                refreshMode: refreshMode,
+                sessions: self.historicalSessionRecords(from: refreshed.records),
+                warnings: refreshed.warnings
+            ),
+            stats: refreshed.stats
         )
+    }
+
+    private func recordsSnapshotDiagnosticFields(
+        refreshMode: RecordsRefreshMode,
+        durationMs: Int,
+        stats: RecordsSnapshotLoadStats?,
+        errorDescription: String? = nil
+    ) -> [String: Any] {
+        var fields: [String: Any] = [
+            "refreshMode": self.diagnosticsRefreshModeValue(refreshMode),
+            "durationMs": max(0, durationMs),
+            "fileCount": stats?.fileCount ?? 0,
+            "totalBytes": stats?.totalBytes ?? 0,
+            "cacheHitCount": stats?.cacheHitCount ?? 0,
+            "parsedFileCount": stats?.parsedFileCount ?? 0,
+            "changedFileCount": stats?.changedFileCount ?? 0,
+            "warningCount": stats?.warningCount ?? 0,
+        ]
+        if let errorDescription, errorDescription.isEmpty == false {
+            fields["error"] = errorDescription
+        }
+        return fields
+    }
+
+    private func diagnosticsRefreshModeValue(_ refreshMode: RecordsRefreshMode) -> String {
+        switch refreshMode {
+        case .incremental:
+            return "incremental"
+        case .rebuildAll:
+            return "rebuildAll"
+        }
     }
 
     private func historicalSessionRecords(

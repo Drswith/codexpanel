@@ -1,6 +1,6 @@
 import Foundation
 
-enum RecordsRefreshMode: Equatable, Sendable {
+enum RecordsRefreshMode: String, Codable, Equatable, Sendable {
     case incremental
     case rebuildAll
 }
@@ -46,7 +46,7 @@ struct RecordsSourceSnapshot: Equatable, Sendable {
     let warnings: [RecordsSnapshotWarning]
 }
 
-struct RecordsSnapshot: Equatable, Sendable {
+struct RecordsSnapshot: Codable, Equatable, Sendable {
     let generatedAt: Date
     let refreshMode: RecordsRefreshMode
     let models: [HistoricalModelRecord]
@@ -59,6 +59,7 @@ protocol RecordsSourceSnapshotLoading: Sendable {
 }
 
 protocol RecordsSnapshotServing: Sendable {
+    func loadCached() async -> RecordsSnapshot?
     func loadCurrent() async throws -> RecordsSnapshot
     func refreshAll(timeout: TimeInterval) async throws -> RecordsSnapshot
 }
@@ -79,36 +80,88 @@ enum RecordsSnapshotServiceError: LocalizedError, Equatable {
 }
 
 struct RecordsSnapshotService: RecordsSnapshotServing {
+    private struct PersistedSnapshotPayload: Codable {
+        let version: Int
+        let generatedAt: Date
+        let refreshMode: RecordsRefreshMode
+        let sessions: [HistoricalSessionRecord]
+        let warnings: [RecordsSnapshotWarning]
+    }
+
+    private let persistedSnapshotVersion = 1
     private let sourceLoader: any RecordsSourceSnapshotLoading
     private let requestCoordinator: RecordsSnapshotRequestCoordinator
+    private let snapshotCacheURL: URL
 
     init(
         sourceLoader: any RecordsSourceSnapshotLoading = SessionLogStore.shared,
-        requestCoordinator: RecordsSnapshotRequestCoordinator = RecordsSnapshotRequestCoordinator()
+        requestCoordinator: RecordsSnapshotRequestCoordinator = RecordsSnapshotRequestCoordinator(),
+        snapshotCacheURL: URL = CodexPaths.recordsSnapshotCacheURL
     ) {
         self.sourceLoader = sourceLoader
         self.requestCoordinator = requestCoordinator
+        self.snapshotCacheURL = snapshotCacheURL
+    }
+
+    func loadCached() async -> RecordsSnapshot? {
+        guard let data = try? Data(contentsOf: self.snapshotCacheURL) else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let payload = try? decoder.decode(PersistedSnapshotPayload.self, from: data),
+              payload.version == self.persistedSnapshotVersion else {
+            return nil
+        }
+        return RecordsSnapshot(
+            generatedAt: payload.generatedAt,
+            refreshMode: payload.refreshMode,
+            models: Self.models(from: payload.sessions),
+            sessions: payload.sessions.sorted(by: Self.shouldSortSessionsBefore),
+            warnings: payload.warnings.sorted(by: Self.shouldSortWarningsBefore)
+        )
     }
 
     func loadCurrent() async throws -> RecordsSnapshot {
-        try await self.requestCoordinator.runRequest(
+        let snapshot = try await self.requestCoordinator.runRequest(
             refreshMode: .incremental,
             timeout: nil,
             sourceLoader: self.sourceLoader,
             makeSnapshot: Self.makeSnapshot(from:)
         )
+        self.persistCached(snapshot)
+        return snapshot
     }
 
     func refreshAll(timeout: TimeInterval) async throws -> RecordsSnapshot {
-        try await self.requestCoordinator.runRequest(
+        let snapshot = try await self.requestCoordinator.runRequest(
             refreshMode: .rebuildAll,
             timeout: max(0, timeout),
             sourceLoader: self.sourceLoader,
             makeSnapshot: Self.makeSnapshot(from:)
         )
+        self.persistCached(snapshot)
+        return snapshot
     }
 
-    private static func makeSnapshot(from sourceSnapshot: RecordsSourceSnapshot) -> RecordsSnapshot {
+    private func persistCached(_ snapshot: RecordsSnapshot) {
+        let payload = PersistedSnapshotPayload(
+            version: self.persistedSnapshotVersion,
+            generatedAt: snapshot.generatedAt,
+            refreshMode: snapshot.refreshMode,
+            sessions: snapshot.sessions,
+            warnings: snapshot.warnings
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(payload) else { return }
+        try? FileManager.default.createDirectory(
+            at: self.snapshotCacheURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? CodexPaths.writeSecureFile(data, to: self.snapshotCacheURL)
+    }
+
+    private nonisolated static func makeSnapshot(from sourceSnapshot: RecordsSourceSnapshot) -> RecordsSnapshot {
         RecordsSnapshot(
             generatedAt: sourceSnapshot.generatedAt,
             refreshMode: sourceSnapshot.refreshMode,
@@ -118,7 +171,7 @@ struct RecordsSnapshotService: RecordsSnapshotServing {
         )
     }
 
-    private static func models(from sessions: [HistoricalSessionRecord]) -> [HistoricalModelRecord] {
+    private nonisolated static func models(from sessions: [HistoricalSessionRecord]) -> [HistoricalModelRecord] {
         let groupedSessions = Dictionary(grouping: sessions, by: \.modelID)
         return groupedSessions.map { modelID, groupedRecords in
             HistoricalModelRecord(
@@ -130,7 +183,7 @@ struct RecordsSnapshotService: RecordsSnapshotServing {
         .sorted(by: Self.shouldSortModelsBefore)
     }
 
-    private static func shouldSortSessionsBefore(
+    private nonisolated static func shouldSortSessionsBefore(
         _ lhs: HistoricalSessionRecord,
         _ rhs: HistoricalSessionRecord
     ) -> Bool {
@@ -143,7 +196,7 @@ struct RecordsSnapshotService: RecordsSnapshotServing {
         return lhs.sessionID < rhs.sessionID
     }
 
-    private static func shouldSortModelsBefore(
+    private nonisolated static func shouldSortModelsBefore(
         _ lhs: HistoricalModelRecord,
         _ rhs: HistoricalModelRecord
     ) -> Bool {
@@ -156,7 +209,7 @@ struct RecordsSnapshotService: RecordsSnapshotServing {
         return lhs.modelID.localizedCaseInsensitiveCompare(rhs.modelID) == .orderedAscending
     }
 
-    private static func shouldSortWarningsBefore(
+    private nonisolated static func shouldSortWarningsBefore(
         _ lhs: RecordsSnapshotWarning,
         _ rhs: RecordsSnapshotWarning
     ) -> Bool {

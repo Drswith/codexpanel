@@ -308,6 +308,16 @@ enum L {
     static var settingsRecordsGoToUsageAction: String { zh ? "去 Usage 编辑价格" : "Open Usage to Edit Pricing" }
     static var settingsRecordsLoading: String { zh ? "正在加载 records…" : "Loading records..." }
     static var settingsRecordsRefreshingIncremental: String { zh ? "正在增量刷新 records…" : "Refreshing records incrementally..." }
+    static var settingsRecordsSlowLoading: String {
+        zh
+            ? "正在扫描本地 Codex 记录，数据量较大时可能需要一会儿…"
+            : "Scanning local Codex records. Large datasets may take a while..."
+    }
+    static var settingsRecordsSlowRefreshingIncremental: String {
+        zh
+            ? "正在增量刷新 records，数据量较大时可能需要一会儿…"
+            : "Refreshing records incrementally. Large datasets may take a while..."
+    }
     static var settingsRecordsRefreshingAll: String { zh ? "正在全量刷新 records…" : "Refreshing all records..." }
     static var settingsRecordsIdle: String { zh ? "尚未加载 records。" : "Records have not been loaded yet." }
     static func settingsRecordsLastUpdated(_ text: String) -> String {
