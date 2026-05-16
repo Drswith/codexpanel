@@ -15,7 +15,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
     case accounts
     case records
     case usage
-    case updates
+    case about
 
     var id: String { self.rawValue }
 }

@@ -128,11 +128,13 @@ enum CodexPanelURLCommandParser {
 
     private static func settingsPage(from url: URL) -> SettingsPage {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let value = components.queryItems?.first(where: { $0.name.lowercased() == "page" })?.value?.lowercased(),
-              let page = SettingsPage(rawValue: value) else {
+              let value = components.queryItems?.first(where: { $0.name.lowercased() == "page" })?.value?.lowercased() else {
             return .accounts
         }
-        return page
+        if value == "updates" {
+            return .about
+        }
+        return SettingsPage(rawValue: value) ?? .accounts
     }
 }
 
@@ -141,7 +143,7 @@ final class CodexPanelUICommandRouter {
     static let shared = CodexPanelUICommandRouter()
 
     static let settingsWindowID = "openai-settings"
-    static let settingsWindowSize = CGSize(width: 820, height: 620)
+    static let settingsWindowSize = CGSize(width: 760, height: 560)
 
     private let handlers: CodexPanelUICommandRouterHandlers
 

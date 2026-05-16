@@ -20,11 +20,11 @@ V1 先忽略 MCP，交付一个安装后可用的 `codexpanel` CLI，用来替�
   - 保留现有 `com.codexpanel.oauth://login`。
   - 新增通用 scheme：`codexpanel://view/open/settings?page=usage`、`codexpanel://view/open/menu`、`codexpanel://view/close/settings`。
   - App 内新增窄接口 `CodexPanelUICommandRouter`，统一调用现有 `DetachedWindowPresenter`、`OpenAILoginCoordinator`、`MenuBarStatusItemController`。
-  - `SettingsWindowView` 增加初始页面参数，支持 `accounts | records | usage | updates`。
+- `SettingsWindowView` 增加初始页面参数，支持 `accounts | records | usage | about`，并兼容旧的 `updates` 路由映射到 `about`。
 
 - 新增 CLI 命令接口。
   ```sh
-  codexpanel view open settings --page accounts|records|usage|updates [--wait 3]
+  codexpanel view open settings --page accounts|records|usage|about [--wait 3]
   codexpanel view open menu [--wait 3]
   codexpanel view open login [--wait 3]
   codexpanel view close settings|menu|login|all [--wait 3]

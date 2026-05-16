@@ -128,14 +128,25 @@ enum L {
     static var settingsWindowTitle: String { self.settings }
     static var settingsWindowHint: String {
         zh
-            ? "左侧切换账户、记录、用量和更新设置。账户/用量修改会先保存在草稿里；记录页只负责浏览与刷新，不进入 Save / Cancel 草稿流。"
-            : "Use the sidebar to switch between account, records, usage, and update settings. Account and usage changes stay in a draft; the records page is browse/refresh only and does not participate in Save or Cancel."
+            ? "左侧切换账户、记录、用量和关于页面。账户/用量修改会先保存在草稿里；记录页只负责浏览与刷新，不进入 Save / Cancel 草稿流。"
+            : "Use the sidebar to switch between account, records, usage, and about pages. Account and usage changes stay in a draft; the records page is browse/refresh only and does not participate in Save or Cancel."
     }
     static var settingsAccountsPageTitle: String { zh ? "账户设置" : "Account Settings" }
     static var settingsRecordsPageTitle: String { zh ? "记录" : "Records" }
     static var settingsUsagePageTitle: String { zh ? "用量设置" : "Usage Settings" }
     static var settingsCodexAppPathPageTitle: String { zh ? "Codex App 路径设置" : "Codex App Path" }
-    static var settingsUpdatesPageTitle: String { zh ? "更新" : "Updates" }
+    static var settingsAboutPageTitle: String { zh ? "关于" : "About" }
+    static var settingsAboutDescriptionLine1: String {
+        zh ? "macOS 状态栏 OpenAI 账号与用量面板" : "A macOS menu bar panel for OpenAI accounts and usage."
+    }
+    static var settingsAboutDescriptionLine2: String {
+        zh ? "提供多账号切换、记录浏览、用量排序与版本更新入口。" : "Provides multi-account switching, records browsing, usage ranking, and update entry points."
+    }
+    static var settingsAboutGitHubAction: String { zh ? "GitHub" : "GitHub" }
+    static var settingsAboutIssuesAction: String { zh ? "Issues" : "Issues" }
+    static var settingsAboutVersionPrefix: String { zh ? "版本" : "Version" }
+    static var settingsAboutUpdateStatusTitle: String { zh ? "更新状态" : "Update Status" }
+    static var settingsAboutCLIStatusTitle: String { zh ? "CLI 状态" : "CLI Status" }
     static var settingsUpdatesPageHint: String {
         zh
             ? "从这里检查最新稳定版本，并继续下载或安装当前可用更新。"
