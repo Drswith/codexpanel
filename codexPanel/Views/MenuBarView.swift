@@ -2114,6 +2114,11 @@ private struct OpenRouterSelectionPayload: Equatable {
     let fetchedAt: Date?
 }
 
+private enum OpenRouterModelPickerRefreshMode {
+    case previewEnteredAPIKey
+    case refreshExistingProvider(fallbackProvider: CodexPanelProvider)
+}
+
 private func normalizedOpenRouterModelID(_ value: String) -> String? {
     let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
     return trimmed.isEmpty ? nil : trimmed
@@ -2172,7 +2177,7 @@ private struct OpenRouterModelPickerSection: View {
     @Binding var cachedModels: [CodexPanelOpenRouterModel]
     @Binding var fetchedAt: Date?
 
-    let refreshAction: (String) async throws -> OpenRouterModelCatalogSnapshot
+    let refreshMode: OpenRouterModelPickerRefreshMode
     let helperText: String
 
     @State private var searchText = ""
@@ -2299,7 +2304,18 @@ private struct OpenRouterModelPickerSection: View {
         }
 
         do {
-            let snapshot = try await self.refreshAction(self.apiKey)
+            let snapshot: OpenRouterModelCatalogSnapshot
+            switch self.refreshMode {
+            case .previewEnteredAPIKey:
+                snapshot = try await self.store.previewOpenRouterModelCatalog(apiKey: self.apiKey)
+            case .refreshExistingProvider(let fallbackProvider):
+                try await self.store.refreshOpenRouterModelCatalog()
+                let refreshedProvider = self.store.openRouterProvider ?? fallbackProvider
+                snapshot = OpenRouterModelCatalogSnapshot(
+                    models: refreshedProvider.cachedModelCatalog,
+                    fetchedAt: refreshedProvider.modelCatalogFetchedAt ?? Date()
+                )
+            }
             self.cachedModels = snapshot.models
             self.fetchedAt = snapshot.fetchedAt
             self.note = "Refreshed \(snapshot.models.count) models. Checked models will be available directly after saving."
@@ -2371,6 +2387,41 @@ private struct AddProviderSheet: View {
         )
     }
 
+    // Keep the default Custom path's first-frame type shallow on macOS 14 by
+    // type-erasing the heavy OpenRouter branch until the user explicitly opens it.
+    private var providerFormContent: AnyView {
+        self.isOpenRouter ? self.openRouterProviderFormContent : self.customProviderFormContent
+    }
+
+    private var customProviderFormContent: AnyView {
+        AnyView(
+            VStack(alignment: .leading, spacing: 12) {
+                TextField("Provider name", text: $label)
+                TextField("Base URL", text: $baseURL)
+                TextField("Account label", text: $accountLabel)
+                SecureField("API key", text: $apiKey)
+            }
+        )
+    }
+
+    private var openRouterProviderFormContent: AnyView {
+        AnyView(
+            VStack(alignment: .leading, spacing: 12) {
+                SecureField("API key", text: $apiKey)
+                OpenRouterModelPickerSection(
+                    store: self.store,
+                    apiKey: $apiKey,
+                    selectedModelIDs: $openRouterSelectedModelIDs,
+                    manualModelID: $openRouterManualModelID,
+                    cachedModels: $openRouterCachedModels,
+                    fetchedAt: $openRouterFetchedAt,
+                    refreshMode: .previewEnteredAPIKey,
+                    helperText: "Pick one or more models here. The first checked model becomes the current model by default, and all checked models will appear in the OpenRouter section for direct switching."
+                )
+            }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Add Provider")
@@ -2383,26 +2434,7 @@ private struct AddProviderSheet: View {
             }
             .pickerStyle(.segmented)
 
-            if isOpenRouter {
-                SecureField("API key", text: $apiKey)
-                OpenRouterModelPickerSection(
-                    store: self.store,
-                    apiKey: $apiKey,
-                    selectedModelIDs: $openRouterSelectedModelIDs,
-                    manualModelID: $openRouterManualModelID,
-                    cachedModels: $openRouterCachedModels,
-                    fetchedAt: $openRouterFetchedAt,
-                    refreshAction: { apiKey in
-                        try await self.store.previewOpenRouterModelCatalog(apiKey: apiKey)
-                    },
-                    helperText: "Pick one or more models here. The first checked model becomes the current model by default, and all checked models will appear in the OpenRouter section for direct switching."
-                )
-            } else {
-                TextField("Provider name", text: $label)
-                TextField("Base URL", text: $baseURL)
-                TextField("Account label", text: $accountLabel)
-                SecureField("API key", text: $apiKey)
-            }
+            self.providerFormContent
 
             HStack {
                 Spacer()
@@ -2517,9 +2549,7 @@ private struct AddOpenRouterAccountSheet: View {
                 manualModelID: $manualModelID,
                 cachedModels: $cachedModels,
                 fetchedAt: $fetchedAt,
-                refreshAction: { apiKey in
-                    try await self.store.previewOpenRouterModelCatalog(apiKey: apiKey)
-                },
+                refreshMode: .previewEnteredAPIKey,
                 helperText: "Account labels are auto-generated for OpenRouter. Pick the models here; after saving, these checked models will appear directly in the OpenRouter section."
             )
 
@@ -2601,14 +2631,7 @@ private struct EditOpenRouterModelSheet: View {
                 manualModelID: $manualModelID,
                 cachedModels: $cachedModels,
                 fetchedAt: $fetchedAt,
-                refreshAction: { _ in
-                    try await self.store.refreshOpenRouterModelCatalog()
-                    let refreshedProvider = self.store.openRouterProvider ?? self.currentProvider
-                    return OpenRouterModelCatalogSnapshot(
-                        models: refreshedProvider.cachedModelCatalog,
-                        fetchedAt: refreshedProvider.modelCatalogFetchedAt ?? Date()
-                    )
-                },
+                refreshMode: .refreshExistingProvider(fallbackProvider: self.currentProvider),
                 helperText: "You can still enter an exact OpenRouter model ID manually. Checked models become your direct-use list in the main menu."
             )
 
