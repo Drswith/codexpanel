@@ -26,6 +26,16 @@ final class CodexPanelUICommandRouterTests: XCTestCase {
         XCTAssertEqual(command.settingsPage, .usage)
     }
 
+    func testParseOpenSettingsURLWithDiagnosticsPage() throws {
+        let url = try XCTUnwrap(URL(string: "codexpanel://view/open/settings?page=diagnostics"))
+        guard case .view(let command) = CodexPanelURLCommandParser.parse(url) else {
+            return XCTFail("expected view command")
+        }
+        XCTAssertEqual(command.action, .open)
+        XCTAssertEqual(command.target, .settings)
+        XCTAssertEqual(command.settingsPage, .diagnostics)
+    }
+
     func testParseOpenSettingsURLFallsBackToAccountsPage() throws {
         let url = try XCTUnwrap(URL(string: "codexpanel://view/open/settings?page=invalid"))
         guard case .view(let command) = CodexPanelURLCommandParser.parse(url) else {

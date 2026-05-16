@@ -46,7 +46,7 @@ The provider section expands inline, so you can manage multiple OpenAI-compatibl
 
 ### Settings Window
 
-The settings window consolidates account mode, ordering rules, manual activation behavior, preferred Codex Desktop path, and update-related controls into one dedicated surface.
+The settings window consolidates account mode, ordering rules, manual activation behavior, preferred Codex Desktop path, diagnostics export, and update-related controls into one dedicated surface.
 
 <p align="center">
   <img src="./docs/assets/readme-settings-window.png" alt="codexpanel settings window" width="1120" />
@@ -79,6 +79,7 @@ That is the main value of the app: switching account or provider does not mean s
 - OpenAI account CSV import / export
 - OpenAI account ordering: quota-weighted or manual order
 - Settings for manual activation behavior and preferred Codex.app path
+- One-click diagnostics export with the latest matching crash report
 - Local usage and cost estimates
 - Runtime version detection from GitHub Releases plus a manual "Check for Updates" entry
 
@@ -96,6 +97,7 @@ The current UI also covers a few newer workflow details that the older README di
 - Settings also let you choose whether OpenAI accounts are shown by quota-weighted ranking or your own manual order
 - manual activation can either update config only or launch a fresh Codex instance while already-running instances stay open
 - when launching a fresh instance, you can set a preferred local Codex.app path in Settings, and invalid paths fall back to automatic detection
+- the settings window can export a GitHub-issue-ready diagnostics bundle with the latest matching crash report plus runtime lifecycle logs
 
 ## Version Checks and Updates
 

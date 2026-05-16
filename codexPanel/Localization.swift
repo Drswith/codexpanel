@@ -128,12 +128,13 @@ enum L {
     static var settingsWindowTitle: String { self.settings }
     static var settingsWindowHint: String {
         zh
-            ? "左侧切换账户、记录、用量和关于页面。账户/用量修改会先保存在草稿里；记录页只负责浏览与刷新，不进入 Save / Cancel 草稿流。"
-            : "Use the sidebar to switch between account, records, usage, and about pages. Account and usage changes stay in a draft; the records page is browse/refresh only and does not participate in Save or Cancel."
+            ? "左侧切换账户、记录、用量、诊断和关于页面。账户/用量修改会先保存在草稿里；记录与诊断页只负责浏览、刷新和导出，不进入 Save / Cancel 草稿流。"
+            : "Use the sidebar to switch between account, records, usage, diagnostics, and about pages. Account and usage changes stay in a draft; the records and diagnostics pages are browse/refresh/export only and do not participate in Save or Cancel."
     }
     static var settingsAccountsPageTitle: String { zh ? "账户设置" : "Account Settings" }
     static var settingsRecordsPageTitle: String { zh ? "记录" : "Records" }
     static var settingsUsagePageTitle: String { zh ? "用量设置" : "Usage Settings" }
+    static var settingsDiagnosticsPageTitle: String { zh ? "诊断" : "Diagnostics" }
     static var settingsCodexAppPathPageTitle: String { zh ? "Codex App 路径设置" : "Codex App Path" }
     static var settingsAboutPageTitle: String { zh ? "关于" : "About" }
     static var settingsAboutDescriptionLine1: String {
@@ -220,6 +221,83 @@ enum L {
     static func settingsUpdatesFailed(_ message: String) -> String {
         zh ? "更新失败：\(message)" : "Update failed: \(message)"
     }
+    static var settingsDiagnosticsPageHint: String {
+        zh
+            ? "在这里导出适合附到 GitHub issue 的诊断包。应用会优先匹配最近的 Codex Panel 崩溃日志，并附带当前运行期事件日志。"
+            : "Export a GitHub-issue-ready diagnostics bundle here. The app prefers the most recent Codex Panel crash report and also includes the current runtime lifecycle log."
+    }
+    static var settingsDiagnosticsRefreshAction: String { zh ? "刷新诊断状态" : "Refresh Diagnostics" }
+    static var settingsDiagnosticsExportAction: String { zh ? "导出诊断信息" : "Export Diagnostics" }
+    static var settingsDiagnosticsSavePanelMessage: String {
+        zh ? "选择诊断包的导出位置。默认会生成 zip 归档。" : "Choose where to export the diagnostics bundle. A zip archive will be created."
+    }
+    static var settingsDiagnosticsSavePanelPrompt: String { zh ? "导出" : "Export" }
+    static var settingsDiagnosticsRefreshing: String { zh ? "正在刷新诊断状态…" : "Refreshing diagnostics..." }
+    static var settingsDiagnosticsExporting: String { zh ? "正在生成诊断包…" : "Building diagnostics bundle..." }
+    static var settingsDiagnosticsIdle: String { zh ? "还没有扫描诊断材料。" : "No diagnostics scan has run yet." }
+    static func settingsDiagnosticsLastScanned(_ text: String) -> String {
+        zh ? "最近扫描：\(text)" : "Last scanned: \(text)"
+    }
+    static var settingsDiagnosticsStatusTitle: String { zh ? "诊断状态" : "Diagnostics Status" }
+    static var settingsDiagnosticsCrashReportsTitle: String { zh ? "最近匹配的崩溃日志" : "Latest Matching Crash Report" }
+    static var settingsDiagnosticsAdditionalCrashReportsTitle: String { zh ? "额外匹配到的较新日志" : "Additional Recent Matches" }
+    static var settingsDiagnosticsLifecycleLogTitle: String { zh ? "运行期事件日志" : "Runtime Lifecycle Log" }
+    static var settingsDiagnosticsLifecycleStateTitle: String { zh ? "最近一次 Session 状态" : "Latest Session State" }
+    static var settingsDiagnosticsCrashNotFound: String {
+        zh ? "未找到与 Codex Panel 相关的 `.ips` / `.crash` 文件。" : "No `.ips` / `.crash` file related to Codex Panel was found."
+    }
+    static var settingsDiagnosticsLifecycleLogMissing: String {
+        zh ? "尚未找到 `app-lifecycle.jsonl`。" : "`app-lifecycle.jsonl` was not found yet."
+    }
+    static var settingsDiagnosticsLifecycleStateMissing: String {
+        zh ? "尚未找到 `app-lifecycle-state.json`。" : "`app-lifecycle-state.json` was not found yet."
+    }
+    static var settingsDiagnosticsUnknownTime: String { zh ? "未知时间" : "Unknown time" }
+    static func settingsDiagnosticsFileSummary(_ fileName: String, _ timestamp: String, _ size: String) -> String {
+        zh ? "\(fileName) · \(timestamp) · \(size)" : "\(fileName) · \(timestamp) · \(size)"
+    }
+    static func settingsDiagnosticsFileSummaryWithoutSize(_ fileName: String, _ timestamp: String) -> String {
+        zh ? "\(fileName) · \(timestamp)" : "\(fileName) · \(timestamp)"
+    }
+    static var settingsDiagnosticsCrashMissingTitle: String {
+        zh ? "当前还没有找到崩溃日志" : "Crash Report Not Found Yet"
+    }
+    static var settingsDiagnosticsCrashMissingHint: String {
+        zh
+            ? "请先复现一次 Codex Panel 闪退，等待几秒让 macOS 生成系统崩溃日志，然后回到这里重新刷新或导出。这样用户不需要手工进入 `~/Library/Logs/DiagnosticReports/`。"
+            : "Reproduce the Codex Panel crash once, wait a few seconds for macOS to generate the system crash report, then return here and refresh or export again. Users do not need to open `~/Library/Logs/DiagnosticReports/` manually."
+    }
+    static var settingsDiagnosticsPrivacyTitle: String { zh ? "隐私与脱敏" : "Privacy and Redaction" }
+    static var settingsDiagnosticsPrivacyHint: String {
+        zh
+            ? "导出包会保留原始崩溃日志，方便维护者直接排查；运行期事件日志会默认脱敏账号 ID、provider ID、token、API key、邮箱、本地路径和 URL。"
+            : "The export keeps crash reports intact so maintainers can inspect them directly; runtime lifecycle logs redact account IDs, provider IDs, tokens, API keys, emails, local paths, and URLs by default."
+    }
+    static var settingsDiagnosticsErrorTitle: String { zh ? "导出失败" : "Export Failed" }
+    static var settingsDiagnosticsExportedTitle: String { zh ? "导出完成" : "Export Complete" }
+    static func settingsDiagnosticsExportSucceeded(_ archiveName: String, _ includedFiles: [String]) -> String {
+        let fileSummary = includedFiles.isEmpty ? self.settingsDiagnosticsNoIncludedArtifacts : includedFiles.joined(separator: ", ")
+        if zh {
+            return "已生成 \(archiveName)。包含：\(fileSummary)。"
+        }
+        return "Created \(archiveName). Included: \(fileSummary)."
+    }
+    static func settingsDiagnosticsPrepareWorkspaceFailed(_ message: String) -> String {
+        zh ? "准备诊断导出目录失败：\(message)" : "Failed to prepare the diagnostics export workspace: \(message)"
+    }
+    static func settingsDiagnosticsReadArtifactFailed(_ message: String) -> String {
+        zh ? "读取诊断材料失败：\(message)" : "Failed to read a diagnostics artifact: \(message)"
+    }
+    static func settingsDiagnosticsArchiveFailed(_ message: String) -> String {
+        zh ? "生成诊断归档失败：\(message)" : "Failed to create the diagnostics archive: \(message)"
+    }
+    static var settingsDiagnosticsLifecycleDecodeFailed: String {
+        zh ? "无法读取运行期事件日志。" : "The runtime lifecycle log could not be read."
+    }
+    static var settingsDiagnosticsUnknownVersion: String { zh ? "未知版本" : "Unknown version" }
+    static var settingsDiagnosticsNoIncludedArtifacts: String { zh ? "没有额外诊断文件" : "No extra diagnostics files" }
+    static var settingsDiagnosticsReadmeRedactedSuffix: String { zh ? "，已脱敏" : ", redacted" }
+    static var settingsDiagnosticsReadmeNothingMissing: String { zh ? "没有缺失项" : "Nothing missing" }
     static var settingsRecordsPageHint: String {
         zh
             ? "Records 以 Sessions 为主视图，Models 只作为辅区摘要。首屏会先显示内存中的旧快照（如果有），再异步拉取最新增量；手动点击后才会做全量重扫。"
