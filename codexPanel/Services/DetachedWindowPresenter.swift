@@ -10,13 +10,15 @@ struct DetachedWindowConfiguration {
     var isResizable = false
     var contentMinSize: CGSize?
     var resetsContentSizeOnReuse = true
+    var windowLevel: NSWindow.Level = .floating
 
     static let standard = Self()
 
     static let openAISettings = Self(
         isResizable: true,
         contentMinSize: CGSize(width: 760, height: 560),
-        resetsContentSizeOnReuse: false
+        resetsContentSizeOnReuse: false,
+        windowLevel: .normal
     )
 }
 
@@ -133,7 +135,6 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
         window.identifier = NSUserInterfaceItemIdentifier(id)
         window.setAccessibilityIdentifier(Self.accessibilityIdentifier(forWindowID: id))
         window.title = title
-        window.level = .floating
         window.isReleasedWhenClosed = false
         self.applyStandardWindowConfiguration(configuration, to: window)
         window.setContentSize(size)
@@ -215,6 +216,7 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
         _ configuration: DetachedWindowConfiguration,
         to window: NSWindow
     ) {
+        window.level = configuration.windowLevel
         window.styleMask = Self.styleMask(for: configuration)
         window.contentMinSize = configuration.contentMinSize ?? .zero
     }
