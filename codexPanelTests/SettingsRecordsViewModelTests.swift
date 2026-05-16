@@ -12,11 +12,31 @@ final class SettingsRecordsViewModelTests: XCTestCase {
         try await self.waitUntil(timeout: 1) { viewModel.snapshot != nil }
 
         let loadCurrentCallCount = await service.loadCurrentCount()
+        let loadCachedCallCount = await service.loadCachedCount()
         let refreshAllCallCount = await service.refreshAllCount()
         XCTAssertEqual(loadCurrentCallCount, 1)
+        XCTAssertEqual(loadCachedCallCount, 1)
         XCTAssertEqual(refreshAllCallCount, 0)
         XCTAssertEqual(viewModel.snapshot?.sessions.map(\.sessionID), ["load-current"])
         XCTAssertFalse(viewModel.isRefreshingAll)
+    }
+
+    func testPageDidAppearShowsCachedSnapshotThenReplacesWithLatestSnapshot() async throws {
+        let service = RecordsSnapshotServiceStub()
+        await service.enqueueCached(self.makeSnapshot(sessionID: "cached", modelID: "gpt-5.4"))
+        let viewModel = SettingsRecordsViewModel(service: service)
+
+        viewModel.pageDidAppear()
+        try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "cached" }
+        XCTAssertFalse(viewModel.shouldShowSkeleton)
+        XCTAssertTrue(viewModel.isLoadingSnapshot)
+        XCTAssertEqual(viewModel.statusText, L.settingsRecordsRefreshingIncremental)
+
+        await service.resumeLoadCurrent(
+            with: .success(self.makeSnapshot(sessionID: "latest", modelID: "gpt-5.4-mini"))
+        )
+        try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "latest" }
+        XCTAssertFalse(viewModel.isLoadingSnapshot)
     }
 
     func testLatestRequestTokenWinsWhenRefreshOverridesInFlightLoad() async throws {
@@ -122,17 +142,85 @@ final class SettingsRecordsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.snapshot?.sessions.map(\.sessionID), ["refreshed"])
     }
 
-    func testTimedOutRefreshKeepsOldSnapshotAndDropsLateResult() async throws {
-        let sourceLoader = SlowRecordsSourceSnapshotLoader(
-            rebuildDelayNanoseconds: 100_000_000
+    func testSlowLoadingStatusAppearsAfterThreshold() async throws {
+        let service = RecordsSnapshotServiceStub()
+        let viewModel = SettingsRecordsViewModel(
+            service: service,
+            slowLoadingThresholdNanoseconds: 10_000_000
         )
-        let service = RecordsSnapshotService(sourceLoader: sourceLoader)
+
+        viewModel.pageDidAppear()
+        try await self.waitUntil(timeout: 1) {
+            viewModel.isSlowLoadingSnapshot && viewModel.statusText == L.settingsRecordsSlowLoading
+        }
+        XCTAssertTrue(viewModel.shouldShowSkeleton)
+
+        await service.resumeLoadCurrent(
+            with: .success(self.makeSnapshot(sessionID: "loaded", modelID: "gpt-5.4"))
+        )
+        try await self.waitUntil(timeout: 1) { viewModel.isLoadingSnapshot == false }
+        XCTAssertFalse(viewModel.isSlowLoadingSnapshot)
+    }
+
+    func testLatestRequestStillWinsWhenPageLoadIsReplacedByManualRefreshAll() async throws {
+        let service = RecordsSnapshotServiceStub()
+        await service.enqueueCached(self.makeSnapshot(sessionID: "cached", modelID: "gpt-5.4"))
+        let viewModel = SettingsRecordsViewModel(service: service)
+
+        viewModel.pageDidAppear()
+        try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "cached" }
+
+        viewModel.refreshAll(timeout: 1)
+        try await self.waitUntil(timeout: 1) {
+            let count = await service.refreshAllCount()
+            return count == 1
+        }
+
+        await service.resumeRefreshAll(
+            with: .success(self.makeSnapshot(sessionID: "refresh-all", modelID: "gpt-5.4"))
+        )
+        try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "refresh-all" }
+
+        await service.resumeLoadCurrent(
+            with: .success(self.makeSnapshot(sessionID: "stale-page-load", modelID: "gpt-5.4-mini"))
+        )
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(viewModel.snapshot?.sessions.first?.sessionID, "refresh-all")
+    }
+
+    func testPageLoadWithoutCacheStillCompletesNormally() async throws {
+        let service = RecordsSnapshotServiceStub()
+        let viewModel = SettingsRecordsViewModel(service: service)
+
+        viewModel.pageDidAppear()
+        XCTAssertTrue(viewModel.shouldShowSkeleton)
+        try await self.waitUntil(timeout: 1) {
+            let count = await service.loadCurrentCount()
+            return count == 1
+        }
+
+        await service.resumeLoadCurrent(
+            with: .success(self.makeSnapshot(sessionID: "no-cache-latest", modelID: "gpt-5.4"))
+        )
+        try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "no-cache-latest" }
+        XCTAssertFalse(viewModel.isLoadingSnapshot)
+        XCTAssertFalse(viewModel.shouldShowSkeleton)
+    }
+
+    func testTimedOutRefreshKeepsOldSnapshotAndDropsLateResult() async throws {
+        let service = RecordsSnapshotServiceStub()
+        await service.enqueueLoadCurrent(self.makeSnapshot(sessionID: "initial", modelID: "gpt-5.4"))
         let viewModel = SettingsRecordsViewModel(service: service)
 
         viewModel.loadCurrent()
         try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "initial" }
 
         viewModel.refreshAll(timeout: 0.01)
+        try await self.waitUntil(timeout: 1) {
+            let count = await service.refreshAllCount()
+            return count == 1
+        }
+        await service.resumeRefreshAll(with: .failure(RecordsSnapshotServiceError.timedOut(timeout: 0.01)))
         try await self.waitUntil(timeout: 1) { viewModel.isRefreshingAll == false }
 
         XCTAssertEqual(viewModel.snapshot?.sessions.map(\.sessionID), ["initial"])
@@ -188,15 +276,25 @@ final class SettingsRecordsViewModelTests: XCTestCase {
 }
 
 private actor RecordsSnapshotServiceStub: RecordsSnapshotServing {
+    private(set) var loadCachedCallCount = 0
     private(set) var loadCurrentCallCount = 0
     private(set) var refreshAllCallCount = 0
 
     private var pendingLoadCurrentContinuations: [CheckedContinuation<RecordsSnapshot, Error>] = []
     private var pendingRefreshAllContinuations: [CheckedContinuation<RecordsSnapshot, Error>] = []
+    private var queuedCachedSnapshots: [RecordsSnapshot?] = []
     private var queuedLoadCurrentResults: [Result<RecordsSnapshot, Error>] = []
+
+    func enqueueCached(_ snapshot: RecordsSnapshot?) {
+        self.queuedCachedSnapshots.append(snapshot)
+    }
 
     func enqueueLoadCurrent(_ snapshot: RecordsSnapshot) {
         self.queuedLoadCurrentResults.append(.success(snapshot))
+    }
+
+    func loadCachedCount() -> Int {
+        self.loadCachedCallCount
     }
 
     func loadCurrentCount() -> Int {
@@ -205,6 +303,14 @@ private actor RecordsSnapshotServiceStub: RecordsSnapshotServing {
 
     func refreshAllCount() -> Int {
         self.refreshAllCallCount
+    }
+
+    func loadCached() async -> RecordsSnapshot? {
+        self.loadCachedCallCount += 1
+        if self.queuedCachedSnapshots.isEmpty == false {
+            return self.queuedCachedSnapshots.removeFirst()
+        }
+        return nil
     }
 
     func loadCurrent() async throws -> RecordsSnapshot {
@@ -236,51 +342,5 @@ private actor RecordsSnapshotServiceStub: RecordsSnapshotServing {
         guard self.pendingRefreshAllContinuations.isEmpty == false else { return }
         let continuation = self.pendingRefreshAllContinuations.removeFirst()
         continuation.resume(with: result)
-    }
-}
-
-private actor SlowRecordsSourceSnapshotLoader: RecordsSourceSnapshotLoading {
-    private let rebuildDelayNanoseconds: UInt64
-
-    init(rebuildDelayNanoseconds: UInt64) {
-        self.rebuildDelayNanoseconds = rebuildDelayNanoseconds
-    }
-
-    func loadRecordsSourceSnapshot(refreshMode: RecordsRefreshMode) async throws -> RecordsSourceSnapshot {
-        switch refreshMode {
-        case .incremental:
-            return RecordsSourceSnapshot(
-                generatedAt: ISO8601Parsing.parse("2026-04-21T10:00:00Z") ?? Date(timeIntervalSince1970: 0),
-                refreshMode: .incremental,
-                sessions: [
-                    HistoricalSessionRecord(
-                        sessionID: "initial",
-                        modelID: "gpt-5.4",
-                        startedAt: ISO8601Parsing.parse("2026-04-21T09:00:00Z") ?? Date(timeIntervalSince1970: 0),
-                        lastActivityAt: ISO8601Parsing.parse("2026-04-21T10:00:00Z") ?? Date(timeIntervalSince1970: 0),
-                        isArchived: false,
-                        totalTokens: 100
-                    ),
-                ],
-                warnings: []
-            )
-        case .rebuildAll:
-            try? await Task.sleep(nanoseconds: self.rebuildDelayNanoseconds)
-            return RecordsSourceSnapshot(
-                generatedAt: ISO8601Parsing.parse("2026-04-21T10:30:00Z") ?? Date(timeIntervalSince1970: 0),
-                refreshMode: .rebuildAll,
-                sessions: [
-                    HistoricalSessionRecord(
-                        sessionID: "late-refresh",
-                        modelID: "gpt-5.4-mini",
-                        startedAt: ISO8601Parsing.parse("2026-04-21T10:10:00Z") ?? Date(timeIntervalSince1970: 0),
-                        lastActivityAt: ISO8601Parsing.parse("2026-04-21T10:30:00Z") ?? Date(timeIntervalSince1970: 0),
-                        isArchived: false,
-                        totalTokens: 140
-                    ),
-                ],
-                warnings: []
-            )
-        }
     }
 }

@@ -6,6 +6,7 @@ import SwiftUI
 final class SettingsRecordsViewModel: ObservableObject {
     @Published private(set) var snapshot: RecordsSnapshot?
     @Published private(set) var isLoadingSnapshot = false
+    @Published private(set) var isSlowLoadingSnapshot = false
     @Published private(set) var isRefreshingAll = false
     @Published private(set) var errorMessage: String?
     @Published var searchText = ""
@@ -13,10 +14,15 @@ final class SettingsRecordsViewModel: ObservableObject {
     @Published var isWarningsExpanded = false
 
     private let service: any RecordsSnapshotServing
+    private let slowLoadingThresholdNanoseconds: UInt64
     private var requestToken: UInt64 = 0
 
-    init(service: any RecordsSnapshotServing) {
+    init(
+        service: any RecordsSnapshotServing,
+        slowLoadingThresholdNanoseconds: UInt64 = 3_000_000_000
+    ) {
         self.service = service
+        self.slowLoadingThresholdNanoseconds = slowLoadingThresholdNanoseconds
     }
 
     var filteredSessions: [HistoricalSessionRecord] {
@@ -62,6 +68,11 @@ final class SettingsRecordsViewModel: ObservableObject {
             return L.settingsRecordsRefreshingAll
         }
         if self.isLoadingSnapshot {
+            if self.isSlowLoadingSnapshot {
+                return self.snapshot == nil
+                    ? L.settingsRecordsSlowLoading
+                    : L.settingsRecordsSlowRefreshingIncremental
+            }
             return self.snapshot == nil
                 ? L.settingsRecordsLoading
                 : L.settingsRecordsRefreshingIncremental
@@ -76,15 +87,16 @@ final class SettingsRecordsViewModel: ObservableObject {
 
     func pageDidAppear() {
         guard self.isLoadingSnapshot == false, self.isRefreshingAll == false else { return }
-        self.loadCurrent()
+        self.loadCurrentWithCachedFallback()
     }
 
     func retryLoad() {
-        self.loadCurrent()
+        self.loadCurrentWithCachedFallback()
     }
 
     func loadCurrent() {
         let requestToken = self.beginRequest(isRefreshAll: false)
+        self.scheduleSlowLoadingCheck(for: requestToken, isRefreshAll: false)
         Task {
             do {
                 let snapshot = try await self.service.loadCurrent()
@@ -132,9 +144,35 @@ final class SettingsRecordsViewModel: ObservableObject {
         self.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func loadCurrentWithCachedFallback() {
+        let requestToken = self.beginRequest(isRefreshAll: false)
+        self.scheduleSlowLoadingCheck(for: requestToken, isRefreshAll: false)
+        Task {
+            let cachedSnapshot = await self.service.loadCached()
+            self.applyCachedSnapshotIfNeeded(token: requestToken, cachedSnapshot: cachedSnapshot)
+            do {
+                let snapshot = try await self.service.loadCurrent()
+                self.finishRequest(
+                    token: requestToken,
+                    snapshot: snapshot,
+                    errorMessage: nil,
+                    isRefreshAll: false
+                )
+            } catch {
+                self.finishRequest(
+                    token: requestToken,
+                    snapshot: nil,
+                    errorMessage: self.displayMessage(for: error),
+                    isRefreshAll: false
+                )
+            }
+        }
+    }
+
     private func beginRequest(isRefreshAll: Bool) -> UInt64 {
         self.requestToken += 1
         self.errorMessage = nil
+        self.isSlowLoadingSnapshot = false
         if isRefreshAll {
             self.isRefreshingAll = true
             self.isLoadingSnapshot = false
@@ -152,6 +190,7 @@ final class SettingsRecordsViewModel: ObservableObject {
     ) {
         guard token == self.requestToken else { return }
         self.isLoadingSnapshot = false
+        self.isSlowLoadingSnapshot = false
         if isRefreshAll {
             self.isRefreshingAll = false
         }
@@ -167,6 +206,22 @@ final class SettingsRecordsViewModel: ObservableObject {
             return L.settingsRecordsRefreshTimeout
         }
         return error.localizedDescription
+    }
+
+    private func applyCachedSnapshotIfNeeded(token: UInt64, cachedSnapshot: RecordsSnapshot?) {
+        guard token == self.requestToken else { return }
+        guard let cachedSnapshot, self.snapshot == nil else { return }
+        self.snapshot = cachedSnapshot
+    }
+
+    private func scheduleSlowLoadingCheck(for token: UInt64, isRefreshAll: Bool) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: self.slowLoadingThresholdNanoseconds)
+            guard token == self.requestToken else { return }
+            guard isRefreshAll == false else { return }
+            guard self.isLoadingSnapshot else { return }
+            self.isSlowLoadingSnapshot = true
+        }
     }
 }
 

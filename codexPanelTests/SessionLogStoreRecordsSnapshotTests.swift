@@ -2,10 +2,30 @@ import Foundation
 import XCTest
 
 final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
+    private final class DiagnosticsSink {
+        private let lock = NSLock()
+        private var values: [(type: String, fields: [String: Any])] = []
+
+        func record(type: String, fields: [String: Any]) {
+            self.lock.lock()
+            self.values.append((type: type, fields: fields))
+            self.lock.unlock()
+        }
+
+        func events() -> [(type: String, fields: [String: Any])] {
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            return self.values
+        }
+    }
+
     func testHistoricalModelsRefreshSessionCacheIncludesNewSessionModel() throws {
         let home = try self.makeCodexHome()
         let codexRoot = home.appendingPathComponent(".codex", isDirectory: true)
-        let store = self.makeStore(home: home)
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(home: home) { type, fields in
+            sink.record(type: type, fields: fields)
+        }
 
         try self.writeFastSession(
             directory: codexRoot.appendingPathComponent("sessions", isDirectory: true),
@@ -41,9 +61,12 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
     func testReduceBillableEventsRefreshSessionCacheRebuildsLedgerForNewSessionFiles() throws {
         let home = try self.makeCodexHome()
         let codexRoot = home.appendingPathComponent(".codex", isDirectory: true)
-        let store = self.makeStore(home: home) { _, usage, _ in
-            Double(usage.totalTokens)
-        }
+        let store = self.makeStore(
+            home: home,
+            billableCostCalculator: { _, usage, _ in
+                Double(usage.totalTokens)
+            }
+        )
 
         try self.writeFastSession(
             directory: codexRoot.appendingPathComponent("sessions", isDirectory: true),
@@ -85,7 +108,13 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
     func testLoadRecordsSourceSnapshotCapturesWarnings() async throws {
         let home = try self.makeCodexHome()
         let codexRoot = home.appendingPathComponent(".codex", isDirectory: true)
-        let store = self.makeStore(home: home)
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(
+            home: home,
+            recordsDiagnosticsRecorder: { type, fields in
+                sink.record(type: type, fields: fields)
+            }
+        )
 
         try self.writeFastSession(
             directory: codexRoot.appendingPathComponent("sessions", isDirectory: true),
@@ -156,6 +185,44 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
         )
     }
 
+    func testLoadRecordsSourceSnapshotRecordsDiagnosticsWithStats() async throws {
+        let home = try self.makeCodexHome()
+        let codexRoot = home.appendingPathComponent(".codex", isDirectory: true)
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(
+            home: home,
+            recordsDiagnosticsRecorder: { type, fields in
+                sink.record(type: type, fields: fields)
+            }
+        )
+
+        try self.writeFastSession(
+            directory: codexRoot.appendingPathComponent("sessions", isDirectory: true),
+            fileName: "alpha.jsonl",
+            id: "alpha",
+            timestamp: "2026-04-21T08:00:00Z",
+            model: "gpt-5.4",
+            inputTokens: 100,
+            cachedInputTokens: 20,
+            outputTokens: 20
+        )
+
+        _ = try await store.loadRecordsSourceSnapshot(refreshMode: .incremental)
+
+        let events = sink.events()
+        let started = try XCTUnwrap(events.first { $0.type == "records_snapshot_load_started" })
+        let finished = try XCTUnwrap(events.first { $0.type == "records_snapshot_load_finished" })
+
+        XCTAssertEqual(started.fields["refreshMode"] as? String, "incremental")
+        XCTAssertEqual(finished.fields["refreshMode"] as? String, "incremental")
+        XCTAssertEqual(finished.fields["fileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["cacheHitCount"] as? Int, 0)
+        XCTAssertEqual(finished.fields["parsedFileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["changedFileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["warningCount"] as? Int, 0)
+        XCTAssertGreaterThan((finished.fields["totalBytes"] as? Int) ?? 0, 0)
+    }
+
     private func billableSessionIDs(from store: SessionLogStore, refreshSessionCache: Bool) -> [String] {
         store.reduceBillableEvents(into: Set<String>(), refreshSessionCache: refreshSessionCache) { partialResult, event in
             partialResult.insert(event.sessionID)
@@ -184,6 +251,7 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
 
     private func makeStore(
         home: URL,
+        recordsDiagnosticsRecorder: @escaping (String, [String: Any]) -> Void = { _, _ in },
         billableCostCalculator: @escaping (String, SessionLogStore.Usage, SessionLogStore.Usage) -> Double? = { model, usage, sessionUsage in
             LocalCostPricing.costUSD(model: model, usage: usage, sessionUsage: sessionUsage)
         }
@@ -192,6 +260,7 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
             codexRootURL: home.appendingPathComponent(".codex", isDirectory: true),
             persistedCacheURL: home.appendingPathComponent(".codexpanel/test-records-session-cache.json"),
             persistedUsageLedgerURL: home.appendingPathComponent(".codexpanel/test-records-ledger.json"),
+            recordsDiagnosticsRecorder: recordsDiagnosticsRecorder,
             billableCostCalculator: billableCostCalculator
         )
     }
@@ -216,4 +285,5 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try content.write(to: fileURL, atomically: true, encoding: .utf8)
     }
+
 }

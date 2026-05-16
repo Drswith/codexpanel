@@ -2,6 +2,23 @@ import Foundation
 import XCTest
 
 final class RecordsSnapshotServiceTests: XCTestCase {
+    private var temporaryDirectory: URL!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        let base = FileManager.default.temporaryDirectory
+        let dir = base.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        self.temporaryDirectory = dir
+    }
+
+    override func tearDownWithError() throws {
+        if let temporaryDirectory {
+            try? FileManager.default.removeItem(at: temporaryDirectory)
+        }
+        try super.tearDownWithError()
+    }
+
     func testLoadCurrentReturnsCompleteSortedSnapshot() async throws {
         let loader = RecordsSourceSnapshotLoaderStub()
         await loader.setIncrementalSnapshot(
@@ -152,6 +169,69 @@ final class RecordsSnapshotServiceTests: XCTestCase {
         XCTAssertEqual(snapshot.warnings[0].sessionFilePath, "/tmp/problem.jsonl")
         XCTAssertEqual(snapshot.warnings[0].kind, .incompleteSessionRecord)
         XCTAssertEqual(snapshot.warnings[0].message, "missing model")
+    }
+
+    func testLoadCurrentPersistsCacheAndLoadCachedReturnsSnapshot() async throws {
+        let loader = RecordsSourceSnapshotLoaderStub()
+        await loader.setIncrementalSnapshot(
+            RecordsSourceSnapshot(
+                generatedAt: self.date("2026-04-21T10:00:00Z"),
+                refreshMode: .incremental,
+                sessions: [
+                    HistoricalSessionRecord(
+                        sessionID: "session-1",
+                        modelID: "gpt-5.4",
+                        startedAt: self.date("2026-04-21T08:00:00Z"),
+                        lastActivityAt: self.date("2026-04-21T09:00:00Z"),
+                        isArchived: false,
+                        totalTokens: 300
+                    ),
+                ],
+                warnings: []
+            )
+        )
+        let cacheURL = self.temporaryDirectory.appendingPathComponent("records-snapshot-cache.json")
+        let service = RecordsSnapshotService(sourceLoader: loader, snapshotCacheURL: cacheURL)
+
+        let loaded = try await service.loadCurrent()
+        let cached = await service.loadCached()
+
+        XCTAssertEqual(cached, loaded)
+    }
+
+    func testLoadCachedReturnsNilWhenCacheIsCorrupted() async throws {
+        let cacheURL = self.temporaryDirectory.appendingPathComponent("records-snapshot-cache.json")
+        try "not-json".write(to: cacheURL, atomically: true, encoding: .utf8)
+        let service = RecordsSnapshotService(
+            sourceLoader: RecordsSourceSnapshotLoaderStub(),
+            snapshotCacheURL: cacheURL
+        )
+
+        let cached = await service.loadCached()
+
+        XCTAssertNil(cached)
+    }
+
+    func testLoadCachedReturnsNilWhenVersionMismatches() async throws {
+        let cacheURL = self.temporaryDirectory.appendingPathComponent("records-snapshot-cache.json")
+        let payload = """
+        {
+          "version": 999,
+          "generatedAt": "2026-04-21T10:00:00Z",
+          "refreshMode": "incremental",
+          "sessions": [],
+          "warnings": []
+        }
+        """
+        try payload.write(to: cacheURL, atomically: true, encoding: .utf8)
+        let service = RecordsSnapshotService(
+            sourceLoader: RecordsSourceSnapshotLoaderStub(),
+            snapshotCacheURL: cacheURL
+        )
+
+        let cached = await service.loadCached()
+
+        XCTAssertNil(cached)
     }
 
     private func date(_ value: String) -> Date {
