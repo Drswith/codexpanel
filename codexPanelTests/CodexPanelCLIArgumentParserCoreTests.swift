@@ -14,6 +14,17 @@ final class CodexPanelCLIArgumentParserCoreTests: XCTestCase {
         XCTAssertEqual(viewCommand.jsonOutput, false)
     }
 
+    func testLegacyUpdatesPageMapsToAbout() throws {
+        let command = try CLIArgumentParser.parse(arguments: ["view", "open", "settings", "--page", "updates"])
+        guard case .view(let viewCommand) = command else {
+            return XCTFail("Expected view command")
+        }
+
+        XCTAssertEqual(viewCommand.action, .open)
+        XCTAssertEqual(viewCommand.target, .settings)
+        XCTAssertEqual(viewCommand.page, .about)
+    }
+
     func testPageOptionOnlyAllowedForOpenSettings() {
         XCTAssertThrowsError(
             try CLIArgumentParser.parse(arguments: ["view", "open", "menu", "--page", "usage", "--json"])
