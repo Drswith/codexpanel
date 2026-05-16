@@ -352,40 +352,13 @@ PR #2 实现要点（`codexPanel/Services/DetachedWindowPresenter.swift`）：
 
 这版修复保留了 PR #2 的异步建窗卫生改动，只额外收敛 view 静态类型，不回退已生效的窗口时序保护。
 
-1. **拆分 `AddProviderSheet`，并在分支边界做 type erasure**。
+如果 macOS 14.2.1 实机回归后仍有残留风险，可继续考虑以下强化项：
 
-    最小变动：
-
-    ```swift
-    if isOpenRouter {
-        AnyView(OpenRouterAddProviderFormView(…))
-    } else {
-        AnyView(CustomAddProviderFormView(…))
-    }
-    ```
-
-    用 `AnyView` 在 `_ConditionalContent` 分支两侧各擦一次类型，可以让 `AddProviderSheet.body.getter` 的具体 opaque 类型从 §4.4.A 那棵巨大 TupleView 缩小到 `TupleView<(Text, …Picker…, AnyView, HStack<…>)>`，OpenRouter 子树就不会出现在 `AddProviderSheet` 的 layout descriptor 扫描里。`AnyView` 内部用 box 转发，AttributeGraph 对它的扫描深度是固定的。
-
-    成本低、范围明确，适合先发一版回归看效果。
-
-2. **把默认进入路径变成「先选 preset，再渲染对应表单」**。
+1. **把默认进入路径变成「先选 preset，再渲染对应表单」**。
 
     让 `openAddProviderWindow(defaultPreset: .custom)` 首屏只渲染一个 `AddProviderPresetPickerView`（轻量 Picker + 提示），用户主动选 OpenRouter 时再 push / replace 到 OpenRouter 表单。即使后续 OpenRouter 子树仍有 SwiftUI 14.2.1 风险，影响范围也从「点 + 立即崩」收敛到「主动选 OpenRouter 才触发」，可叠加 try/catch、降级表单等更精细的处理。
 
-3. **把 `(String) async throws -> OpenRouterModelCatalogSnapshot` 从 view 字段中移除**。
-
-    具体做法二选一：
-
-    - 让 `OpenRouterModelPickerSection` 直接通过 `@ObservedObject store` 调 `store.previewOpenRouterModelCatalog(apiKey:)`，不再把 `refreshAction` 当 view 字段；或
-    - 抽一个轻量协议 / `ObservableObject`（例如 `OpenRouterModelCatalogRefreshing`）作为 view 字段类型，view 字段不再直接持有「自定义结构体的 async throws 函数类型」。
-
-    这样 `OpenRouterModelPickerSection` 的字段元数据里就不再出现 `OpenRouterModelCatalogSnapshot`，AttributeGraph 扫描时的脆弱点显著减少。`AddOpenRouterAccountSheet`、`EditOpenRouterModelSheet` 也同样受益（§4.4.C 已确认三处复用同款模式）。
-
-4. **保留 PR #2 的异步建窗与 `@MainActor` 卫生**。
-
-    这层时序保护对菜单栏 + status item + SwiftUI 组合产品仍有价值，不要在修复 root cause 时一起回滚。
-
-5. **（可选 / 低成本）**用 `task { … }` 替代部分 view 体内的 `Task { … }`，把首帧繁重 `List` / `ForEach` 容器的实际创建推迟一帧；同时考虑用 `LazyVStack` 等容器替换部分 `List`。属于 macOS 14 SwiftUI 元数据竞态的通用 workaround，价值偏低但成本也低。
+2. **（可选 / 低成本）**用 `task { … }` 替代部分 view 体内的 `Task { … }`，把首帧繁重 `List` / `ForEach` 容器的实际创建推迟一帧；同时考虑用 `LazyVStack` 等容器替换部分 `List`。属于 macOS 14 SwiftUI 元数据竞态的通用 workaround，价值偏低但成本也低。
 
 不建议的方向：
 
