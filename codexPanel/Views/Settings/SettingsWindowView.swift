@@ -171,6 +171,8 @@ struct SettingsWindowView: View {
                     }
                 case .usage:
                     SettingsUsagePage(coordinator: self.coordinator)
+                case .diagnostics:
+                    SettingsDiagnosticsPage()
                 case .about:
                     SettingsAboutPage(updateCoordinator: self.updateCoordinator)
                 }
@@ -208,7 +210,7 @@ private struct SettingsSidebarGroup: Identifiable {
         SettingsSidebarGroup(
             id: "primary",
             title: nil,
-            pages: [SettingsPage.accounts, SettingsPage.records, SettingsPage.usage]
+            pages: [SettingsPage.accounts, SettingsPage.records, SettingsPage.usage, SettingsPage.diagnostics]
         ),
         SettingsSidebarGroup(
             id: "product",
@@ -1188,6 +1190,8 @@ private extension SettingsPage {
             return L.settingsRecordsPageTitle
         case .usage:
             return L.settingsUsagePageTitle
+        case .diagnostics:
+            return L.settingsDiagnosticsPageTitle
         case .about:
             return L.settingsAboutPageTitle
         }
@@ -1201,6 +1205,8 @@ private extension SettingsPage {
             return "clock.arrow.circlepath"
         case .usage:
             return "chart.bar"
+        case .diagnostics:
+            return "stethoscope"
         case .about:
             return "info.circle.fill"
         }
@@ -1214,6 +1220,8 @@ private extension SettingsPage {
             return Color(red: 0.99, green: 0.65, blue: 0.16)
         case .usage:
             return Color(red: 0.20, green: 0.76, blue: 0.86)
+        case .diagnostics:
+            return Color(red: 0.90, green: 0.36, blue: 0.32)
         case .about:
             return Color(red: 0.45, green: 0.76, blue: 0.97)
         }

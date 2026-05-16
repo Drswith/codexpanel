@@ -24,6 +24,7 @@ enum CLISettingsPage: String {
     case records
     case usage
     case about
+    case diagnostics
 }
 
 enum SnapshotFormat: String {

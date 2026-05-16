@@ -3,7 +3,7 @@ import Foundation
 enum CLIUsage {
     static let text = """
 Usage:
-  codexpanel view open settings [--page accounts|records|usage|about] [--wait <sec>] [--json]
+  codexpanel view open settings [--page accounts|records|usage|diagnostics|about] [--wait <sec>] [--json]
   codexpanel view open menu [--wait <sec>] [--json]
   codexpanel view open login [--wait <sec>] [--json]
   codexpanel view close settings|menu|login|all [--wait <sec>] [--json]

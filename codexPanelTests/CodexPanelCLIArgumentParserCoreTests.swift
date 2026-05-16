@@ -35,6 +35,17 @@ final class CodexPanelCLIArgumentParserCoreTests: XCTestCase {
         }
     }
 
+    func testViewOpenSettingsAcceptsDiagnosticsPage() throws {
+        let command = try CLIArgumentParser.parse(arguments: ["view", "open", "settings", "--page", "diagnostics"])
+        guard case .view(let viewCommand) = command else {
+            return XCTFail("Expected view command")
+        }
+
+        XCTAssertEqual(viewCommand.action, .open)
+        XCTAssertEqual(viewCommand.target, .settings)
+        XCTAssertEqual(viewCommand.page, .diagnostics)
+    }
+
     func testViewOpenAllReturnsRouteUnsupported() {
         XCTAssertThrowsError(
             try CLIArgumentParser.parse(arguments: ["view", "open", "all", "--json"])
