@@ -688,6 +688,7 @@ final class DetachedWindowPresenterTests: XCTestCase {
         let window = try self.window(withID: id, presenter: presenter)
         XCTAssertFalse(window.styleMask.contains(.resizable))
         XCTAssertEqual(window.contentMinSize, .zero)
+        XCTAssertEqual(window.level.rawValue, NSWindow.Level.floating.rawValue)
     }
 
     func testOpenAISettingsWindowIsResizableAndAppliesMinimumContentSize() throws {
@@ -714,6 +715,7 @@ final class DetachedWindowPresenterTests: XCTestCase {
         XCTAssertTrue(window.styleMask.contains(.resizable))
         XCTAssertEqual(window.contentMinSize, CGSize(width: 760, height: 560))
         XCTAssertEqual(self.contentSize(of: window), CGSize(width: 820, height: 620))
+        XCTAssertEqual(window.level.rawValue, NSWindow.Level.normal.rawValue)
     }
 
     func testExistingSettingsWindowReplaysConfigurationWithoutResettingUserSizedContent() throws {
@@ -751,6 +753,7 @@ final class DetachedWindowPresenterTests: XCTestCase {
         XCTAssertTrue(existingWindow.styleMask.contains(.resizable))
         XCTAssertEqual(existingWindow.contentMinSize, CGSize(width: 760, height: 560))
         XCTAssertEqual(self.contentSize(of: existingWindow), CGSize(width: 940, height: 700))
+        XCTAssertEqual(existingWindow.level.rawValue, NSWindow.Level.normal.rawValue)
     }
 
     func testDefaultWindowReuseStillResetsContentSize() throws {
