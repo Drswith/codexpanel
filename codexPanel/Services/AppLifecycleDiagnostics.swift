@@ -152,11 +152,15 @@ final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppLifecycleDiagnostics.shared.beginSession()
+        let runtimeProfile = CodexPaths.runtimeProfile
         AppLifecycleDiagnostics.shared.recordEvent(
             type: "runtime_mode",
             fields: [
                 "pid": getpid(),
                 "bundleIdentifier": Bundle.main.bundleIdentifier as Any,
+                "runtimeChannel": runtimeProfile.channel.rawValue,
+                "homeSource": runtimeProfile.homeSource.rawValue,
+                "usesRealHome": runtimeProfile.usesRealHome,
                 "isMenuHostProcess": false,
                 "statusItemHostMode": "single_process_status_item",
                 "lsuiElement": Bundle.main.object(forInfoDictionaryKey: "LSUIElement") as Any,
