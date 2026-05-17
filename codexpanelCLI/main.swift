@@ -24,45 +24,6 @@ private enum CLIIO {
     }
 }
 
-private final class CodexPanelAppLocator {
-    private let identity: CLIRuntimeIdentity
-
-    init(identity: CLIRuntimeIdentity = .current) {
-        self.identity = identity
-    }
-
-    func runningApp() -> NSRunningApplication? {
-        NSRunningApplication.runningApplications(withBundleIdentifier: self.identity.bundleIdentifier).first
-    }
-
-    func installedAppURL() -> URL? {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: self.identity.bundleIdentifier)
-    }
-
-    func appVersion(bundleURL: URL?) -> String? {
-        guard let bundleURL else { return nil }
-        let infoPlistURL = bundleURL
-            .appendingPathComponent("Contents", isDirectory: true)
-            .appendingPathComponent("Info.plist", isDirectory: false)
-        guard let plist = NSDictionary(contentsOf: infoPlistURL) as? [String: Any] else {
-            return nil
-        }
-        return plist["CFBundleShortVersionString"] as? String
-    }
-
-    func helperOwningAppURL(executablePath: String = CommandLine.arguments.first ?? "") -> URL? {
-        guard executablePath.isEmpty == false else { return nil }
-        var cursor = URL(fileURLWithPath: executablePath).standardizedFileURL.deletingLastPathComponent()
-        while cursor.path != "/" {
-            if cursor.pathExtension.lowercased() == "app" {
-                return cursor
-            }
-            cursor.deleteLastPathComponent()
-        }
-        return nil
-    }
-}
-
 private struct AXWindowInfo {
     var windowElement: AXUIElement
     var identifier: String?
@@ -376,7 +337,8 @@ private final class CodexPanelCLI {
                 jsonOutput: command.jsonOutput
             )
         }
-        guard NSWorkspace.shared.open(url) else {
+        let routingAppURL = self.appLocator.preferredRoutingAppURL()
+        guard CLIViewURLOpener.open(url, appURL: routingAppURL) else {
             throw CLIError(
                 code: .appUnavailable,
                 message: "Codex Panel app is not reachable.",
