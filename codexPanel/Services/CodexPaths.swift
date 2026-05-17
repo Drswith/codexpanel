@@ -4,15 +4,12 @@ enum CodexPaths {
     private static let stateSQLiteDefaultVersion = 5
     private static let logsSQLiteDefaultVersion = 2
 
+    static var runtimeProfile: CodexPanelRuntimeProfile {
+        CodexPanelRuntimeProfile.current
+    }
+
     static var realHome: URL {
-        if let override = ProcessInfo.processInfo.environment["CODEXPANEL_HOME"],
-           override.isEmpty == false {
-            return URL(fileURLWithPath: override, isDirectory: true)
-        }
-        if let pw = getpwuid(getuid()), let pwDir = pw.pointee.pw_dir {
-            return URL(fileURLWithPath: String(cString: pwDir), isDirectory: true)
-        }
-        return FileManager.default.homeDirectoryForCurrentUser
+        self.runtimeProfile.homeRoot
     }
 
     static var codexRoot: URL {

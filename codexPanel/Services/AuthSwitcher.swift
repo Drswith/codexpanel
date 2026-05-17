@@ -1,17 +1,16 @@
 import Foundation
 
-/// 将指定账号写入 ~/.codex/auth.json，供 Codex CLI/App 使用
+/// 将指定账号写入当前 profile 的 auth.json，供 Codex CLI/App 使用。
 struct AuthSwitcher {
-    static let authFilePath = URL(fileURLWithPath: NSHomeDirectory())
-        .appendingPathComponent(".codex/auth.json")
+    static var authFilePath: URL { CodexPaths.authURL }
 
     static func activate(_ account: TokenAccount) throws {
-        let dir = authFilePath.deletingLastPathComponent()
+        let dir = self.authFilePath.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         // 读取现有文件，保留非 token 字段
         var existing: [String: Any] = [:]
-        if let data = try? Data(contentsOf: authFilePath),
+        if let data = try? Data(contentsOf: self.authFilePath),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             existing = json
         }
@@ -26,12 +25,12 @@ struct AuthSwitcher {
         ]
 
         let data = try JSONSerialization.data(withJSONObject: existing, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: authFilePath, options: .atomic)
+        try CodexPaths.writeSecureFile(data, to: self.authFilePath)
     }
 
     /// 读取当前激活账号的 email（用于标记 isActive）
     static func currentEmail() -> String? {
-        guard let data = try? Data(contentsOf: authFilePath),
+        guard let data = try? Data(contentsOf: self.authFilePath),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let tokens = json["tokens"] as? [String: Any],
               let accessToken = tokens["access_token"] as? String else { return nil }
