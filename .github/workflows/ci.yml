@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - "codex/**"
   push:
     branches:
       - main
@@ -48,3 +49,15 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build
+
+      - name: Development isolation regression tests
+        run: |
+          xcodebuild \
+            -project codexpanel.xcodeproj \
+            -scheme codexpanel \
+            -destination 'platform=macOS' \
+            -only-testing:codexpanelTests/CodexPanelRuntimeProfileTests \
+            -only-testing:codexpanelTests/CodexPanelCLIInstallServiceTests \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            test

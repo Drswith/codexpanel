@@ -205,6 +205,17 @@ open codexpanel.xcodeproj
 1. 编辑 `Configs/Signing.local.xcconfig`，填入自己的 `CODEXPANEL_DEVELOPMENT_TEAM`
 2. 构建并运行 `codexpanel` target
 
+Debug 构建默认使用开发态隔离 profile，不会直接写真实 `~/.codex` / `~/.codexpanel`：
+
+- Debug app 使用 `~/.codexpanel-dev/home`
+- Debug CLI 命令是 `codexpanel-dev`
+- Debug OAuth / gateway 端口使用 `1555` / `1556` / `1557`
+- Release 正式运行态仍使用真实 `~/.codex` 历史池和正式 `codexpanel` 命令
+
+完整开发态运行、测试和 CLI 说明见：
+
+- [docs/development-isolation.md](./docs/development-isolation.md)
+
 ## 发版方式（本地）
 
 本仓库已移除 GitHub Actions 自动发版逻辑，发布统一改为本地打包后手动上传 GitHub Release。

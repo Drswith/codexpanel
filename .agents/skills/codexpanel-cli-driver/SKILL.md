@@ -7,7 +7,7 @@ description: |
 
 # CodexPanel CLI Driver
 
-Use this skill when the user wants an agent to operate the installed Codex Panel macOS app through the native `codexpanel` CLI. The goal is to use app intent routes and Accessibility snapshots instead of screenshots, mouse clicks, keyboard shortcuts, or OCR.
+Use this skill when the user wants an agent to operate the installed Codex Panel macOS app through the native CLI driver. For Release installs the command is `codexpanel`; for repository Debug builds the command is `codexpanel-dev`. The goal is to use app intent routes and Accessibility snapshots instead of screenshots, mouse clicks, keyboard shortcuts, or OCR.
 
 ## Repository Layout
 
@@ -37,6 +37,15 @@ The V1 CLI driver provides:
 
 The V1 CLI driver does not provide generic `click`, `fill`, `press`, or MCP. Do not invent those commands. If a task needs arbitrary control activation, first use `snapshot` to inspect native structure, then explain that V1 can only navigate top-level views; leave ref-based actions for a later CLI version.
 
+## Runtime Profiles
+
+Release and Debug intentionally route to different app identities:
+
+- Release: `codexpanel`, `codexpanel://`, bundle id `com.codexpanel`.
+- Debug: `codexpanel-dev`, `codexpanel-dev://`, bundle id `com.codexpanel.dev`.
+
+Do not use the Release `codexpanel` command to operate a Debug app. Debug builds also use isolated local data by default under `~/.codexpanel-dev/home`; only use `CODEXPANEL_ALLOW_REAL_HOME=1` for explicit low-level compatibility checks.
+
 ## Resolve The Binary
 
 Prefer the user-installed command:
@@ -57,9 +66,10 @@ For repository development builds, build the app target so the helper is copied 
 
 ```bash
 xcodebuild -scheme codexpanel -destination 'platform=macOS' build
+codexpanel-dev doctor --json
 ```
 
-Do not use the old `codexpanel-ctl` name for CLI Driver V1. The shipped command is `codexpanel`.
+If `codexpanel-dev` is not on `PATH`, try the bundled helper in the Debug app build product or install it from the Debug app Settings page. Do not use the old `codexpanel-ctl` name for CLI Driver V1.
 
 ## First Checks
 
@@ -68,6 +78,13 @@ Start with:
 ```bash
 codexpanel doctor --json
 codexpanel state --json
+```
+
+For Debug builds, use the matching command:
+
+```bash
+codexpanel-dev doctor --json
+codexpanel-dev state --json
 ```
 
 Interpret the result before attempting view or snapshot commands:

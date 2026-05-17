@@ -9,6 +9,15 @@ description: |
 
 Use this skill as the general entry point for Codex Panel repository work. Choose the narrower repo-local skill when the task has a specific operational surface.
 
+## Development Isolation
+
+- Xcode Debug builds use the development runtime profile by default.
+- Debug home is `~/.codexpanel-dev/home`, not the real production home.
+- Debug CLI command is `codexpanel-dev`; Release CLI command is `codexpanel`.
+- Use `CODEXPANEL_HOME` for an explicit temporary development home.
+- Use `CODEXPANEL_ALLOW_REAL_HOME=1` only for deliberate low-level compatibility checks that must touch the real `~/.codex`.
+- See `docs/development-isolation.md` for the repository workflow.
+
 ## Skill Routing
 
 - Use `$codexpanel-cli-driver` when the task is to operate the installed app through the `codexpanel` CLI, open/close views, run `state`, run `snapshot`, run `doctor`, validate CLI installation, or inspect native Accessibility output.
@@ -17,7 +26,7 @@ Use this skill as the general entry point for Codex Panel repository work. Choos
 
 ## Current CLI Boundary
 
-The shipped CLI Driver V1 command is `codexpanel`, not `codexpanel-ctl`.
+The shipped Release CLI Driver V1 command is `codexpanel`, not `codexpanel-ctl`. Repository Debug builds use `codexpanel-dev`.
 
 Supported user-facing CLI groups:
 
@@ -29,6 +38,18 @@ codexpanel view close all --wait 3 --json
 codexpanel state --json
 codexpanel snapshot --format tree --target auto
 codexpanel doctor --json
+```
+
+For Debug builds, use the matching development command:
+
+```bash
+codexpanel-dev view open settings --page usage --wait 3 --json
+codexpanel-dev view open menu --wait 3 --json
+codexpanel-dev view open login --wait 3 --json
+codexpanel-dev view close all --wait 3 --json
+codexpanel-dev state --json
+codexpanel-dev snapshot --format tree --target auto
+codexpanel-dev doctor --json
 ```
 
 The V1 driver does not implement account-management commands, generic control refs, `click`, `fill`, `press`, or MCP.
