@@ -9,8 +9,8 @@
 				<string>Editor</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
-					<string>com.codexpanel.oauth</string>
-					<string>codexpanel</string>
+					<string>$(CODEXPANEL_OAUTH_URL_SCHEME)</string>
+					<string>$(CODEXPANEL_AUTOMATION_URL_SCHEME)</string>
 				</array>
 			</dict>
 		</array>

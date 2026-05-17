@@ -158,9 +158,12 @@ final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
             fields: [
                 "pid": getpid(),
                 "bundleIdentifier": Bundle.main.bundleIdentifier as Any,
+                "profileBundleIdentifier": runtimeProfile.bundleIdentifier,
                 "runtimeChannel": runtimeProfile.channel.rawValue,
                 "homeSource": runtimeProfile.homeSource.rawValue,
                 "usesRealHome": runtimeProfile.usesRealHome,
+                "automationURLScheme": runtimeProfile.automationURLScheme,
+                "oauthURLScheme": runtimeProfile.oauthURLScheme,
                 "isMenuHostProcess": false,
                 "statusItemHostMode": "single_process_status_item",
                 "lsuiElement": Bundle.main.object(forInfoDictionaryKey: "LSUIElement") as Any,
