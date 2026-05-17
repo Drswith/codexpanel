@@ -26,6 +26,7 @@ final class CodexPanelRuntimeProfileTests: XCTestCase {
         XCTAssertEqual(profile.bundleIdentifier, "com.codexpanel.dev")
         XCTAssertEqual(profile.automationURLScheme, "codexpanel-dev")
         XCTAssertEqual(profile.oauthURLScheme, "com.codexpanel.dev.oauth")
+        XCTAssertEqual(profile.cliCommandName, "codexpanel-dev")
     }
 
     func testDebugRespectsExplicitHomeOverride() {
@@ -79,6 +80,7 @@ final class CodexPanelRuntimeProfileTests: XCTestCase {
         XCTAssertEqual(profile.bundleIdentifier, "com.codexpanel")
         XCTAssertEqual(profile.automationURLScheme, "codexpanel")
         XCTAssertEqual(profile.oauthURLScheme, "com.codexpanel.oauth")
+        XCTAssertEqual(profile.cliCommandName, "codexpanel")
     }
 
     func testDebugHomeProducesCodexAndCodexPanelRootsAwayFromRealHome() {

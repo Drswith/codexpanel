@@ -35,21 +35,32 @@ struct CodexPanelCLIInstallService {
     private let fileManager: FileManager
     private let installURL: URL
     private let helperURL: URL
+    let commandName: String
 
     init(
         fileManager: FileManager = .default,
+        runtimeProfile: CodexPanelRuntimeProfile = CodexPaths.runtimeProfile,
+        installHomeURL: URL? = nil,
         installURL: URL? = nil,
         helperURL: URL? = nil
     ) {
         self.fileManager = fileManager
-        self.installURL = installURL ?? CodexPaths.realHome
+        self.commandName = runtimeProfile.cliCommandName
+        self.installURL = installURL ?? (installHomeURL ?? Self.defaultInstallHome())
             .appendingPathComponent(".local", isDirectory: true)
             .appendingPathComponent("bin", isDirectory: true)
-            .appendingPathComponent("codexpanel", isDirectory: false)
+            .appendingPathComponent(runtimeProfile.cliCommandName, isDirectory: false)
         self.helperURL = helperURL ?? Bundle.main.bundleURL
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("Helpers", isDirectory: true)
-            .appendingPathComponent("codexpanel", isDirectory: false)
+            .appendingPathComponent(runtimeProfile.cliCommandName, isDirectory: false)
+    }
+
+    private static func defaultInstallHome() -> URL {
+        if let pw = getpwuid(getuid()), let pwDir = pw.pointee.pw_dir {
+            return URL(fileURLWithPath: String(cString: pwDir), isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
     }
 
     func status() -> CodexPanelCLIInstallStatus {

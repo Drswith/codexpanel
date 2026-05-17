@@ -172,13 +172,17 @@ enum L {
             : "If you already installed an earlier build with the same version number, a same-version reissue will usually not show up as an upgrade automatically; you must download the reissued build manually."
     }
     static var codexPanelCLIInstallTitle: String { zh ? "CLI 安装" : "CLI Install" }
-    static var codexPanelCLIInstallHint: String {
+    static func codexPanelCLIInstallHint(commandName: String) -> String {
         zh
-            ? "把 App 内置的 codexpanel helper 链接到 ~/.local/bin/codexpanel，便于终端和 agent 直接调用。"
-            : "Link the bundled codexpanel helper to ~/.local/bin/codexpanel for terminal and agent use."
+            ? "把 App 内置的 \(commandName) helper 链接到 ~/.local/bin/\(commandName)，便于终端和 agent 直接调用。"
+            : "Link the bundled \(commandName) helper to ~/.local/bin/\(commandName) for terminal and agent use."
     }
-    static var codexPanelCLIInstallStatusTitle: String { zh ? "CLI 状态" : "CLI Status" }
-    static var codexPanelCLIInstallAction: String { zh ? "安装或更新 CLI 链接" : "Install or Update CLI Link" }
+    static func codexPanelCLIInstallStatusTitle(commandName: String) -> String {
+        zh ? "CLI 状态（\(commandName)）" : "CLI Status (\(commandName))"
+    }
+    static func codexPanelCLIInstallAction(commandName: String) -> String {
+        zh ? "安装或更新 \(commandName) 链接" : "Install or Update \(commandName) Link"
+    }
     static func codexPanelCLIInstallNotInstalled(_ installPath: String) -> String {
         zh ? "尚未安装：\(installPath)" : "Not installed: \(installPath)"
     }

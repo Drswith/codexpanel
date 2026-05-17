@@ -1,6 +1,7 @@
 import Foundation
 
 struct CLIStateComputationInput {
+    var bundleIdentifier: String = codexPanelBundleIdentifier
     var appRunning: Bool
     var pid: Int32?
     var accessibilityTrusted: Bool
@@ -12,6 +13,7 @@ enum CLIStateResultBuilder {
     static func build(from input: CLIStateComputationInput) -> StateResult {
         if input.appRunning == false {
             return StateResult(
+                bundleIdentifier: input.bundleIdentifier,
                 appRunning: false,
                 appVersion: nil,
                 pid: nil,
@@ -23,6 +25,7 @@ enum CLIStateResultBuilder {
 
         if input.accessibilityTrusted == false {
             return StateResult(
+                bundleIdentifier: input.bundleIdentifier,
                 appRunning: true,
                 appVersion: nil,
                 pid: input.pid,
@@ -33,6 +36,7 @@ enum CLIStateResultBuilder {
         }
 
         return StateResult(
+            bundleIdentifier: input.bundleIdentifier,
             appRunning: true,
             appVersion: nil,
             pid: input.pid,
@@ -42,4 +46,3 @@ enum CLIStateResultBuilder {
         )
     }
 }
-

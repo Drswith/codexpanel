@@ -25,12 +25,18 @@ private enum CLIIO {
 }
 
 private final class CodexPanelAppLocator {
+    private let identity: CLIRuntimeIdentity
+
+    init(identity: CLIRuntimeIdentity = .current) {
+        self.identity = identity
+    }
+
     func runningApp() -> NSRunningApplication? {
-        NSRunningApplication.runningApplications(withBundleIdentifier: codexPanelBundleIdentifier).first
+        NSRunningApplication.runningApplications(withBundleIdentifier: self.identity.bundleIdentifier).first
     }
 
     func installedAppURL() -> URL? {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: codexPanelBundleIdentifier)
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: self.identity.bundleIdentifier)
     }
 
     func appVersion(bundleURL: URL?) -> String? {
@@ -65,6 +71,12 @@ private struct AXWindowInfo {
 }
 
 private final class CodexPanelAXInspector {
+    private let identity: CLIRuntimeIdentity
+
+    init(identity: CLIRuntimeIdentity = .current) {
+        self.identity = identity
+    }
+
     func isTrusted() -> Bool {
         AXIsProcessTrusted()
     }
@@ -100,7 +112,7 @@ private final class CodexPanelAXInspector {
         }
 
         return SnapshotResult(
-            bundleIdentifier: codexPanelBundleIdentifier,
+            bundleIdentifier: self.identity.bundleIdentifier,
             pid: app.processIdentifier,
             target: target == .auto ? CLISnapshotWindowSelectionCore.autoResolvedTarget(for: windowMetadata) : target,
             windows: snapshotWindows
@@ -320,8 +332,9 @@ private final class CodexPanelAXInspector {
 
 private final class CodexPanelCLI {
     private let arguments: [String]
-    private let appLocator = CodexPanelAppLocator()
-    private let axInspector = CodexPanelAXInspector()
+    private let identity: CLIRuntimeIdentity
+    private let appLocator: CodexPanelAppLocator
+    private let axInspector: CodexPanelAXInspector
     private let waitPoller = CLIViewWaitPoller()
 
     private struct AXStateProvider: CLIViewStateProviding {
@@ -334,8 +347,11 @@ private final class CodexPanelCLI {
         }
     }
 
-    init(arguments: [String]) {
+    init(arguments: [String], identity: CLIRuntimeIdentity = .current) {
         self.arguments = arguments
+        self.identity = identity
+        self.appLocator = CodexPanelAppLocator(identity: identity)
+        self.axInspector = CodexPanelAXInspector(identity: identity)
     }
 
     func run() throws {
@@ -421,7 +437,7 @@ private final class CodexPanelCLI {
         let helperPath = bundleURL?
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("Helpers", isDirectory: true)
-            .appendingPathComponent("codexpanel", isDirectory: false)
+            .appendingPathComponent(self.identity.commandName, isDirectory: false)
             .path
         let helperBundled: Bool
         if let helperPath {
@@ -430,11 +446,14 @@ private final class CodexPanelCLI {
             helperBundled = false
         }
 
-        let cliSymlinkPath = NSHomeDirectory() + "/.local/bin/codexpanel"
+        let cliSymlinkPath = NSHomeDirectory() + "/.local/bin/\(self.identity.commandName)"
         let cliExists = FileManager.default.fileExists(atPath: cliSymlinkPath)
         let cliTarget = try? FileManager.default.destinationOfSymbolicLink(atPath: cliSymlinkPath)
 
         let doctor = DoctorResult(
+            cliCommandName: self.identity.commandName,
+            bundleIdentifier: self.identity.bundleIdentifier,
+            urlScheme: self.identity.urlScheme,
             appInstalled: installedURL != nil || helperAppURL != nil,
             appBundlePath: bundleURL?.path,
             appRunning: runningApp != nil,
@@ -451,14 +470,7 @@ private final class CodexPanelCLI {
     }
 
     private func makeViewURL(_ command: ViewCommand) -> URL? {
-        var components = URLComponents()
-        components.scheme = codexPanelURLScheme
-        components.host = "view"
-        components.path = "/\(command.action.rawValue)/\(command.target.rawValue)"
-        if command.action == .open, command.target == .settings, let page = command.page {
-            components.queryItems = [URLQueryItem(name: "page", value: page.rawValue)]
-        }
-        return components.url
+        CLIViewURLBuilder.makeViewURL(command: command, identity: self.identity)
     }
 
     private func waitForView(_ command: ViewCommand, timeout: TimeInterval) throws {

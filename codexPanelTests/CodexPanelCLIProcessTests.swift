@@ -64,6 +64,7 @@ final class CodexPanelCLIProcessTests: XCTestCase {
         XCTAssertEqual(result.status, 0)
 
         let payload = try self.parseJSONObject(result.stdout)
+        XCTAssertEqual(payload["bundleIdentifier"] as? String, "com.codexpanel.dev")
         XCTAssertNotNil(payload["appRunning"] as? Bool)
         XCTAssertNotNil(payload["menuVisible"] as? Bool)
         XCTAssertNotNil(payload["accessibilityTrusted"] as? Bool)
@@ -74,6 +75,9 @@ final class CodexPanelCLIProcessTests: XCTestCase {
         XCTAssertEqual(result.status, 0)
 
         let payload = try self.parseJSONObject(result.stdout)
+        XCTAssertEqual(payload["cliCommandName"] as? String, "codexpanel-dev")
+        XCTAssertEqual(payload["bundleIdentifier"] as? String, "com.codexpanel.dev")
+        XCTAssertEqual(payload["urlScheme"] as? String, "codexpanel-dev")
         XCTAssertNotNil(payload["appRunning"] as? Bool)
         XCTAssertNotNil(payload["helperBundled"] as? Bool)
         XCTAssertNotNil(payload["cliSymlinkPath"] as? String)
@@ -108,13 +112,17 @@ final class CodexPanelCLIProcessTests: XCTestCase {
 
         if let productsDir = ProcessInfo.processInfo.environment["BUILT_PRODUCTS_DIR"] {
             let root = URL(fileURLWithPath: productsDir, isDirectory: true)
+            candidates.append(root.appendingPathComponent("codexpanel-dev"))
             candidates.append(root.appendingPathComponent("codexpanel"))
+            candidates.append(root.appendingPathComponent("Codex Panel DEV.app/Contents/Helpers/codexpanel-dev"))
             candidates.append(root.appendingPathComponent("Codex Panel DEV.app/Contents/Helpers/codexpanel"))
             candidates.append(root.appendingPathComponent("Codex Panel.app/Contents/Helpers/codexpanel"))
         }
 
         let testBundleRoot = Bundle(for: Self.self).bundleURL.deletingLastPathComponent()
+        candidates.append(testBundleRoot.appendingPathComponent("codexpanel-dev"))
         candidates.append(testBundleRoot.appendingPathComponent("codexpanel"))
+        candidates.append(testBundleRoot.appendingPathComponent("Codex Panel DEV.app/Contents/Helpers/codexpanel-dev"))
         candidates.append(testBundleRoot.appendingPathComponent("Codex Panel DEV.app/Contents/Helpers/codexpanel"))
         candidates.append(testBundleRoot.appendingPathComponent("Codex Panel.app/Contents/Helpers/codexpanel"))
 

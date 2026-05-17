@@ -1,7 +1,8 @@
 import Foundation
 
-let codexPanelBundleIdentifier = "com.codexpanel"
-let codexPanelURLScheme = "codexpanel"
+let codexPanelCLICommandName = CLIRuntimeIdentity.current.commandName
+let codexPanelBundleIdentifier = CLIRuntimeIdentity.current.bundleIdentifier
+let codexPanelURLScheme = CLIRuntimeIdentity.current.urlScheme
 let codexPanelWindowIdentifierPrefix = "codexpanel.window."
 let settingsWindowIdentifier = "\(codexPanelWindowIdentifierPrefix)openai-settings"
 let loginWindowIdentifier = "\(codexPanelWindowIdentifierPrefix)oauth-login"
@@ -102,6 +103,7 @@ struct SnapshotResult: Codable, Equatable {
 }
 
 struct StateResult: Codable, Equatable {
+    var bundleIdentifier: String
     var appRunning: Bool
     var appVersion: String?
     var pid: Int32?
@@ -111,6 +113,9 @@ struct StateResult: Codable, Equatable {
 }
 
 struct DoctorResult: Codable, Equatable {
+    var cliCommandName: String
+    var bundleIdentifier: String
+    var urlScheme: String
     var appInstalled: Bool
     var appBundlePath: String?
     var appRunning: Bool

@@ -32,6 +32,33 @@ final class CodexPanelCLIInstallServiceTests: XCTestCase {
         XCTAssertEqual(installPath, installURL.path)
     }
 
+    func testDebugProfileUsesDevCommandNameAndDoesNotTargetProductionSymlink() {
+        let debugHome = self.rootDirectory.appendingPathComponent("debug-home", isDirectory: true)
+        let profile = CodexPanelRuntimeProfile.resolve(
+            channel: .debug,
+            environment: [
+                CodexPanelRuntimeProfile.homeOverrideEnvironmentKey: debugHome.path,
+            ],
+            defaultHome: self.rootDirectory
+        )
+        let helperURL = self.rootDirectory.appendingPathComponent("helpers/codexpanel-dev")
+        let service = CodexPanelCLIInstallService(
+            runtimeProfile: profile,
+            installHomeURL: self.rootDirectory,
+            helperURL: helperURL
+        )
+
+        guard case let .helperMissing(helperPath, installPath) = service.status() else {
+            return XCTFail("expected helperMissing status")
+        }
+
+        XCTAssertEqual(service.commandName, "codexpanel-dev")
+        XCTAssertEqual(helperPath, helperURL.path)
+        XCTAssertEqual(installPath, self.rootDirectory.appendingPathComponent(".local/bin/codexpanel-dev").path)
+        XCTAssertNotEqual(installPath, self.rootDirectory.appendingPathComponent(".local/bin/codexpanel").path)
+        XCTAssertFalse(installPath.hasPrefix(debugHome.path))
+    }
+
     func testInstallSymlinkCreatesDirectoryAndLink() throws {
         let helperURL = self.rootDirectory.appendingPathComponent("helpers/codexpanel")
         let installURL = self.rootDirectory.appendingPathComponent("bin/codexpanel")

@@ -133,6 +133,7 @@ final class CodexPanelCLIViewWaitCoreTests: XCTestCase {
         menuVisible: Bool
     ) -> StateResult {
         StateResult(
+            bundleIdentifier: codexPanelBundleIdentifier,
             appRunning: true,
             appVersion: "1.0.0",
             pid: 123,
@@ -154,6 +155,7 @@ private final class SequenceStateProvider: CLIViewStateProviding {
     func currentState() -> StateResult {
         guard self.states.isEmpty == false else {
             return StateResult(
+                bundleIdentifier: codexPanelBundleIdentifier,
                 appRunning: false,
                 appVersion: nil,
                 pid: nil,
