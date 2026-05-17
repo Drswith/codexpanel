@@ -30,8 +30,10 @@ struct CodexSyncService: CodexSynchronizing {
     private let readData: (URL) -> Data?
     private let fileExists: (URL) -> Bool
     private let removeFileIfPresent: (URL) throws -> Void
+    private let networkConfiguration: CodexPanelRuntimeNetworkConfiguration
 
     init(
+        networkConfiguration: CodexPanelRuntimeNetworkConfiguration = CodexPanelRuntimeProfile.current.network,
         ensureDirectories: @escaping () throws -> Void = { try CodexPaths.ensureDirectories() },
         backupFileIfPresent: @escaping (URL, URL) throws -> Void = { source, destination in
             try CodexPaths.backupFileIfPresent(from: source, to: destination)
@@ -53,6 +55,7 @@ struct CodexSyncService: CodexSynchronizing {
             try FileManager.default.removeItem(at: url)
         }
     ) {
+        self.networkConfiguration = networkConfiguration
         self.ensureDirectories = ensureDirectories
         self.backupFileIfPresent = backupFileIfPresent
         self.writeSecureFile = writeSecureFile
@@ -194,13 +197,13 @@ struct CodexSyncService: CodexSynchronizing {
             text = self.upsertSetting(
                 text,
                 key: "openai_base_url",
-                value: self.quote(OpenAIAccountGatewayConfiguration.baseURLString)
+                value: self.quote(self.networkConfiguration.openAIAccountGatewayBaseURLString)
             )
         } else if provider.kind == .openRouter {
             text = self.upsertSetting(
                 text,
                 key: "openai_base_url",
-                value: self.quote(OpenRouterGatewayConfiguration.baseURLString)
+                value: self.quote(self.networkConfiguration.openRouterGatewayBaseURLString)
             )
         } else if provider.kind == .openAICompatible, let baseURL = provider.baseURL {
             text = self.upsertSetting(text, key: "openai_base_url", value: self.quote(baseURL))

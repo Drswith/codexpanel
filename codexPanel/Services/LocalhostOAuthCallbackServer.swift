@@ -28,8 +28,8 @@ final class LocalhostOAuthCallbackServer {
     private var serverFd: Int32 = -1
 
     init(
-        port: UInt16 = 1455,
-        callbackPath: String = "/auth/callback",
+        port: UInt16 = CodexPanelRuntimeProfile.current.network.oauthCallbackPort,
+        callbackPath: String = CodexPanelRuntimeProfile.current.network.oauthCallbackPath,
         onCallback: @escaping @MainActor (String) -> Void
     ) {
         self.port = port

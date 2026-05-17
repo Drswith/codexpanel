@@ -89,7 +89,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
             providers: [provider]
         )
 
-        try CodexSyncService().synchronize(config: config)
+        try CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()).synchronize(config: config)
 
         let authText = try String(contentsOf: CodexPaths.authURL, encoding: .utf8)
         let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
@@ -130,7 +130,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
             providers: [provider]
         )
 
-        try CodexSyncService().synchronize(config: config)
+        try CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()).synchronize(config: config)
 
         let authObject = try self.readAuthJSON()
         let tokens = try XCTUnwrap(authObject["tokens"] as? [String: Any])
@@ -169,7 +169,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
             providers: [provider]
         )
 
-        try CodexSyncService().synchronize(config: config)
+        try CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()).synchronize(config: config)
 
         let authObject = try self.readAuthJSON()
         let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
@@ -180,7 +180,77 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         XCTAssertTrue(tomlText.contains(#"review_model = "anthropic/claude-3.7-sonnet""#))
     }
 
+    func testSynchronizeWritesDebugGatewayBaseURLsWhenUsingDebugNetworkProfile() throws {
+        let openAIAccount = CodexPanelProviderAccount(
+            id: "acct_pool",
+            kind: .oauthTokens,
+            label: "pool@example.com",
+            email: "pool@example.com",
+            openAIAccountId: "acct_pool",
+            accessToken: "access-pool",
+            refreshToken: "refresh-pool",
+            idToken: "id-pool"
+        )
+        let openAIProvider = CodexPanelProvider(
+            id: "openai-oauth",
+            kind: .openAIOAuth,
+            label: "OpenAI",
+            activeAccountId: openAIAccount.id,
+            accounts: [openAIAccount]
+        )
+        let openAIConfig = CodexPanelConfig(
+            active: CodexPanelActiveSelection(providerId: openAIProvider.id, accountId: openAIAccount.id),
+            openAI: CodexPanelOpenAISettings(accountUsageMode: .aggregateGateway),
+            providers: [openAIProvider]
+        )
+
+        try CodexSyncService(networkConfiguration: self.debugNetworkConfiguration()).synchronize(config: openAIConfig)
+
+        let openAITOMLText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertTrue(openAITOMLText.contains(#"openai_base_url = "http://localhost:1556/v1""#))
+
+        let openRouterAccount = CodexPanelProviderAccount(
+            id: "acct_openrouter",
+            kind: .apiKey,
+            label: "OpenRouter Primary",
+            apiKey: "sk-or-v1-primary"
+        )
+        let openRouterProvider = CodexPanelProvider(
+            id: "openrouter",
+            kind: .openRouter,
+            label: "OpenRouter",
+            selectedModelID: "anthropic/claude-3.7-sonnet",
+            activeAccountId: openRouterAccount.id,
+            accounts: [openRouterAccount]
+        )
+        let openRouterConfig = CodexPanelConfig(
+            active: CodexPanelActiveSelection(providerId: openRouterProvider.id, accountId: openRouterAccount.id),
+            providers: [openRouterProvider]
+        )
+
+        try CodexSyncService(networkConfiguration: self.debugNetworkConfiguration()).synchronize(config: openRouterConfig)
+
+        let openRouterTOMLText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertTrue(openRouterTOMLText.contains(#"openai_base_url = "http://localhost:1557/v1""#))
+    }
+
     private enum SyncFailure: Error, Equatable {
         case configWriteFailed
+    }
+
+    private func debugNetworkConfiguration() -> CodexPanelRuntimeNetworkConfiguration {
+        CodexPanelRuntimeProfile.resolve(
+            channel: .debug,
+            environment: [:],
+            defaultHome: URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        ).network
+    }
+
+    private func releaseNetworkConfiguration() -> CodexPanelRuntimeNetworkConfiguration {
+        CodexPanelRuntimeProfile.resolve(
+            channel: .release,
+            environment: [:],
+            defaultHome: URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        ).network
     }
 }

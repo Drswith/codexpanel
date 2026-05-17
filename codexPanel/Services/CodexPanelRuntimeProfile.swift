@@ -11,6 +11,26 @@ enum CodexPanelHomeSource: String, Equatable {
     case realHome
 }
 
+struct CodexPanelRuntimeNetworkConfiguration: Equatable {
+    var host: String
+    var oauthCallbackPort: UInt16
+    var openAIAccountGatewayPort: UInt16
+    var openRouterGatewayPort: UInt16
+    var oauthCallbackPath: String
+
+    var oauthRedirectURI: String {
+        "http://\(self.host):\(self.oauthCallbackPort)\(self.oauthCallbackPath)"
+    }
+
+    var openAIAccountGatewayBaseURLString: String {
+        "http://\(self.host):\(self.openAIAccountGatewayPort)/v1"
+    }
+
+    var openRouterGatewayBaseURLString: String {
+        "http://\(self.host):\(self.openRouterGatewayPort)/v1"
+    }
+}
+
 struct CodexPanelRuntimeProfile: Equatable {
     static let homeOverrideEnvironmentKey = "CODEXPANEL_HOME"
     static let allowRealHomeEnvironmentKey = "CODEXPANEL_ALLOW_REAL_HOME"
@@ -52,6 +72,27 @@ struct CodexPanelRuntimeProfile: Equatable {
             return "com.codexpanel.dev.oauth"
         case .release:
             return "com.codexpanel.oauth"
+        }
+    }
+
+    var network: CodexPanelRuntimeNetworkConfiguration {
+        switch self.channel {
+        case .debug:
+            return CodexPanelRuntimeNetworkConfiguration(
+                host: "localhost",
+                oauthCallbackPort: 1555,
+                openAIAccountGatewayPort: 1556,
+                openRouterGatewayPort: 1557,
+                oauthCallbackPath: "/auth/callback"
+            )
+        case .release:
+            return CodexPanelRuntimeNetworkConfiguration(
+                host: "localhost",
+                oauthCallbackPort: 1455,
+                openAIAccountGatewayPort: 1456,
+                openRouterGatewayPort: 1457,
+                oauthCallbackPath: "/auth/callback"
+            )
         }
     }
 

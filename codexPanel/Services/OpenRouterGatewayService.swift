@@ -10,12 +10,14 @@ protocol OpenRouterGatewayControlling: AnyObject {
 
 enum OpenRouterGatewayConfiguration {
     static let host = "localhost"
-    static let port: UInt16 = 1457
+    static var port: UInt16 {
+        CodexPanelRuntimeProfile.current.network.openRouterGatewayPort
+    }
     static let apiKey = "codexpanel-openrouter-gateway"
     static let upstreamResponsesURL = URL(string: "https://openrouter.ai/api/v1/responses")!
 
     static var baseURLString: String {
-        "http://\(self.host):\(self.port)/v1"
+        CodexPanelRuntimeProfile.current.network.openRouterGatewayBaseURLString
     }
 }
 
@@ -24,11 +26,13 @@ struct OpenRouterGatewayRuntimeConfiguration {
     var port: UInt16
     var upstreamResponsesURL: URL
 
-    static let live = OpenRouterGatewayRuntimeConfiguration(
-        host: OpenRouterGatewayConfiguration.host,
-        port: OpenRouterGatewayConfiguration.port,
-        upstreamResponsesURL: OpenRouterGatewayConfiguration.upstreamResponsesURL
-    )
+    static var live: OpenRouterGatewayRuntimeConfiguration {
+        OpenRouterGatewayRuntimeConfiguration(
+            host: OpenRouterGatewayConfiguration.host,
+            port: OpenRouterGatewayConfiguration.port,
+            upstreamResponsesURL: OpenRouterGatewayConfiguration.upstreamResponsesURL
+        )
+    }
 }
 
 struct OpenRouterGatewayTestResponse {
@@ -140,7 +144,12 @@ final class OpenRouterGatewayService: OpenRouterGatewayControlling {
                 self.listener = listener
                 listener.start(queue: self.listenerQueue)
             } catch {
-                NSLog("codexpanel OpenRouter gateway failed to start: %@", error.localizedDescription)
+                NSLog(
+                    "codexpanel OpenRouter gateway failed to start on %@:%d: %@",
+                    self.runtimeConfiguration.host,
+                    self.runtimeConfiguration.port,
+                    error.localizedDescription
+                )
             }
         }
     }

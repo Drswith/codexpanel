@@ -24,7 +24,9 @@ protocol OpenAIAccountGatewayControlling: AnyObject {
 
 enum OpenAIAccountGatewayConfiguration {
     static let host = "localhost"
-    static let port: UInt16 = 1456
+    static var port: UInt16 {
+        CodexPanelRuntimeProfile.current.network.openAIAccountGatewayPort
+    }
     static let apiKey = "codexpanel-local-gateway"
     static let originator = "codexpanel"
     static let reasoningIncludeMarker = "reasoning.encrypted_content"
@@ -32,7 +34,7 @@ enum OpenAIAccountGatewayConfiguration {
     static let upstreamResponsesCompactURL = URL(string: "https://chatgpt.com/backend-api/codex/responses/compact")!
 
     static var baseURLString: String {
-        "http://\(self.host):\(self.port)/v1"
+        CodexPanelRuntimeProfile.current.network.openAIAccountGatewayBaseURLString
     }
 }
 
@@ -42,12 +44,14 @@ struct OpenAIAccountGatewayRuntimeConfiguration {
     var upstreamResponsesURL: URL
     var upstreamResponsesCompactURL: URL
 
-    static let live = OpenAIAccountGatewayRuntimeConfiguration(
-        host: OpenAIAccountGatewayConfiguration.host,
-        port: OpenAIAccountGatewayConfiguration.port,
-        upstreamResponsesURL: OpenAIAccountGatewayConfiguration.upstreamResponsesURL,
-        upstreamResponsesCompactURL: OpenAIAccountGatewayConfiguration.upstreamResponsesCompactURL
-    )
+    static var live: OpenAIAccountGatewayRuntimeConfiguration {
+        OpenAIAccountGatewayRuntimeConfiguration(
+            host: OpenAIAccountGatewayConfiguration.host,
+            port: OpenAIAccountGatewayConfiguration.port,
+            upstreamResponsesURL: OpenAIAccountGatewayConfiguration.upstreamResponsesURL,
+            upstreamResponsesCompactURL: OpenAIAccountGatewayConfiguration.upstreamResponsesCompactURL
+        )
+    }
 }
 
 enum OpenAIAccountGatewayUpstreamProxyResolutionMode: Equatable {
@@ -586,7 +590,12 @@ final class OpenAIAccountGatewayService: OpenAIAccountGatewayControlling {
                 self.listener = listener
                 listener.start(queue: self.listenerQueue)
             } catch {
-                NSLog("codexpanel OpenAI gateway failed to start: %@", error.localizedDescription)
+                NSLog(
+                    "codexpanel OpenAI gateway failed to start on %@:%d: %@",
+                    self.runtimeConfiguration.host,
+                    self.runtimeConfiguration.port,
+                    error.localizedDescription
+                )
             }
         }
     }

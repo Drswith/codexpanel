@@ -13,6 +13,18 @@ final class LocalhostOAuthCallbackServerTests: XCTestCase {
         XCTAssertEqual(callbackURL, "http://localhost:1455/auth/callback?code=abc123&state=xyz")
     }
 
+    func testCallbackURLUsesInjectedPort() {
+        let request = """
+        GET /auth/callback?code=abc123&state=xyz HTTP/1.1\r
+        Host: localhost:1555\r
+        Connection: close\r
+        \r
+        """
+
+        let callbackURL = LocalhostOAuthCallbackServer.callbackURL(from: request, port: 1555)
+        XCTAssertEqual(callbackURL, "http://localhost:1555/auth/callback?code=abc123&state=xyz")
+    }
+
     func testCallbackURLRejectsNonCallbackRoutes() {
         let request = """
         GET /favicon.ico HTTP/1.1\r
