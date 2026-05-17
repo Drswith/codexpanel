@@ -93,14 +93,23 @@ struct CodexPanelUICommandRouterHandlers {
 
 @MainActor
 enum CodexPanelURLCommandParser {
-    static let oauthScheme = OpenAILoginCoordinator.loginURLScheme
-    static let automationScheme = "codexpanel"
+    static var oauthScheme: String {
+        CodexPanelRuntimeProfile.current.oauthURLScheme
+    }
+
+    static var automationScheme: String {
+        CodexPanelRuntimeProfile.current.automationURLScheme
+    }
+
     static let viewHost = "view"
 
-    static func parse(_ url: URL) -> CodexPanelURLCommand? {
+    static func parse(
+        _ url: URL,
+        profile: CodexPanelRuntimeProfile = CodexPanelRuntimeProfile.current
+    ) -> CodexPanelURLCommand? {
         guard let scheme = url.scheme?.lowercased() else { return nil }
 
-        if scheme == self.oauthScheme.lowercased() {
+        if scheme == profile.oauthURLScheme.lowercased() {
             let host = url.host?.lowercased()
             let path = url.path.lowercased()
             if host == OpenAILoginCoordinator.loginHost || path == "/\(OpenAILoginCoordinator.loginHost)" {
@@ -109,7 +118,7 @@ enum CodexPanelURLCommandParser {
             return nil
         }
 
-        guard scheme == self.automationScheme else { return nil }
+        guard scheme == profile.automationURLScheme.lowercased() else { return nil }
         guard url.host?.lowercased() == self.viewHost else { return nil }
 
         let components = url.pathComponents.filter { $0 != "/" }

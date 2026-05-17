@@ -19,6 +19,33 @@ struct CodexPanelRuntimeProfile: Equatable {
     let homeRoot: URL
     let homeSource: CodexPanelHomeSource
 
+    var bundleIdentifier: String {
+        switch self.channel {
+        case .debug:
+            return "com.codexpanel.dev"
+        case .release:
+            return "com.codexpanel"
+        }
+    }
+
+    var automationURLScheme: String {
+        switch self.channel {
+        case .debug:
+            return "codexpanel-dev"
+        case .release:
+            return "codexpanel"
+        }
+    }
+
+    var oauthURLScheme: String {
+        switch self.channel {
+        case .debug:
+            return "com.codexpanel.dev.oauth"
+        case .release:
+            return "com.codexpanel.oauth"
+        }
+    }
+
     var usesRealHome: Bool {
         self.homeSource == .realHome
     }

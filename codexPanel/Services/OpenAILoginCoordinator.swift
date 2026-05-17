@@ -59,7 +59,9 @@ final class OpenAILoginCoordinator {
     static let shared = OpenAILoginCoordinator()
 
     static let windowID = "oauth-login"
-    static let loginURLScheme = "com.codexpanel.oauth"
+    static var loginURLScheme: String {
+        CodexPanelRuntimeProfile.current.oauthURLScheme
+    }
     static let loginHost = "login"
 
     private let oauth: any OpenAILoginOAuthManaging

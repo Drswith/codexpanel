@@ -2,23 +2,25 @@ import XCTest
 
 @MainActor
 final class CodexPanelUICommandRouterTests: XCTestCase {
+    private let defaultHome = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+
     func testParseOAuthLoginURLFromHost() throws {
         let url = try XCTUnwrap(URL(string: "com.codexpanel.oauth://login"))
-        guard case .oauthLogin = CodexPanelURLCommandParser.parse(url) else {
+        guard case .oauthLogin = CodexPanelURLCommandParser.parse(url, profile: self.releaseProfile()) else {
             return XCTFail("expected oauthLogin command")
         }
     }
 
     func testParseOAuthLoginURLFromPath() throws {
         let url = try XCTUnwrap(URL(string: "com.codexpanel.oauth:///login"))
-        guard case .oauthLogin = CodexPanelURLCommandParser.parse(url) else {
+        guard case .oauthLogin = CodexPanelURLCommandParser.parse(url, profile: self.releaseProfile()) else {
             return XCTFail("expected oauthLogin command")
         }
     }
 
     func testParseOpenSettingsURLWithPage() throws {
         let url = try XCTUnwrap(URL(string: "codexpanel://view/open/settings?page=usage"))
-        guard case .view(let command) = CodexPanelURLCommandParser.parse(url) else {
+        guard case .view(let command) = CodexPanelURLCommandParser.parse(url, profile: self.releaseProfile()) else {
             return XCTFail("expected view command")
         }
         XCTAssertEqual(command.action, .open)
@@ -28,7 +30,7 @@ final class CodexPanelUICommandRouterTests: XCTestCase {
 
     func testParseOpenSettingsURLWithDiagnosticsPage() throws {
         let url = try XCTUnwrap(URL(string: "codexpanel://view/open/settings?page=diagnostics"))
-        guard case .view(let command) = CodexPanelURLCommandParser.parse(url) else {
+        guard case .view(let command) = CodexPanelURLCommandParser.parse(url, profile: self.releaseProfile()) else {
             return XCTFail("expected view command")
         }
         XCTAssertEqual(command.action, .open)
@@ -38,7 +40,7 @@ final class CodexPanelUICommandRouterTests: XCTestCase {
 
     func testParseOpenSettingsURLFallsBackToAccountsPage() throws {
         let url = try XCTUnwrap(URL(string: "codexpanel://view/open/settings?page=invalid"))
-        guard case .view(let command) = CodexPanelURLCommandParser.parse(url) else {
+        guard case .view(let command) = CodexPanelURLCommandParser.parse(url, profile: self.releaseProfile()) else {
             return XCTFail("expected view command")
         }
         XCTAssertEqual(command.action, .open)
@@ -48,7 +50,7 @@ final class CodexPanelUICommandRouterTests: XCTestCase {
 
     func testParseOpenSettingsURLWithoutPageDefaultsToAccounts() throws {
         let url = try XCTUnwrap(URL(string: "codexpanel://view/open/settings"))
-        guard case .view(let command) = CodexPanelURLCommandParser.parse(url) else {
+        guard case .view(let command) = CodexPanelURLCommandParser.parse(url, profile: self.releaseProfile()) else {
             return XCTFail("expected view command")
         }
         XCTAssertEqual(command.action, .open)
@@ -58,7 +60,7 @@ final class CodexPanelUICommandRouterTests: XCTestCase {
 
     func testParseLegacyUpdatesPageMapsToAbout() throws {
         let url = try XCTUnwrap(URL(string: "codexpanel://view/open/settings?page=updates"))
-        guard case .view(let command) = CodexPanelURLCommandParser.parse(url) else {
+        guard case .view(let command) = CodexPanelURLCommandParser.parse(url, profile: self.releaseProfile()) else {
             return XCTFail("expected view command")
         }
         XCTAssertEqual(command.action, .open)
@@ -68,12 +70,39 @@ final class CodexPanelUICommandRouterTests: XCTestCase {
 
     func testParseCloseAllURL() throws {
         let url = try XCTUnwrap(URL(string: "codexpanel://view/close/all"))
-        guard case .view(let command) = CodexPanelURLCommandParser.parse(url) else {
+        guard case .view(let command) = CodexPanelURLCommandParser.parse(url, profile: self.releaseProfile()) else {
             return XCTFail("expected view command")
         }
         XCTAssertEqual(command.action, .close)
         XCTAssertEqual(command.target, .all)
         XCTAssertNil(command.settingsPage)
+    }
+
+    func testParseDebugOAuthLoginURL() throws {
+        let url = try XCTUnwrap(URL(string: "com.codexpanel.dev.oauth://login"))
+        guard case .oauthLogin = CodexPanelURLCommandParser.parse(url, profile: self.debugProfile()) else {
+            return XCTFail("expected oauthLogin command")
+        }
+    }
+
+    func testParseDebugOpenSettingsURL() throws {
+        let url = try XCTUnwrap(URL(string: "codexpanel-dev://view/open/settings?page=usage"))
+        guard case .view(let command) = CodexPanelURLCommandParser.parse(url, profile: self.debugProfile()) else {
+            return XCTFail("expected view command")
+        }
+
+        XCTAssertEqual(command.action, .open)
+        XCTAssertEqual(command.target, .settings)
+        XCTAssertEqual(command.settingsPage, .usage)
+    }
+
+    func testDebugParserRejectsProductionSchemes() throws {
+        let debugProfile = self.debugProfile()
+        let productionOAuthURL = try XCTUnwrap(URL(string: "com.codexpanel.oauth://login"))
+        let productionAutomationURL = try XCTUnwrap(URL(string: "codexpanel://view/open/settings?page=usage"))
+
+        XCTAssertNil(CodexPanelURLCommandParser.parse(productionOAuthURL, profile: debugProfile))
+        XCTAssertNil(CodexPanelURLCommandParser.parse(productionAutomationURL, profile: debugProfile))
     }
 
     func testHandleOpenAllThrowsUnsupportedCommand() throws {
@@ -168,6 +197,22 @@ final class CodexPanelUICommandRouterTests: XCTestCase {
         XCTAssertEqual(recorder.closeSettingsCount, 1)
         XCTAssertEqual(recorder.closeMenuCount, 1)
         XCTAssertEqual(recorder.closeLoginCount, 1)
+    }
+
+    private func debugProfile() -> CodexPanelRuntimeProfile {
+        CodexPanelRuntimeProfile.resolve(
+            channel: .debug,
+            environment: [:],
+            defaultHome: self.defaultHome
+        )
+    }
+
+    private func releaseProfile() -> CodexPanelRuntimeProfile {
+        CodexPanelRuntimeProfile.resolve(
+            channel: .release,
+            environment: [:],
+            defaultHome: self.defaultHome
+        )
     }
 }
 

@@ -16,6 +16,18 @@ final class CodexPanelRuntimeProfileTests: XCTestCase {
         XCTAssertFalse(profile.usesRealHome)
     }
 
+    func testDebugUsesDevIdentity() {
+        let profile = CodexPanelRuntimeProfile.resolve(
+            channel: .debug,
+            environment: [:],
+            defaultHome: self.defaultHome
+        )
+
+        XCTAssertEqual(profile.bundleIdentifier, "com.codexpanel.dev")
+        XCTAssertEqual(profile.automationURLScheme, "codexpanel-dev")
+        XCTAssertEqual(profile.oauthURLScheme, "com.codexpanel.dev.oauth")
+    }
+
     func testDebugRespectsExplicitHomeOverride() {
         let profile = CodexPanelRuntimeProfile.resolve(
             channel: .debug,
@@ -55,6 +67,18 @@ final class CodexPanelRuntimeProfileTests: XCTestCase {
         XCTAssertEqual(profile.homeSource, .realHome)
         XCTAssertEqual(profile.homeRoot.path, "/Users/example")
         XCTAssertTrue(profile.usesRealHome)
+    }
+
+    func testReleaseKeepsProductionIdentity() {
+        let profile = CodexPanelRuntimeProfile.resolve(
+            channel: .release,
+            environment: [:],
+            defaultHome: self.defaultHome
+        )
+
+        XCTAssertEqual(profile.bundleIdentifier, "com.codexpanel")
+        XCTAssertEqual(profile.automationURLScheme, "codexpanel")
+        XCTAssertEqual(profile.oauthURLScheme, "com.codexpanel.oauth")
     }
 
     func testDebugHomeProducesCodexAndCodexPanelRootsAwayFromRealHome() {
