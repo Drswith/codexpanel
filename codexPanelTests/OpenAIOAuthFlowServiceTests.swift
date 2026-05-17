@@ -20,6 +20,21 @@ final class OpenAIOAuthFlowServiceTests: CodexPanelTestCase {
         XCTAssertFalse(flow.expectedState.isEmpty)
     }
 
+    func testStartFlowUsesInjectedRedirectURI() throws {
+        let service = OpenAIOAuthFlowService(
+            networkConfiguration: self.debugNetworkConfiguration(),
+            session: self.makeMockSession()
+        )
+
+        let started = try service.startFlow()
+        let redirectURI = URLComponents(string: started.authURL)?
+            .queryItems?
+            .first(where: { $0.name == "redirect_uri" })?
+            .value
+
+        XCTAssertEqual(redirectURI, "http://localhost:1555/auth/callback")
+    }
+
     func testCompleteFlowAcceptsCallbackURLAndCleansFlow() async throws {
         let accessToken = try self.makeJWT(payload: [
             "https://api.openai.com/auth": [
@@ -33,6 +48,7 @@ final class OpenAIOAuthFlowServiceTests: CodexPanelTestCase {
 
         MockURLProtocol.handler = { request in
             XCTAssertEqual(request.url?.absoluteString, "https://auth.openai.com/oauth/token")
+            XCTAssertEqual(self.formBodyValue(from: request, key: "redirect_uri"), "http://localhost:1555/auth/callback")
             let response = HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
             let data = try JSONSerialization.data(withJSONObject: [
                 "access_token": accessToken,
@@ -42,7 +58,10 @@ final class OpenAIOAuthFlowServiceTests: CodexPanelTestCase {
             return (response, data)
         }
 
-        let service = OpenAIOAuthFlowService(session: self.makeMockSession())
+        let service = OpenAIOAuthFlowService(
+            networkConfiguration: self.debugNetworkConfiguration(),
+            session: self.makeMockSession()
+        )
         let started = try service.startFlow()
         let state = URLComponents(string: started.authURL)?
             .queryItems?
@@ -216,5 +235,40 @@ final class OpenAIOAuthFlowServiceTests: CodexPanelTestCase {
             XCTAssertTrue(error.isTerminalAuthFailure)
             XCTAssertTrue(error.localizedDescription.contains("invalid_grant"))
         }
+    }
+
+    private func formBodyValue(from request: URLRequest, key: String) -> String? {
+        guard let bodyText = self.formBodyText(from: request),
+              let items = URLComponents(string: "?\(bodyText)")?.queryItems else {
+            return nil
+        }
+        return items.first(where: { $0.name == key })?.value
+    }
+
+    private func formBodyText(from request: URLRequest) -> String? {
+        if let body = request.httpBody {
+            return String(data: body, encoding: .utf8)
+        }
+
+        guard let stream = request.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            data.append(buffer, count: count)
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    private func debugNetworkConfiguration() -> CodexPanelRuntimeNetworkConfiguration {
+        CodexPanelRuntimeProfile.resolve(
+            channel: .debug,
+            environment: [:],
+            defaultHome: URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        ).network
     }
 }

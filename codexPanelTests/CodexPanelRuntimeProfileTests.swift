@@ -29,6 +29,18 @@ final class CodexPanelRuntimeProfileTests: XCTestCase {
         XCTAssertEqual(profile.cliCommandName, "codexpanel-dev")
     }
 
+    func testDebugUsesDevNetworkPorts() {
+        let profile = CodexPanelRuntimeProfile.resolve(
+            channel: .debug,
+            environment: [:],
+            defaultHome: self.defaultHome
+        )
+
+        XCTAssertEqual(profile.network.oauthRedirectURI, "http://localhost:1555/auth/callback")
+        XCTAssertEqual(profile.network.openAIAccountGatewayBaseURLString, "http://localhost:1556/v1")
+        XCTAssertEqual(profile.network.openRouterGatewayBaseURLString, "http://localhost:1557/v1")
+    }
+
     func testDebugRespectsExplicitHomeOverride() {
         let profile = CodexPanelRuntimeProfile.resolve(
             channel: .debug,
@@ -81,6 +93,18 @@ final class CodexPanelRuntimeProfileTests: XCTestCase {
         XCTAssertEqual(profile.automationURLScheme, "codexpanel")
         XCTAssertEqual(profile.oauthURLScheme, "com.codexpanel.oauth")
         XCTAssertEqual(profile.cliCommandName, "codexpanel")
+    }
+
+    func testReleaseKeepsProductionNetworkPorts() {
+        let profile = CodexPanelRuntimeProfile.resolve(
+            channel: .release,
+            environment: [:],
+            defaultHome: self.defaultHome
+        )
+
+        XCTAssertEqual(profile.network.oauthRedirectURI, "http://localhost:1455/auth/callback")
+        XCTAssertEqual(profile.network.openAIAccountGatewayBaseURLString, "http://localhost:1456/v1")
+        XCTAssertEqual(profile.network.openRouterGatewayBaseURLString, "http://localhost:1457/v1")
     }
 
     func testDebugHomeProducesCodexAndCodexPanelRootsAwayFromRealHome() {

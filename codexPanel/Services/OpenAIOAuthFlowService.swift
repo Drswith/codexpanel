@@ -133,22 +133,24 @@ struct OpenAIOAuthFlowStore {
 
 struct OpenAIOAuthFlowService {
     private let clientId = "app_EMoamEEZ73f0CkXaXp7hrann"
-    private let redirectURI = "http://localhost:1455/auth/callback"
     private let authURL = "https://auth.openai.com/oauth/authorize"
     private let tokenURL = "https://auth.openai.com/oauth/token"
     private let scope = "openid profile email offline_access api.connectors.read api.connectors.invoke"
 
+    private let networkConfiguration: CodexPanelRuntimeNetworkConfiguration
     private let accountService: CodexPanelOAuthAccountService
     private let flowStore: OpenAIOAuthFlowStore
     private let session: URLSession
     private let now: () -> Date
 
     init(
+        networkConfiguration: CodexPanelRuntimeNetworkConfiguration = CodexPanelRuntimeProfile.current.network,
         accountService: CodexPanelOAuthAccountService = CodexPanelOAuthAccountService(),
         flowStore: OpenAIOAuthFlowStore = OpenAIOAuthFlowStore(),
         session: URLSession = .shared,
         now: @escaping () -> Date = Date.init
     ) {
+        self.networkConfiguration = networkConfiguration
         self.accountService = accountService
         self.flowStore = flowStore
         self.session = session
@@ -267,7 +269,7 @@ struct OpenAIOAuthFlowService {
         components?.queryItems = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: self.clientId),
-            URLQueryItem(name: "redirect_uri", value: self.redirectURI),
+            URLQueryItem(name: "redirect_uri", value: self.networkConfiguration.oauthRedirectURI),
             URLQueryItem(name: "scope", value: self.scope),
             URLQueryItem(name: "code_challenge", value: self.generateCodeChallenge(from: flow.codeVerifier)),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
@@ -288,7 +290,7 @@ struct OpenAIOAuthFlowService {
             "grant_type": "authorization_code",
             "client_id": self.clientId,
             "code": code,
-            "redirect_uri": self.redirectURI,
+            "redirect_uri": self.networkConfiguration.oauthRedirectURI,
             "code_verifier": flow.codeVerifier,
         ]
         return try await self.performTokenRequest(

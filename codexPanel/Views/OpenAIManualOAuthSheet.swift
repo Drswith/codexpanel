@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OpenAIManualOAuthSheet: View {
     let authURL: String
+    let callbackBaseURL: String
     let isAuthenticating: Bool
     let errorMessage: String?
     @Binding var callbackInput: String
@@ -19,7 +20,7 @@ struct OpenAIManualOAuthSheet: View {
                 .font(.system(size: 12))
             Text("2. Finish authorization.")
                 .font(.system(size: 12))
-            Text("3. Codex Panel will auto-capture `http://localhost:1455/auth/callback?...` while this window is open. If automatic capture fails, paste the full URL here. You can also paste just the `code` value.")
+            Text("3. Codex Panel will auto-capture `\(callbackBaseURL)?...` while this window is open. If automatic capture fails, paste the full URL here. You can also paste just the `code` value.")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
 

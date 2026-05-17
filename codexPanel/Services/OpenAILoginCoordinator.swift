@@ -29,10 +29,16 @@ extension Notification.Name {
 
 private struct OpenAILoginWindowView: View {
     @ObservedObject private var oauth = OAuthManager.shared
+    private let callbackBaseURL: String
+
+    init(callbackBaseURL: String = CodexPanelRuntimeProfile.current.network.oauthRedirectURI) {
+        self.callbackBaseURL = callbackBaseURL
+    }
 
     var body: some View {
         OpenAIManualOAuthSheet(
             authURL: oauth.pendingAuthURL ?? "",
+            callbackBaseURL: self.callbackBaseURL,
             isAuthenticating: oauth.isAuthenticating,
             errorMessage: oauth.errorMessage,
             callbackInput: Binding(
