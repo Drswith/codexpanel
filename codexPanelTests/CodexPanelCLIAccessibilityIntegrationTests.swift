@@ -56,13 +56,17 @@ final class CodexPanelCLIAccessibilityIntegrationTests: XCTestCase {
 
         if let productsDir = ProcessInfo.processInfo.environment["BUILT_PRODUCTS_DIR"] {
             let root = URL(fileURLWithPath: productsDir, isDirectory: true)
+            candidates.append(root.appendingPathComponent("codexpanel-dev"))
             candidates.append(root.appendingPathComponent("codexpanel"))
+            candidates.append(root.appendingPathComponent("Codex Panel DEV.app/Contents/Helpers/codexpanel-dev"))
             candidates.append(root.appendingPathComponent("Codex Panel DEV.app/Contents/Helpers/codexpanel"))
             candidates.append(root.appendingPathComponent("Codex Panel.app/Contents/Helpers/codexpanel"))
         }
 
         let testBundleRoot = Bundle(for: Self.self).bundleURL.deletingLastPathComponent()
+        candidates.append(testBundleRoot.appendingPathComponent("codexpanel-dev"))
         candidates.append(testBundleRoot.appendingPathComponent("codexpanel"))
+        candidates.append(testBundleRoot.appendingPathComponent("Codex Panel DEV.app/Contents/Helpers/codexpanel-dev"))
         candidates.append(testBundleRoot.appendingPathComponent("Codex Panel DEV.app/Contents/Helpers/codexpanel"))
         candidates.append(testBundleRoot.appendingPathComponent("Codex Panel.app/Contents/Helpers/codexpanel"))
 

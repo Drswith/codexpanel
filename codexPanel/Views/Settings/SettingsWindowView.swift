@@ -508,18 +508,18 @@ private struct SettingsAboutPage: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     SettingsAboutInfoRow(
-                        title: L.settingsAboutCLIStatusTitle,
+                        title: L.codexPanelCLIInstallStatusTitle(commandName: self.cliInstallService.commandName),
                         value: self.cliStatusText
                     )
 
-                    Text(L.codexPanelCLIInstallHint)
+                    Text(L.codexPanelCLIInstallHint(commandName: self.cliInstallService.commandName))
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 10) {
                         SettingsAboutActionButton(
-                            title: L.codexPanelCLIInstallAction,
+                            title: L.codexPanelCLIInstallAction(commandName: self.cliInstallService.commandName),
                             icon: "terminal"
                         ) {
                             do {

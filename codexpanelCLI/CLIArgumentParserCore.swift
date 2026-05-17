@@ -1,16 +1,22 @@
 import Foundation
 
 enum CLIUsage {
-    static let text = """
+    static var text: String {
+        self.text(commandName: codexPanelCLICommandName)
+    }
+
+    static func text(commandName: String) -> String {
+        return """
 Usage:
-  codexpanel view open settings [--page accounts|records|usage|diagnostics|about] [--wait <sec>] [--json]
-  codexpanel view open menu [--wait <sec>] [--json]
-  codexpanel view open login [--wait <sec>] [--json]
-  codexpanel view close settings|menu|login|all [--wait <sec>] [--json]
-  codexpanel state [--json]
-  codexpanel snapshot [--format tree|json] [--target auto|settings|menu|login|all]
-  codexpanel doctor [--json]
+  \(commandName) view open settings [--page accounts|records|usage|diagnostics|about] [--wait <sec>] [--json]
+  \(commandName) view open menu [--wait <sec>] [--json]
+  \(commandName) view open login [--wait <sec>] [--json]
+  \(commandName) view close settings|menu|login|all [--wait <sec>] [--json]
+  \(commandName) state [--json]
+  \(commandName) snapshot [--format tree|json] [--target auto|settings|menu|login|all]
+  \(commandName) doctor [--json]
 """
+    }
 }
 
 enum CLIArgumentParser {
