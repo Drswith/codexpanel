@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D1D100010000000000000001 /* codexpanel in Copy CLI Helper */ = {isa = PBXBuildFile; fileRef = D1D100020000000000000001 /* codexpanel */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -20,19 +19,29 @@
 		};
 /* End PBXContainerItemProxy section */
 
-/* Begin PBXCopyFilesBuildPhase section */
+/* Begin PBXShellScriptBuildPhase section */
 		D1D100060000000000000001 /* Copy CLI Helper */ = {
-			isa = PBXCopyFilesBuildPhase;
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
-			dstPath = "Contents/Helpers";
-			dstSubfolderSpec = 1;
 			files = (
-				D1D100010000000000000001 /* codexpanel in Copy CLI Helper */,
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/$(CODEXPANEL_CLI_HELPER_NAME)",
 			);
 			name = "Copy CLI Helper";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/$(CODEXPANEL_CLI_HELPER_NAME)",
+			);
 			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\nhelper_name=\"${CODEXPANEL_CLI_HELPER_NAME:-codexpanel}\"\nsource_path=\"${BUILT_PRODUCTS_DIR}/${helper_name}\"\ndest_dir=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers\"\ndest_path=\"${dest_dir}/${helper_name}\"\nif [ ! -f \"${source_path}\" ]; then\n  echo \"error: CLI helper missing: ${source_path}\" >&2\n  exit 1\nfi\nmkdir -p \"${dest_dir}\"\ncp -f \"${source_path}\" \"${dest_path}\"\nchmod +x \"${dest_path}\"\n";
 		};
-/* End PBXCopyFilesBuildPhase section */
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXFileReference section */
 		9F23A0013C5A4B7200A00001 /* Signing.local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.local.example.xcconfig; sourceTree = "<group>"; };
@@ -440,6 +449,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODEXPANEL_CLI_HELPER_NAME = "codexpanel-dev";
 				CODEXPANEL_AUTOMATION_URL_SCHEME = "codexpanel-dev";
 				CODEXPANEL_OAUTH_URL_SCHEME = com.codexpanel.dev.oauth;
 				CODE_SIGN_ENTITLEMENTS = codexPanel/codexPanel.entitlements;
@@ -484,6 +494,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODEXPANEL_CLI_HELPER_NAME = codexpanel;
 				CODEXPANEL_AUTOMATION_URL_SCHEME = codexpanel;
 				CODEXPANEL_OAUTH_URL_SCHEME = com.codexpanel.oauth;
 				CODE_SIGN_ENTITLEMENTS = codexPanel/codexPanel.entitlements;
