@@ -143,6 +143,61 @@ struct SettingsOpenAIAccountOrderItem: Identifiable, Equatable {
     let detail: String
 }
 
+private enum SettingsOpenAIAccountTitlePreference {
+    case organization
+    case email
+}
+
+private enum SettingsOpenAIAccountTitlePresentation {
+    static func title(
+        for account: TokenAccount,
+        preference: SettingsOpenAIAccountTitlePreference
+    ) -> String {
+        "\(self.baseTitle(for: account, preference: preference)) · \(self.planDisplayName(for: account))"
+    }
+
+    private static func baseTitle(
+        for account: TokenAccount,
+        preference: SettingsOpenAIAccountTitlePreference
+    ) -> String {
+        switch preference {
+        case .organization:
+            return self.baseTitlePreferOrganization(for: account)
+        case .email:
+            return self.baseTitlePreferEmail(for: account)
+        }
+    }
+
+    private static func baseTitlePreferOrganization(for account: TokenAccount) -> String {
+        if let organizationName = account.organizationName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           organizationName.isEmpty == false {
+            return organizationName
+        }
+        if account.email.isEmpty == false {
+            return account.email
+        }
+        return account.accountId
+    }
+
+    private static func baseTitlePreferEmail(for account: TokenAccount) -> String {
+        if account.email.isEmpty == false {
+            return account.email
+        }
+        if let organizationName = account.organizationName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           organizationName.isEmpty == false {
+            return organizationName
+        }
+        return account.accountId
+    }
+
+    private static func planDisplayName(for account: TokenAccount) -> String {
+        let normalized = account.planType
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return normalized.isEmpty ? "free" : normalized
+    }
+}
+
 enum SettingsDirtyField: Hashable {
     case accountOrder
     case accountUsageMode
@@ -362,14 +417,7 @@ final class SettingsWindowCoordinator: ObservableObject {
     }
 
     private static func accountTitle(for account: TokenAccount) -> String {
-        if let organizationName = account.organizationName?.trimmingCharacters(in: .whitespacesAndNewlines),
-           organizationName.isEmpty == false {
-            return organizationName
-        }
-        if account.email.isEmpty == false {
-            return account.email
-        }
-        return account.accountId
+        SettingsOpenAIAccountTitlePresentation.title(for: account, preference: .organization)
     }
 
     private static func accountDetail(for account: TokenAccount) -> String {

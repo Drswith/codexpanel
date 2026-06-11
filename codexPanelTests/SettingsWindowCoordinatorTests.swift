@@ -539,6 +539,32 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         XCTAssertEqual(SettingsSidebarSelectionAdapter.binding(for: coordinator).wrappedValue, .usage)
     }
 
+    func testAccountOrderTitlesIncludePlanAndPreferOrganization() {
+        let coordinator = SettingsWindowCoordinator(
+            config: self.makeConfig(accountOrder: ["acct_team", "acct_plus"]),
+            accounts: [
+                self.makeAccount(
+                    email: "shared@example.com",
+                    accountId: "acct_team",
+                    organizationName: "Shared Team",
+                    planType: "team"
+                ),
+                self.makeAccount(
+                    email: "shared@example.com",
+                    accountId: "acct_plus",
+                    planType: "plus"
+                ),
+            ],
+            historicalModels: ["gpt-5.4"]
+        )
+
+        XCTAssertEqual(
+            coordinator.orderedAccounts.map(\.title),
+            ["Shared Team · team", "shared@example.com · plus"]
+        )
+        XCTAssertEqual(coordinator.orderedAccounts.map(\.detail), ["shared@example.com", "acct_plus"])
+    }
+
     private func makeConfig(
         accountOrder: [String] = ["acct_alpha", "acct_beta"],
         accountOrderingMode: CodexPanelOpenAIAccountOrderingMode = .quotaSort,
@@ -598,13 +624,20 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         )
     }
 
-    private func makeAccount(email: String, accountId: String) -> TokenAccount {
+    private func makeAccount(
+        email: String,
+        accountId: String,
+        organizationName: String? = nil,
+        planType: String = "free"
+    ) -> TokenAccount {
         TokenAccount(
             email: email,
             accountId: accountId,
             accessToken: "access-\(accountId)",
             refreshToken: "refresh-\(accountId)",
-            idToken: "id-\(accountId)"
+            idToken: "id-\(accountId)",
+            planType: planType,
+            organizationName: organizationName
         )
     }
 }
