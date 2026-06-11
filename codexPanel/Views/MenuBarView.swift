@@ -695,7 +695,7 @@ struct MenuBarView: View {
             AdaptiveMenuScrollContainer(
                 maxHeight: max(
                     MenuBarPopoverSizing.minimumHeight,
-                    self.menuBodyHeightCap ?? self.statusItemAvailableContentHeight ?? MenuBarPopoverSizing.defaultHeight
+                    self.menuBodyHeightCap ?? MenuBarPopoverSizing.maximumHeight
                 ),
                 onMeasuredHeightChange: self.reportScrollableMenuBodyMeasuredHeight
             ) {

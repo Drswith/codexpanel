@@ -117,6 +117,7 @@ struct OpenRouterModelCatalogService: OpenRouterModelCatalogFetching {
 
 final class TokenStore: ObservableObject {
     static let shared = TokenStore()
+    static let debugMockDataUserDefaultsKey = "codexpanel.debug.useMockData"
 
     @Published var accounts: [TokenAccount] = []
     @Published private(set) var config: CodexPanelConfig
@@ -196,7 +197,9 @@ final class TokenStore: ObservableObject {
         self.publishState()
         if injectedDebugMockData == false {
             self.localCostSummary = self.loadCachedLocalCostSummary()
-            self.refreshLocalCostSummaryIfNeeded()
+            if self.ensureDebugMockLocalCostSummaryIfNeeded() == false {
+                self.refreshLocalCostSummaryIfNeeded()
+            }
         }
         self.refreshHistoricalModels()
         self.seedSwitchJournalIfNeeded()
@@ -243,7 +246,8 @@ final class TokenStore: ObservableObject {
                 preferredHistoricalModels: self.historicalModels,
                 fallbackHistoricalModels: Array(self.config.modelPricing.keys)
             )
-            if injectedDebugMockData == false {
+            if injectedDebugMockData == false,
+               self.ensureDebugMockLocalCostSummaryIfNeeded() == false {
                 self.refreshLocalCostSummaryIfNeeded()
             }
             self.refreshHistoricalModels()
@@ -1019,6 +1023,10 @@ final class TokenStore: ObservableObject {
         minimumInterval: TimeInterval = 5 * 60,
         refreshSessionCache: Bool = false
     ) {
+        #if DEBUG
+        guard self.isDebugMockDataActive == false else { return }
+        #endif
+
         guard force || self.localCostSummary.updatedAt == nil else { return }
         if force == false,
            let updatedAt = self.localCostSummary.updatedAt,
@@ -1188,7 +1196,7 @@ final class TokenStore: ObservableObject {
 
     private var shouldForceDebugMockData: Bool {
         #if DEBUG
-        if UserDefaults.standard.bool(forKey: "codexpanel.debug.useMockData") {
+        if UserDefaults.standard.bool(forKey: Self.debugMockDataUserDefaultsKey) {
             return true
         }
 
@@ -1203,13 +1211,69 @@ final class TokenStore: ObservableObject {
         #endif
     }
 
+    private var isDebugMockDataActive: Bool {
+        #if DEBUG
+        if self.shouldForceDebugMockData {
+            return true
+        }
+
+        let runtimeProfile = CodexPanelRuntimeProfile.current
+        return runtimeProfile.channel == .debug &&
+            runtimeProfile.homeSource == .debugDefault &&
+            self.config.providers.contains { $0.id == "debug-openai-oauth" }
+        #else
+        return false
+        #endif
+    }
+
+    @discardableResult
+    private func ensureDebugMockLocalCostSummaryIfNeeded(now: Date = Date()) -> Bool {
+        #if DEBUG
+        guard self.isDebugMockDataActive,
+              self.isEffectivelyEmptyLocalCostSummary(self.localCostSummary) else {
+            return false
+        }
+
+        self.localCostSummary = Self.makeDebugLocalCostSummary(now: now)
+        self.saveCachedLocalCostSummary(self.localCostSummary)
+        return true
+        #else
+        _ = now
+        return false
+        #endif
+    }
+
+    #if DEBUG
+    static func shouldInjectDebugMockData(
+        force: Bool,
+        runtimeProfile: CodexPanelRuntimeProfile,
+        providersAreEmpty: Bool,
+        localCostSummaryIsEmpty: Bool
+    ) -> Bool {
+        if force { return true }
+
+        if runtimeProfile.channel == .debug,
+           runtimeProfile.homeSource == .debugDefault,
+           providersAreEmpty {
+            return true
+        }
+
+        _ = localCostSummaryIsEmpty
+        return false
+    }
+    #endif
+
     @discardableResult
     private func injectDebugMockDataIfNeeded(now: Date = Date()) -> Bool {
         #if DEBUG
-        let shouldInjectBecauseStoreIsEmpty = self.config.providers.isEmpty &&
-            self.isEffectivelyEmptyLocalCostSummary(self.localCostSummary)
+        let shouldInject = Self.shouldInjectDebugMockData(
+            force: self.shouldForceDebugMockData,
+            runtimeProfile: CodexPanelRuntimeProfile.current,
+            providersAreEmpty: self.config.providers.isEmpty,
+            localCostSummaryIsEmpty: self.isEffectivelyEmptyLocalCostSummary(self.localCostSummary)
+        )
 
-        guard self.shouldForceDebugMockData || shouldInjectBecauseStoreIsEmpty else {
+        guard shouldInject else {
             return false
         }
 
@@ -1347,6 +1411,19 @@ final class TokenStore: ObservableObject {
             ]
         )
 
+        self.localCostSummary = Self.makeDebugLocalCostSummary(now: now)
+
+        try? self.configStore.save(self.config)
+        self.saveCachedLocalCostSummary(self.localCostSummary)
+
+        return true
+        #else
+        _ = now
+        return false
+        #endif
+    }
+
+    private static func makeDebugLocalCostSummary(now: Date) -> LocalCostSummary {
         let entries = (0..<14).map { offset in
             let dayOffset = 13 - offset
             let date = Calendar.current.date(byAdding: .day, value: -dayOffset, to: now) ?? now
@@ -1360,7 +1437,7 @@ final class TokenStore: ObservableObject {
             )
         }
 
-        self.localCostSummary = LocalCostSummary(
+        return LocalCostSummary(
             todayCostUSD: 80.29,
             todayTokens: 183_200_000,
             last30DaysCostUSD: 1_270.80,
@@ -1370,12 +1447,6 @@ final class TokenStore: ObservableObject {
             dailyEntries: entries,
             updatedAt: now
         )
-
-        return true
-        #else
-        _ = now
-        return false
-        #endif
     }
 
     deinit {

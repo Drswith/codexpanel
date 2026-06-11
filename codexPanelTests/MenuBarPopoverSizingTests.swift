@@ -92,6 +92,16 @@ final class MenuBarPopoverSizingTests: XCTestCase {
         )
     }
 
+    func testFlexibleSectionHeightCapDoesNotExpandSectionWhenContentFits() {
+        XCTAssertNil(
+            MenuBarPopoverSizing.flexibleSectionHeightCap(
+                totalContentHeight: 420,
+                flexibleSectionHeight: 120,
+                availableHeight: 640
+            )
+        )
+    }
+
     func testFlexibleSectionHeightCapFloorsToMinimumHeightWhenFixedChromeExceedsAvailableHeight() {
         XCTAssertEqual(
             MenuBarPopoverSizing.flexibleSectionHeightCap(

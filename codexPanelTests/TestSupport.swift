@@ -33,6 +33,7 @@ final class MockURLProtocol: URLProtocol {
 
 class CodexPanelTestCase: XCTestCase {
     private var originalHome: String?
+    private var originalDebugMockDataUserDefault: Any?
     private var temporaryHome: URL?
 
     override func setUpWithError() throws {
@@ -42,6 +43,8 @@ class CodexPanelTestCase: XCTestCase {
         self.temporaryHome = tempDir
         self.originalHome = ProcessInfo.processInfo.environment["CODEXPANEL_HOME"]
         setenv("CODEXPANEL_HOME", tempDir.path, 1)
+        self.originalDebugMockDataUserDefault = UserDefaults.standard.object(forKey: TokenStore.debugMockDataUserDefaultsKey)
+        UserDefaults.standard.removeObject(forKey: TokenStore.debugMockDataUserDefaultsKey)
         MockURLProtocol.handler = nil
     }
 
@@ -50,6 +53,11 @@ class CodexPanelTestCase: XCTestCase {
             setenv("CODEXPANEL_HOME", originalHome, 1)
         } else {
             unsetenv("CODEXPANEL_HOME")
+        }
+        if let originalDebugMockDataUserDefault {
+            UserDefaults.standard.set(originalDebugMockDataUserDefault, forKey: TokenStore.debugMockDataUserDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: TokenStore.debugMockDataUserDefaultsKey)
         }
 
         if let temporaryHome {
