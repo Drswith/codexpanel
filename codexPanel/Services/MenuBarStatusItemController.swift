@@ -140,6 +140,9 @@ enum MenuBarPopoverSizing {
               flexibleSectionHeight > 0 else {
             return nil
         }
+        guard totalContentHeight > availableHeight else {
+            return nil
+        }
 
         let fixedHeight = max(totalContentHeight - flexibleSectionHeight, 0)
         return max(availableHeight - fixedHeight, self.minimumHeight)
