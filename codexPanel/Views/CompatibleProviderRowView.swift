@@ -4,10 +4,15 @@ struct CompatibleProviderRowView: View {
     let provider: CodexPanelProvider
     let isActiveProvider: Bool
     let activeAccountId: String?
+    var visibleAccounts: [CodexPanelProviderAccount]? = nil
     let onActivate: (CodexPanelProviderAccount) -> Void
     let onAddAccount: () -> Void
     let onDeleteAccount: (CodexPanelProviderAccount) -> Void
     let onDeleteProvider: () -> Void
+
+    private var displayedAccounts: [CodexPanelProviderAccount] {
+        self.visibleAccounts ?? self.provider.accounts
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -50,7 +55,7 @@ struct CompatibleProviderRowView: View {
                 .foregroundColor(.secondary)
             }
 
-            ForEach(provider.accounts) { account in
+            ForEach(self.displayedAccounts) { account in
                 HStack(spacing: 6) {
                     Text(account.label)
                         .font(.system(size: 11, weight: account.id == activeAccountId ? .semibold : .regular))

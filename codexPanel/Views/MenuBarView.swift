@@ -258,10 +258,10 @@ private final class AdaptiveMenuHeightReportingHost: NSView {
 
         let width = max(self.bounds.width, 1)
         self.hostingView.setFrameSize(
-            NSSize(width: width, height: max(self.hostingView.frame.height, self.measuredHeight, 1))
+            NSSize(width: width, height: MenuBarPopoverSizing.minimumHeight)
         )
 
-        let fittingHeight = max(self.hostingView.fittingSize.height, 1)
+        let fittingHeight = max(self.hostingView.fittingSize.height, MenuBarPopoverSizing.minimumHeight)
         self.hostingView.setFrameSize(NSSize(width: width, height: fittingHeight))
         let acceptsWidth = MenuBarPopoverSizing.acceptsMeasuredContentWidth(width)
         #if DEBUG
@@ -405,9 +405,9 @@ private final class AdaptiveMenuScrollHost: NSView {
         defer { self.isMeasuring = false }
 
         let width = max(self.bounds.width, 1)
-        self.measuringHostingView.setFrameSize(NSSize(width: width, height: max(self.measuringHostingView.frame.height, 1)))
+        self.measuringHostingView.setFrameSize(NSSize(width: width, height: MenuBarPopoverSizing.minimumHeight))
 
-        let fittingHeight = max(self.measuringHostingView.fittingSize.height, 1)
+        let fittingHeight = max(self.measuringHostingView.fittingSize.height, MenuBarPopoverSizing.minimumHeight)
         let limitHeight = self.resolveHeightLimit(for: width)
         let effectiveLimitHeight = min(limitHeight, max(self.maxHeightCap ?? limitHeight, 1))
         let targetHeight = min(effectiveLimitHeight, fittingHeight)
@@ -438,8 +438,8 @@ private final class AdaptiveMenuScrollHost: NSView {
         case let .fixed(maxHeight):
             return max(maxHeight, 1)
         case .measured:
-            self.limitHostingView.setFrameSize(NSSize(width: width, height: max(self.limitHostingView.frame.height, 1)))
-            return max(self.limitHostingView.fittingSize.height, 1)
+            self.limitHostingView.setFrameSize(NSSize(width: width, height: MenuBarPopoverSizing.minimumHeight))
+            return max(self.limitHostingView.fittingSize.height, MenuBarPopoverSizing.minimumHeight)
         }
     }
 
@@ -471,6 +471,17 @@ private final class AdaptiveMenuScrollHost: NSView {
     }
 }
 
+private struct APIProviderListRow: Identifiable {
+    let provider: CodexPanelProvider
+    let visibleAccounts: [CodexPanelProviderAccount]
+    let visiblePinnedModelIDs: [String]
+    let showsNoModelFallback: Bool
+
+    var id: String {
+        self.provider.id
+    }
+}
+
 struct MenuBarView: View {
     @EnvironmentObject var store: TokenStore
     @EnvironmentObject var oauth: OAuthManager
@@ -478,8 +489,10 @@ struct MenuBarView: View {
 
     private let costPanelID = "cost-details-hover-panel"
     private let usageRefreshInterval = OpenAIUsagePollingService.defaultRefreshInterval
-    private let visibleOpenAIAccountLimit = 5
+    private let visibleOpenAIAccountLimit = 10
     private let openAIAccountsInitialHeight: CGFloat = 260
+    private let visibleAPIEntryLimit = 10
+    private let apiProvidersInitialHeight: CGFloat = 260
     private let runningThreadAttributionService = OpenAIRunningThreadAttributionService()
     private let oauthAccountService = CodexPanelOAuthAccountService()
     private let openAIAccountCSVService = OpenAIAccountCSVService()
@@ -505,6 +518,7 @@ struct MenuBarView: View {
     @State private var lastOpenAIManualSwitchResult: OpenAIManualSwitchResult?
     @State private var measuredMenuHeight: CGFloat = 0
     @State private var openAIAccountsMeasuredHeight: CGFloat = 0
+    @State private var apiProvidersMeasuredHeight: CGFloat = 0
     @State private var scrollableMenuBodyMeasuredHeight: CGFloat = 0
     @State private var statusItemAvailableContentHeight: CGFloat?
     @State private var countdownTimerConnection: Cancellable?
@@ -562,6 +576,14 @@ struct MenuBarView: View {
         )
     }
 
+    private var apiProvidersHeightCap: CGFloat? {
+        MenuBarPopoverSizing.flexibleSectionHeightCap(
+            totalContentHeight: self.measuredMenuHeight,
+            flexibleSectionHeight: self.apiProvidersMeasuredHeight,
+            availableHeight: self.statusItemAvailableContentHeight
+        )
+    }
+
     private var menuBodyHeightCap: CGFloat? {
         MenuBarPopoverSizing.flexibleSectionHeightCap(
             totalContentHeight: self.measuredMenuHeight,
@@ -606,6 +628,35 @@ struct MenuBarView: View {
             from: groupedAccounts,
             maxAccounts: visibleOpenAIAccountLimit
         )
+    }
+
+    private var openAIAccountCount: Int {
+        groupedAccounts.reduce(0) { count, group in
+            count + group.accounts.count
+        }
+    }
+
+    private var shouldScrollOpenAIAccounts: Bool {
+        self.openAIAccountCount > self.visibleOpenAIAccountLimit
+    }
+
+    private var apiEntryCount: Int {
+        self.apiEntryCount(
+            customProviders: self.store.customProviders,
+            openRouterProvider: self.visibleOpenRouterProvider
+        )
+    }
+
+    private var shouldScrollAPIProviders: Bool {
+        self.apiEntryCount > self.visibleAPIEntryLimit
+    }
+
+    private var fullAPIProviderRows: [APIProviderListRow] {
+        self.apiProviderRows(limit: nil)
+    }
+
+    private var visibleAPIProviderRows: [APIProviderListRow] {
+        self.apiProviderRows(limit: self.visibleAPIEntryLimit)
     }
 
     private var availableCount: Int {
@@ -1066,17 +1117,22 @@ struct MenuBarView: View {
                         .fill(Color.secondary.opacity(0.06))
                 )
             } else {
-                AdaptiveMenuScrollContainer(
-                    initialHeight: openAIAccountsInitialHeight,
-                    measuredHeight: {
-                        openAIAccountGroupsView(visibleGroupedAccounts)
-                    },
-                    maxHeightCap: self.openAIAccountsHeightCap,
-                    onMeasuredHeightChange: self.reportOpenAIAccountsMeasuredHeight
-                ) {
+                if self.shouldScrollOpenAIAccounts {
+                    AdaptiveMenuScrollContainer(
+                        initialHeight: openAIAccountsInitialHeight,
+                        measuredHeight: {
+                            openAIAccountGroupsView(visibleGroupedAccounts)
+                        },
+                        maxHeightCap: self.openAIAccountsHeightCap,
+                        onMeasuredHeightChange: self.reportOpenAIAccountsMeasuredHeight
+                    ) {
+                        openAIAccountGroupsView(groupedAccounts)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
                     openAIAccountGroupsView(groupedAccounts)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1114,48 +1170,156 @@ struct MenuBarView: View {
                 .buttonStyle(.plain)
 
                 if isProvidersExpanded {
-                    ForEach(store.customProviders) { provider in
-                        CompatibleProviderRowView(
-                            provider: provider,
-                            isActiveProvider: store.activeProvider?.id == provider.id,
-                            activeAccountId: provider.activeAccountId
-                        ) { account in
-                            Task {
-                                await activateCompatibleProvider(
-                                    providerID: provider.id,
-                                    accountID: account.id
-                                )
-                            }
-                        } onAddAccount: {
-                            openAddProviderAccountWindow(provider: provider)
-                        } onDeleteAccount: { account in
-                            deleteCompatibleAccount(providerID: provider.id, accountID: account.id)
-                        } onDeleteProvider: {
-                            deleteProvider(providerID: provider.id)
+                    if self.shouldScrollAPIProviders {
+                        AdaptiveMenuScrollContainer(
+                            initialHeight: self.apiProvidersInitialHeight,
+                            measuredHeight: {
+                                self.apiProviderRowsView(self.visibleAPIProviderRows)
+                            },
+                            maxHeightCap: self.apiProvidersHeightCap,
+                            onMeasuredHeightChange: self.reportAPIProvidersMeasuredHeight
+                        ) {
+                            self.apiProviderRowsView(self.fullAPIProviderRows)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        self.apiProviderRowsView(self.fullAPIProviderRows)
                     }
+                }
+            }
+        }
+    }
 
-                    if let provider = openRouterProvider {
-                        OpenRouterProviderRowView(
-                            provider: provider,
-                            isActiveProvider: store.activeProvider?.id == provider.id,
-                            activeAccountId: provider.activeAccountId
-                        ) { account in
-                            Task {
-                                await activateOpenRouterProvider(accountID: account.id)
-                            }
-                        } onSelectModel: { modelID in
-                            Task {
-                                await selectOpenRouterModel(modelID)
-                            }
-                        } onAddAccount: {
-                            openAddOpenRouterAccountWindow(provider: provider)
-                        } onEditModel: {
-                            openEditOpenRouterWindow(provider: provider)
-                        } onDeleteAccount: { account in
-                            deleteOpenRouterAccount(accountID: account.id)
-                        }
+    private func apiEntryCount(
+        customProviders: [CodexPanelProvider],
+        openRouterProvider: CodexPanelProvider?
+    ) -> Int {
+        customProviders.reduce(0) { count, provider in
+            count + self.apiEntryCount(for: provider)
+        } + (openRouterProvider.map { self.apiEntryCount(for: $0) } ?? 0)
+    }
+
+    private func apiEntryCount(for provider: CodexPanelProvider) -> Int {
+        let providerHeaderEntry = 1
+        guard provider.kind == .openRouter else {
+            return providerHeaderEntry + provider.accounts.count
+        }
+
+        let pinnedModelCount = orderedPinnedOpenRouterModelIDs(
+            selectedModelIDs: Set(provider.pinnedModelIDs),
+            cachedModels: provider.cachedModelCatalog,
+            manualModelID: provider.openRouterEffectiveModelID ?? ""
+        ).count
+        let noModelFallbackCount = pinnedModelCount == 0 && provider.openRouterEffectiveModelID == nil ? 1 : 0
+        return providerHeaderEntry + pinnedModelCount + noModelFallbackCount + provider.accounts.count
+    }
+
+    private func apiProviderRows(limit: Int?) -> [APIProviderListRow] {
+        var remaining = limit ?? Int.max
+        var rows: [APIProviderListRow] = []
+
+        for provider in self.store.customProviders {
+            guard remaining > 0 else { return rows }
+            rows.append(self.apiProviderRow(for: provider, remaining: &remaining))
+        }
+
+        if let openRouterProvider = self.visibleOpenRouterProvider,
+           remaining > 0 {
+            rows.append(self.apiProviderRow(for: openRouterProvider, remaining: &remaining))
+        }
+
+        return rows
+    }
+
+    private func apiProviderRow(
+        for provider: CodexPanelProvider,
+        remaining: inout Int
+    ) -> APIProviderListRow {
+        remaining = max(remaining - 1, 0)
+
+        if provider.kind == .openRouter {
+            let pinnedModelIDs = orderedPinnedOpenRouterModelIDs(
+                selectedModelIDs: Set(provider.pinnedModelIDs),
+                cachedModels: provider.cachedModelCatalog,
+                manualModelID: provider.openRouterEffectiveModelID ?? ""
+            )
+            let visiblePinnedModelIDs = Array(pinnedModelIDs.prefix(remaining))
+            remaining = max(remaining - visiblePinnedModelIDs.count, 0)
+
+            let showsNoModelFallback =
+                pinnedModelIDs.isEmpty &&
+                provider.openRouterEffectiveModelID == nil &&
+                remaining > 0
+            if showsNoModelFallback {
+                remaining -= 1
+            }
+
+            let visibleAccounts = Array(provider.accounts.prefix(remaining))
+            remaining = max(remaining - visibleAccounts.count, 0)
+
+            return APIProviderListRow(
+                provider: provider,
+                visibleAccounts: visibleAccounts,
+                visiblePinnedModelIDs: visiblePinnedModelIDs,
+                showsNoModelFallback: showsNoModelFallback
+            )
+        }
+
+        let visibleAccounts = Array(provider.accounts.prefix(remaining))
+        remaining = max(remaining - visibleAccounts.count, 0)
+        return APIProviderListRow(
+            provider: provider,
+            visibleAccounts: visibleAccounts,
+            visiblePinnedModelIDs: [],
+            showsNoModelFallback: false
+        )
+    }
+
+    @ViewBuilder
+    private func apiProviderRowsView(_ rows: [APIProviderListRow]) -> some View {
+        ForEach(rows) { row in
+            if row.provider.kind == .openRouter {
+                OpenRouterProviderRowView(
+                    provider: row.provider,
+                    isActiveProvider: store.activeProvider?.id == row.provider.id,
+                    activeAccountId: row.provider.activeAccountId,
+                    visibleAccounts: row.visibleAccounts,
+                    visiblePinnedModelIDs: row.visiblePinnedModelIDs,
+                    showsNoModelFallback: row.showsNoModelFallback
+                ) { account in
+                    Task {
+                        await activateOpenRouterProvider(accountID: account.id)
                     }
+                } onSelectModel: { modelID in
+                    Task {
+                        await selectOpenRouterModel(modelID)
+                    }
+                } onAddAccount: {
+                    openAddOpenRouterAccountWindow(provider: row.provider)
+                } onEditModel: {
+                    openEditOpenRouterWindow(provider: row.provider)
+                } onDeleteAccount: { account in
+                    deleteOpenRouterAccount(accountID: account.id)
+                }
+            } else {
+                CompatibleProviderRowView(
+                    provider: row.provider,
+                    isActiveProvider: store.activeProvider?.id == row.provider.id,
+                    activeAccountId: row.provider.activeAccountId,
+                    visibleAccounts: row.visibleAccounts
+                ) { account in
+                    Task {
+                        await activateCompatibleProvider(
+                            providerID: row.provider.id,
+                            accountID: account.id
+                        )
+                    }
+                } onAddAccount: {
+                    openAddProviderAccountWindow(provider: row.provider)
+                } onDeleteAccount: { account in
+                    deleteCompatibleAccount(providerID: row.provider.id, accountID: account.id)
+                } onDeleteProvider: {
+                    deleteProvider(providerID: row.provider.id)
                 }
             }
         }
@@ -1354,6 +1518,10 @@ struct MenuBarView: View {
 
     private func reportOpenAIAccountsMeasuredHeight(_ height: CGFloat) {
         self.openAIAccountsMeasuredHeight = height
+    }
+
+    private func reportAPIProvidersMeasuredHeight(_ height: CGFloat) {
+        self.apiProvidersMeasuredHeight = height
     }
 
     private func reportScrollableMenuBodyMeasuredHeight(_ height: CGFloat) {
@@ -2738,6 +2906,9 @@ private struct OpenRouterProviderRowView: View {
     let provider: CodexPanelProvider
     let isActiveProvider: Bool
     let activeAccountId: String?
+    var visibleAccounts: [CodexPanelProviderAccount]? = nil
+    var visiblePinnedModelIDs: [String]? = nil
+    var showsNoModelFallback = true
     let onActivate: (CodexPanelProviderAccount) -> Void
     let onSelectModel: (String) -> Void
     let onAddAccount: () -> Void
@@ -2750,6 +2921,14 @@ private struct OpenRouterProviderRowView: View {
             cachedModels: self.provider.cachedModelCatalog,
             manualModelID: self.provider.openRouterEffectiveModelID ?? ""
         )
+    }
+
+    private var displayedPinnedModelIDs: [String] {
+        self.visiblePinnedModelIDs ?? self.orderedPinnedModelIDs
+    }
+
+    private var displayedAccounts: [CodexPanelProviderAccount] {
+        self.visibleAccounts ?? self.provider.accounts
     }
 
     private func displayName(for modelID: String) -> String {
@@ -2803,9 +2982,9 @@ private struct OpenRouterProviderRowView: View {
             .foregroundColor(.secondary)
             .padding(.leading, 14)
 
-            if self.orderedPinnedModelIDs.isEmpty == false {
+            if self.displayedPinnedModelIDs.isEmpty == false {
                 VStack(alignment: .leading, spacing: 4) {
-                    ForEach(self.orderedPinnedModelIDs, id: \.self) { modelID in
+                    ForEach(self.displayedPinnedModelIDs, id: \.self) { modelID in
                         HStack(spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(self.displayName(for: modelID))
@@ -2835,7 +3014,7 @@ private struct OpenRouterProviderRowView: View {
                         .padding(.leading, 14)
                     }
                 }
-            } else if self.provider.openRouterEffectiveModelID == nil {
+            } else if self.provider.openRouterEffectiveModelID == nil && self.showsNoModelFallback {
                 HStack(spacing: 8) {
                     Text("No model configured yet.")
                         .font(.system(size: 10, weight: .medium))
@@ -2853,7 +3032,7 @@ private struct OpenRouterProviderRowView: View {
                 .padding(.leading, 14)
             }
 
-            ForEach(provider.accounts) { account in
+            ForEach(self.displayedAccounts) { account in
                 HStack(spacing: 6) {
                     Text(account.label)
                         .font(.system(size: 11, weight: account.id == activeAccountId ? .semibold : .regular))
