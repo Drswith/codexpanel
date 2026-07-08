@@ -29,6 +29,7 @@ struct GlobalSettingsUpdate: Equatable {
     var defaultModel: String
     var reviewModel: String
     var reasoningEffort: String
+    var serviceTier: String
 }
 
 struct SettingsSaveRequests: Equatable {
@@ -676,7 +677,8 @@ final class TokenStore: ObservableObject {
                     GlobalSettingsUpdate(
                         defaultModel: trimmedModelID,
                         reviewModel: trimmedModelID,
-                        reasoningEffort: self.config.global.reasoningEffort
+                        reasoningEffort: self.config.global.reasoningEffort,
+                        serviceTier: self.config.global.serviceTier
                     )
                 )
             }
@@ -687,7 +689,8 @@ final class TokenStore: ObservableObject {
             GlobalSettingsUpdate(
                 defaultModel: trimmedModelID,
                 reviewModel: trimmedModelID,
-                reasoningEffort: self.config.global.reasoningEffort
+                reasoningEffort: self.config.global.reasoningEffort,
+                serviceTier: self.config.global.serviceTier
             )
         )
     }
@@ -702,7 +705,24 @@ final class TokenStore: ObservableObject {
             GlobalSettingsUpdate(
                 defaultModel: self.config.global.defaultModel,
                 reviewModel: self.config.global.reviewModel,
-                reasoningEffort: trimmedEffort
+                reasoningEffort: trimmedEffort,
+                serviceTier: self.config.global.serviceTier
+            )
+        )
+    }
+
+    func updateServiceTier(_ serviceTier: String) throws {
+        let trimmedServiceTier = serviceTier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedServiceTier.isEmpty == false else {
+            throw TokenStoreError.invalidInput
+        }
+
+        try self.saveGlobalSettings(
+            GlobalSettingsUpdate(
+                defaultModel: self.config.global.defaultModel,
+                reviewModel: self.config.global.reviewModel,
+                reasoningEffort: self.config.global.reasoningEffort,
+                serviceTier: trimmedServiceTier
             )
         )
     }

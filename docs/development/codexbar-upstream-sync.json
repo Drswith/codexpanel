@@ -1,7 +1,7 @@
 {
   "upstream": "lizhelang/codexbar",
-  "mergedThroughTag": "v1.2.4",
-  "mergedThroughCommit": "0a2d2d9cc29951b93cbf7915e713f428db33ae14",
+  "mergedThroughTag": "v1.2.5",
+  "mergedThroughCommit": "dffc79c19db8d83c1ed1735e665e3bcb6c417f0e",
   "updatedAt": "2026-07-08",
   "notes": "Development-only marker for selective upstream sync checks; not read by the app or packaged into release artifacts."
 }
