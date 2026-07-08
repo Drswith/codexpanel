@@ -1235,7 +1235,7 @@ private extension CodexPanelOpenAIManualActivationBehavior {
         case .updateConfigOnly:
             return L.manualActivationUpdateConfigOnly
         case .launchNewInstance:
-            return L.manualActivationLaunchNewInstance
+            return L.manualActivationUpdateConfigOnly
         }
     }
 
@@ -1244,7 +1244,7 @@ private extension CodexPanelOpenAIManualActivationBehavior {
         case .updateConfigOnly:
             return L.manualActivationUpdateConfigOnlyHint
         case .launchNewInstance:
-            return L.manualActivationLaunchNewInstanceHint
+            return L.manualActivationUpdateConfigOnlyHint
         }
     }
 }

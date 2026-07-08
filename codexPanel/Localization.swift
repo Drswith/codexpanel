@@ -54,6 +54,11 @@ enum L {
     static var codexLaunchProbeTimedOut: String {
         zh ? "启动 Codex.app 超时" : "Launching Codex.app timed out"
     }
+    static var codexLaunchProbeUnsupported: String {
+        zh
+            ? "当前 Codex App / macOS 不允许稳定多开；已停止尝试新开实例。"
+            : "The current Codex App / macOS does not allow stable multi-instance launch; Codex Panel stopped trying to launch a new instance."
+    }
     static func codexLaunchProbeFailed(_ message: String) -> String {
         zh ? "受管启动探针失败：\(message)" : "Managed launch probe failed: \(message)"
     }
@@ -741,5 +746,22 @@ enum L {
     }
     static func resetInDay(_ d: Int, _ h: Int) -> String {
         zh ? "\(d) 天 \(h) 小时后重置" : "Resets in \(d)d \(h)h"
+    }
+
+    // MARK: - Provider presets / multi-model
+    static var providerPresetGroupDomestic: String { zh ? "国产模型" : "Domestic" }
+    static var providerPresetGroupForeign: String { zh ? "国外模型" : "Foreign" }
+    static var providerPresetNoteArkEndpoint: String {
+        zh ? "火山方舟使用接入点 ID 或模型名，请按控制台填写。" : "Volcengine Ark uses endpoint IDs or model names; fill in per your console."
+    }
+    static var providerPresetNoteGeminiCompat: String {
+        zh ? "使用 Gemini 的 OpenAI 兼容端点；部分工具能力可能受限。" : "Uses Gemini's OpenAI-compatible endpoint; some tool features may be limited."
+    }
+    static var addProviderPresetTab: String { zh ? "预设厂商" : "Presets" }
+    static var addProviderPresetVendor: String { zh ? "厂商" : "Vendor" }
+    static var addProviderWireAPI: String { zh ? "协议" : "Protocol" }
+    static var addProviderModel: String { zh ? "模型" : "Model" }
+    static var addProviderWireAPIChatHint: String {
+        zh ? "通过本地网关把 Chat Completions 转换为 Responses。" : "Routes through the local gateway converting Chat Completions to Responses."
     }
 }

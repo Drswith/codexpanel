@@ -10,22 +10,22 @@ final class OpenAIManualActivationResolverTests: XCTestCase {
         XCTAssertEqual(action, .updateConfigOnly)
     }
 
-    func testPrimaryTapUsesConfiguredLaunchBehavior() {
+    func testPrimaryTapIgnoresConfiguredLaunchBehavior() {
         let action = OpenAIManualActivationResolver.resolve(
             configuredBehavior: .launchNewInstance,
             trigger: .primaryTap
         )
 
-        XCTAssertEqual(action, .launchNewInstance)
+        XCTAssertEqual(action, .updateConfigOnly)
     }
 
-    func testContextOverrideLaunchesNewInstanceEvenWhenDefaultIsUpdateConfigOnly() {
+    func testContextOverrideLaunchIsDowngradedToConfigOnly() {
         let action = OpenAIManualActivationResolver.resolve(
             configuredBehavior: .updateConfigOnly,
             trigger: .contextOverride(.launchNewInstance)
         )
 
-        XCTAssertEqual(action, .launchNewInstance)
+        XCTAssertEqual(action, .updateConfigOnly)
     }
 
     func testContextOverrideUpdatesConfigOnlyEvenWhenDefaultIsLaunchNewInstance() {
