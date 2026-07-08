@@ -8,5 +8,13 @@ struct codexPanelApp: App {
         Settings {
             EmptyView()
         }
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button(L.settings) {
+                    CodexPanelUICommandRouter.shared.openSettings()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
     }
 }

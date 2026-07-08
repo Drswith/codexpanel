@@ -85,7 +85,7 @@ struct CodexSyncService: CodexSynchronizing {
             }
             effectiveModel = selectedModelID
         case .openAICompatible:
-            effectiveModel = provider.defaultModel ?? config.global.defaultModel
+            effectiveModel = provider.compatibleEffectiveModelID ?? config.global.defaultModel
         case .openAIOAuth:
             effectiveModel = config.global.defaultModel
         }
@@ -207,6 +207,12 @@ struct CodexSyncService: CodexSynchronizing {
                 text,
                 key: "openai_base_url",
                 value: self.quote(self.networkConfiguration.openRouterGatewayBaseURLString)
+            )
+        } else if provider.usesChatCompletionsGateway {
+            text = self.upsertSetting(
+                text,
+                key: "openai_base_url",
+                value: self.quote(self.networkConfiguration.chatCompletionsGatewayBaseURLString)
             )
         } else if provider.kind == .openAICompatible, let baseURL = provider.baseURL {
             text = self.upsertSetting(text, key: "openai_base_url", value: self.quote(baseURL))

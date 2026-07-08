@@ -75,7 +75,7 @@ struct AccountRowView: View {
                 .foregroundColor(isRefreshing ? .accentColor : .secondary)
                 .disabled(isRefreshing)
 
-                if rowState.showsUseAction {
+                if self.canPerformManualActivation {
                     Button(
                         OpenAIAccountPresentation.manualActivationButtonTitle(
                             defaultBehavior: defaultManualActivationBehavior
@@ -109,7 +109,7 @@ struct AccountRowView: View {
         }
         .contextMenu {
             if let defaultManualActivationBehavior,
-               rowState.showsUseAction {
+               self.canPerformManualActivation {
                 ForEach(
                     OpenAIAccountPresentation.manualActivationContextActions(
                         defaultBehavior: defaultManualActivationBehavior
@@ -128,6 +128,18 @@ struct AccountRowView: View {
                 }
             }
         }
+    }
+
+    private var canPerformManualActivation: Bool {
+        self.account.tokenExpired == false
+            && self.account.isBanned == false
+            && self.showsManualActivationAction
+    }
+
+    private var showsManualActivationAction: Bool {
+        self.rowState.showsManualActivationAction(
+            defaultBehavior: self.defaultManualActivationBehavior
+        )
     }
 
     @ViewBuilder

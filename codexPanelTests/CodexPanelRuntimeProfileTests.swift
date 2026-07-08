@@ -39,6 +39,7 @@ final class CodexPanelRuntimeProfileTests: XCTestCase {
         XCTAssertEqual(profile.network.oauthRedirectURI, "http://localhost:1555/auth/callback")
         XCTAssertEqual(profile.network.openAIAccountGatewayBaseURLString, "http://localhost:1556/v1")
         XCTAssertEqual(profile.network.openRouterGatewayBaseURLString, "http://localhost:1557/v1")
+        XCTAssertEqual(profile.network.chatCompletionsGatewayBaseURLString, "http://localhost:1558/v1")
     }
 
     func testDebugRespectsExplicitHomeOverride() {
@@ -105,6 +106,7 @@ final class CodexPanelRuntimeProfileTests: XCTestCase {
         XCTAssertEqual(profile.network.oauthRedirectURI, "http://localhost:1455/auth/callback")
         XCTAssertEqual(profile.network.openAIAccountGatewayBaseURLString, "http://localhost:1456/v1")
         XCTAssertEqual(profile.network.openRouterGatewayBaseURLString, "http://localhost:1457/v1")
+        XCTAssertEqual(profile.network.chatCompletionsGatewayBaseURLString, "http://localhost:1458/v1")
     }
 
     func testDebugHomeProducesCodexAndCodexPanelRootsAwayFromRealHome() {
