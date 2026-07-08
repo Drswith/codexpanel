@@ -181,6 +181,42 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         XCTAssertTrue(tomlText.contains(#"review_model = "anthropic/claude-3.7-sonnet""#))
     }
 
+    func testSynchronizeWritesChatCompletionsGatewayConfigAndProviderModel() throws {
+        let account = CodexPanelProviderAccount(
+            id: "acct_chat",
+            kind: .apiKey,
+            label: "DeepSeek Primary",
+            apiKey: "sk-chat-primary"
+        )
+        let provider = CodexPanelProvider(
+            id: "deepseek",
+            kind: .openAICompatible,
+            label: "DeepSeek",
+            enabled: true,
+            baseURL: "https://api.deepseek.com/v1",
+            wireAPI: .chat,
+            presetID: "deepseek",
+            defaultModel: "deepseek-chat",
+            selectedModelID: "deepseek-chat",
+            activeAccountId: account.id,
+            accounts: [account]
+        )
+        let config = CodexPanelConfig(
+            active: CodexPanelActiveSelection(providerId: provider.id, accountId: account.id),
+            providers: [provider]
+        )
+
+        try CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()).synchronize(config: config)
+
+        let authObject = try self.readAuthJSON()
+        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+
+        XCTAssertEqual(authObject["OPENAI_API_KEY"] as? String, "sk-chat-primary")
+        XCTAssertTrue(tomlText.contains(#"openai_base_url = "http://localhost:1458/v1""#))
+        XCTAssertTrue(tomlText.contains(#"model = "deepseek-chat""#))
+        XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5""#))
+    }
+
     func testSynchronizeWritesDebugGatewayBaseURLsWhenUsingDebugNetworkProfile() throws {
         let openAIAccount = CodexPanelProviderAccount(
             id: "acct_pool",
@@ -233,6 +269,33 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
 
         let openRouterTOMLText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
         XCTAssertTrue(openRouterTOMLText.contains(#"openai_base_url = "http://localhost:1557/v1""#))
+
+        let chatAccount = CodexPanelProviderAccount(
+            id: "acct_chat",
+            kind: .apiKey,
+            label: "DeepSeek Primary",
+            apiKey: "sk-chat-primary"
+        )
+        let chatProvider = CodexPanelProvider(
+            id: "deepseek",
+            kind: .openAICompatible,
+            label: "DeepSeek",
+            baseURL: "https://api.deepseek.com/v1",
+            wireAPI: .chat,
+            defaultModel: "deepseek-chat",
+            selectedModelID: "deepseek-chat",
+            activeAccountId: chatAccount.id,
+            accounts: [chatAccount]
+        )
+        let chatConfig = CodexPanelConfig(
+            active: CodexPanelActiveSelection(providerId: chatProvider.id, accountId: chatAccount.id),
+            providers: [chatProvider]
+        )
+
+        try CodexSyncService(networkConfiguration: self.debugNetworkConfiguration()).synchronize(config: chatConfig)
+
+        let chatTOMLText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertTrue(chatTOMLText.contains(#"openai_base_url = "http://localhost:1558/v1""#))
     }
 
     private enum SyncFailure: Error, Equatable {

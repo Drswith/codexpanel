@@ -16,6 +16,7 @@ struct CodexPanelRuntimeNetworkConfiguration: Equatable {
     var oauthCallbackPort: UInt16
     var openAIAccountGatewayPort: UInt16
     var openRouterGatewayPort: UInt16
+    var chatCompletionsGatewayPort: UInt16
     var oauthCallbackPath: String
 
     var oauthRedirectURI: String {
@@ -28,6 +29,10 @@ struct CodexPanelRuntimeNetworkConfiguration: Equatable {
 
     var openRouterGatewayBaseURLString: String {
         "http://\(self.host):\(self.openRouterGatewayPort)/v1"
+    }
+
+    var chatCompletionsGatewayBaseURLString: String {
+        "http://\(self.host):\(self.chatCompletionsGatewayPort)/v1"
     }
 }
 
@@ -83,6 +88,7 @@ struct CodexPanelRuntimeProfile: Equatable {
                 oauthCallbackPort: 1555,
                 openAIAccountGatewayPort: 1556,
                 openRouterGatewayPort: 1557,
+                chatCompletionsGatewayPort: 1558,
                 oauthCallbackPath: "/auth/callback"
             )
         case .release:
@@ -91,6 +97,7 @@ struct CodexPanelRuntimeProfile: Equatable {
                 oauthCallbackPort: 1455,
                 openAIAccountGatewayPort: 1456,
                 openRouterGatewayPort: 1457,
+                chatCompletionsGatewayPort: 1458,
                 oauthCallbackPath: "/auth/callback"
             )
         }

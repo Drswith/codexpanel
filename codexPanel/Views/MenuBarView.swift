@@ -414,6 +414,7 @@ private final class AdaptiveMenuScrollHost: NSView {
         let needsScroller = fittingHeight > effectiveLimitHeight + 1
 
         self.displayHostingView.setFrameSize(NSSize(width: width, height: fittingHeight))
+        self.clampScrollPosition(documentHeight: fittingHeight)
         self.scrollView.hasVerticalScroller = needsScroller
         if needsScroller {
             self.hideScrollerImmediately()
@@ -431,6 +432,8 @@ private final class AdaptiveMenuScrollHost: NSView {
         self.measuredHeight = targetHeight
         self.invalidateIntrinsicContentSize()
         self.superview?.invalidateIntrinsicContentSize()
+        self.needsLayout = true
+        self.superview?.needsLayout = true
     }
 
     private func resolveHeightLimit(for width: CGFloat) -> CGFloat {
@@ -441,6 +444,15 @@ private final class AdaptiveMenuScrollHost: NSView {
             self.limitHostingView.setFrameSize(NSSize(width: width, height: MenuBarPopoverSizing.minimumHeight))
             return max(self.limitHostingView.fittingSize.height, MenuBarPopoverSizing.minimumHeight)
         }
+    }
+
+    private func clampScrollPosition(documentHeight: CGFloat) {
+        let clipView = self.scrollView.contentView
+        var origin = clipView.bounds.origin
+        let maxY = max(documentHeight - clipView.bounds.height, 0)
+        origin.y = min(max(origin.y, 0), maxY)
+        clipView.scroll(to: origin)
+        self.scrollView.reflectScrolledClipView(clipView)
     }
 
     private func showScrollerTemporarily() {
@@ -1250,6 +1262,10 @@ struct MenuBarView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Button {
                     isProvidersExpanded.toggle()
+                    requestStatusItemLayoutRefresh()
+                    DispatchQueue.main.async {
+                        self.requestStatusItemLayoutRefresh()
+                    }
                 } label: {
                     HStack(spacing: 6) {
                         Text("Providers")
@@ -1262,9 +1278,11 @@ struct MenuBarView: View {
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(.secondary)
 
-                        Image(systemName: isProvidersExpanded ? "chevron.down" : "chevron.right")
+                        Image(systemName: "chevron.right")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundColor(.secondary)
+                            .rotationEffect(.degrees(isProvidersExpanded ? 90 : 0))
+                            .animation(.easeInOut(duration: 0.12), value: isProvidersExpanded)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
@@ -1791,11 +1809,12 @@ struct MenuBarView: View {
                     protectedByManualGrace: false
                 )
             } launchNewInstance: {
-                try await self.switchAccountAndLaunchNewInstance(
+                try self.store.activate(
                     account,
                     reason: .manual,
                     automatic: false,
-                    forced: false
+                    forced: false,
+                    protectedByManualGrace: false
                 )
             }
 
@@ -1829,7 +1848,10 @@ struct MenuBarView: View {
                     activeAccountID: previousActiveAccountID
                 )
             } launchNewInstance: {
-                _ = try await self.codexDesktopLaunchProbeService.launchNewInstance()
+                try self.store.activateCustomProvider(
+                    providerID: providerID,
+                    accountID: accountID
+                )
             }
 
             self.clearError()
@@ -1853,7 +1875,7 @@ struct MenuBarView: View {
                     activeAccountID: previousActiveAccountID
                 )
             } launchNewInstance: {
-                _ = try await self.codexDesktopLaunchProbeService.launchNewInstance()
+                try self.store.activateOpenRouterProvider(accountID: accountID)
             }
 
             self.clearError()
@@ -1925,7 +1947,7 @@ struct MenuBarView: View {
                     )
                 },
                 launchNewInstance: {
-                    _ = try await self.codexDesktopLaunchProbeService.launchNewInstance()
+                    try self.store.updateOpenAIAccountUsageMode(mode)
                 }
             )
             self.lastOpenAIManualSwitchResult = nil
@@ -1938,14 +1960,7 @@ struct MenuBarView: View {
     private func applyManualSwitchRecommendation(
         _ result: OpenAIManualSwitchResult
     ) async {
-        guard result.immediateEffectRecommendation == .launchNewInstance,
-              let account = self.store.oauthAccount(accountID: result.targetAccountID) else {
-            return
-        }
-        await self.activateAccount(
-            account,
-            trigger: .contextOverride(.launchNewInstance)
-        )
+        _ = result
     }
 
     private func clearStaleAggregateStickyIfNeeded() {
@@ -2054,28 +2069,33 @@ struct MenuBarView: View {
         CodexPanelUICommandRouter.shared.openSettings()
     }
 
-    private func openAddProviderWindow(defaultPreset: AddProviderPreset = .custom) {
+    private func openAddProviderWindow(defaultPreset: AddProviderPreset = .preset) {
         self.requestCloseStatusItemMenu()
         DetachedWindowPresenter.shared.show(
             id: "add-provider",
             title: "Add Provider",
             size: CGSize(width: 520, height: 620)
         ) {
-            AddProviderSheet(store: store, defaultPreset: defaultPreset) { preset, label, baseURL, accountLabel, apiKey, openRouterSelection in
+            AddProviderSheet(store: store, defaultPreset: defaultPreset) { result in
                 do {
-                    switch preset {
-                    case .custom:
-                        try store.addCustomProvider(label: label, baseURL: baseURL, accountLabel: accountLabel, apiKey: apiKey)
-                    case .openRouter:
-                        guard let openRouterSelection else {
-                            throw TokenStoreError.invalidInput
-                        }
+                    if let openRouterSelection = result.openRouterSelection {
                         try store.addOpenRouterProvider(
                             apiKey: openRouterSelection.apiKey,
                             selectedModelID: openRouterSelection.selectedModelID,
                             pinnedModelIDs: openRouterSelection.pinnedModelIDs,
                             cachedModelCatalog: openRouterSelection.cachedModelCatalog,
                             fetchedAt: openRouterSelection.fetchedAt
+                        )
+                    } else {
+                        try store.addCompatibleProvider(
+                            label: result.label,
+                            baseURL: result.baseURL,
+                            accountLabel: result.accountLabel,
+                            apiKey: result.apiKey,
+                            wireAPI: result.wireAPI,
+                            presetID: result.presetID,
+                            model: result.model,
+                            modelCatalog: result.modelCatalog
                         )
                     }
                     self.clearError()
@@ -2458,19 +2478,32 @@ struct MenuBarView: View {
 }
 
 private enum AddProviderPreset: String, CaseIterable, Identifiable {
+    case preset
     case custom
-    case openRouter
 
     var id: String { self.rawValue }
 
     var title: String {
         switch self {
+        case .preset:
+            return L.addProviderPresetTab
         case .custom:
             return "Custom"
-        case .openRouter:
-            return "OpenRouter"
         }
     }
+}
+
+private struct AddProviderResult {
+    let preset: AddProviderPreset
+    let label: String
+    let baseURL: String
+    let accountLabel: String
+    let apiKey: String
+    let wireAPI: CodexPanelWireAPI
+    let presetID: String?
+    let model: String?
+    let modelCatalog: [CodexPanelOpenRouterModel]
+    let openRouterSelection: OpenRouterSelectionPayload?
 }
 
 private struct OpenRouterSelectionPayload: Equatable {
@@ -2700,18 +2733,22 @@ private struct AddProviderSheet: View {
     @State private var baseURL = ""
     @State private var accountLabel = ""
     @State private var apiKey = ""
+    @State private var customWireAPI: CodexPanelWireAPI = .chat
+    @State private var customModel = ""
+    @State private var selectedPresetID: String
+    @State private var presetModelID = ""
     @State private var openRouterSelectedModelIDs: Set<String>
     @State private var openRouterManualModelID: String
     @State private var openRouterCachedModels: [CodexPanelOpenRouterModel]
     @State private var openRouterFetchedAt: Date?
 
-    let onSave: (AddProviderPreset, String, String, String, String, OpenRouterSelectionPayload?) -> Void
+    let onSave: (AddProviderResult) -> Void
     let onCancel: () -> Void
 
     init(
         store: TokenStore,
-        defaultPreset: AddProviderPreset = .custom,
-        onSave: @escaping (AddProviderPreset, String, String, String, String, OpenRouterSelectionPayload?) -> Void,
+        defaultPreset: AddProviderPreset = .preset,
+        onSave: @escaping (AddProviderResult) -> Void,
         onCancel: @escaping () -> Void
     ) {
         let existingProvider = store.openRouterProvider
@@ -2719,29 +2756,42 @@ private struct AddProviderSheet: View {
         self.store = store
         self.onSave = onSave
         self.onCancel = onCancel
+        let firstPreset = CodexPanelProviderPresetCatalog.all.first
+        self._selectedPresetID = State(initialValue: firstPreset?.id ?? "")
+        self._presetModelID = State(initialValue: firstPreset?.defaultModelID ?? "")
         self._openRouterSelectedModelIDs = State(initialValue: Set(existingProvider?.pinnedModelIDs ?? []))
         self._openRouterManualModelID = State(initialValue: existingProvider?.openRouterEffectiveModelID ?? "")
         self._openRouterCachedModels = State(initialValue: existingProvider?.cachedModelCatalog ?? [])
         self._openRouterFetchedAt = State(initialValue: existingProvider?.modelCatalogFetchedAt)
-        if defaultPreset == .openRouter {
-            self._label = State(initialValue: "OpenRouter")
-        }
     }
 
-    private var isOpenRouter: Bool {
-        self.preset == .openRouter
+    private var selectedPreset: CodexPanelProviderPreset? {
+        CodexPanelProviderPresetCatalog.preset(id: self.selectedPresetID)
+    }
+
+    private var selectedPresetIsOpenRouter: Bool {
+        self.selectedPreset?.kind == .openRouter
     }
 
     private var canSave: Bool {
         let trimmedAPIKey = self.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedAPIKey.isEmpty == false else { return false }
 
-        if self.isOpenRouter {
-            return self.openRouterSelectionPayload != nil
+        switch self.preset {
+        case .preset:
+            if self.selectedPresetIsOpenRouter {
+                return self.openRouterSelectionPayload != nil
+            }
+            return self.selectedPreset != nil &&
+                self.presetModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        case .custom:
+            let hasBasics = self.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
+                self.baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            if self.customWireAPI == .chat {
+                return hasBasics && self.customModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            }
+            return hasBasics
         }
-
-        return self.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
-            self.baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
     private var openRouterSelectionPayload: OpenRouterSelectionPayload? {
@@ -2751,41 +2801,6 @@ private struct AddProviderSheet: View {
             manualModelID: self.openRouterManualModelID,
             cachedModels: self.openRouterCachedModels,
             fetchedAt: self.openRouterFetchedAt
-        )
-    }
-
-    // Keep the default Custom path's first-frame type shallow on macOS 14 by
-    // type-erasing the heavy OpenRouter branch until the user explicitly opens it.
-    private var providerFormContent: AnyView {
-        self.isOpenRouter ? self.openRouterProviderFormContent : self.customProviderFormContent
-    }
-
-    private var customProviderFormContent: AnyView {
-        AnyView(
-            VStack(alignment: .leading, spacing: 12) {
-                TextField("Provider name", text: $label)
-                TextField("Base URL", text: $baseURL)
-                TextField("Account label", text: $accountLabel)
-                SecureField("API key", text: $apiKey)
-            }
-        )
-    }
-
-    private var openRouterProviderFormContent: AnyView {
-        AnyView(
-            VStack(alignment: .leading, spacing: 12) {
-                SecureField("API key", text: $apiKey)
-                OpenRouterModelPickerSection(
-                    store: self.store,
-                    apiKey: $apiKey,
-                    selectedModelIDs: $openRouterSelectedModelIDs,
-                    manualModelID: $openRouterManualModelID,
-                    cachedModels: $openRouterCachedModels,
-                    fetchedAt: $openRouterFetchedAt,
-                    refreshMode: .previewEnteredAPIKey,
-                    helperText: "Pick one or more models here. The first checked model becomes the current model by default, and all checked models will appear in the OpenRouter section for direct switching."
-                )
-            }
         )
     }
 
@@ -2801,32 +2816,138 @@ private struct AddProviderSheet: View {
             }
             .pickerStyle(.segmented)
 
-            self.providerFormContent
+            switch preset {
+            case .preset:
+                presetSection
+            case .custom:
+                customSection
+            }
 
             HStack {
                 Spacer()
                 Button("Cancel", action: onCancel)
                 Button("Save") {
-                    onSave(
-                        preset,
-                        label,
-                        baseURL,
-                        accountLabel,
-                        apiKey,
-                        self.isOpenRouter ? self.openRouterSelectionPayload : nil
-                    )
+                    onSave(self.makeResult())
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(canSave == false)
             }
         }
         .padding(16)
-        .frame(width: self.isOpenRouter ? 460 : 360)
-        .onChange(of: preset) { newValue in
-            if newValue == .openRouter {
-                self.label = "OpenRouter"
-                self.baseURL = ""
+        .frame(width: self.preset == .custom ? 380 : 460)
+        .onChange(of: selectedPresetID) { _ in
+            self.presetModelID = self.selectedPreset?.defaultModelID ?? ""
+        }
+    }
+
+    @ViewBuilder private var presetSection: some View {
+        Picker(L.addProviderPresetVendor, selection: $selectedPresetID) {
+            ForEach(CodexPanelProviderPresetGroup.allCases) { group in
+                Section(group.title) {
+                    ForEach(CodexPanelProviderPresetCatalog.all.filter { $0.group == group }) { preset in
+                        Text(preset.displayName).tag(preset.id)
+                    }
+                }
             }
+        }
+
+        if self.selectedPresetIsOpenRouter {
+            OpenRouterModelPickerSection(
+                store: self.store,
+                apiKey: $apiKey,
+                selectedModelIDs: $openRouterSelectedModelIDs,
+                manualModelID: $openRouterManualModelID,
+                cachedModels: $openRouterCachedModels,
+                fetchedAt: $openRouterFetchedAt,
+                refreshMode: .previewEnteredAPIKey,
+                helperText: "Pick one or more models here. The first checked model becomes the current model by default, and all checked models will appear in the OpenRouter section for direct switching."
+            )
+        } else {
+            HStack(spacing: 8) {
+                TextField(L.addProviderModel, text: $presetModelID)
+                if let models = selectedPreset?.defaultModels, models.isEmpty == false {
+                    Menu(L.addProviderModel) {
+                        ForEach(models) { model in
+                            Button(model.name) { self.presetModelID = model.id }
+                        }
+                    }
+                    .fixedSize()
+                }
+            }
+        }
+
+        TextField("Account label", text: $accountLabel)
+        SecureField("API key", text: $apiKey)
+
+        if let note = selectedPreset?.note {
+            Text(note)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private var customSection: some View {
+        TextField("Provider name", text: $label)
+        TextField("Base URL", text: $baseURL)
+        Picker(L.addProviderWireAPI, selection: $customWireAPI) {
+            ForEach(CodexPanelWireAPI.allCases) { wire in
+                Text(wire.title).tag(wire)
+            }
+        }
+        .pickerStyle(.segmented)
+        if customWireAPI == .chat {
+            TextField(L.addProviderModel, text: $customModel)
+            Text(L.addProviderWireAPIChatHint)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        TextField("Account label", text: $accountLabel)
+        SecureField("API key", text: $apiKey)
+    }
+
+    private func makeResult() -> AddProviderResult {
+        switch preset {
+        case .preset:
+            let selected = self.selectedPreset
+            if selected?.kind == .openRouter {
+                return AddProviderResult(
+                    preset: .preset,
+                    label: "OpenRouter",
+                    baseURL: "",
+                    accountLabel: accountLabel,
+                    apiKey: apiKey,
+                    wireAPI: .responses,
+                    presetID: selected?.id,
+                    model: nil,
+                    modelCatalog: [],
+                    openRouterSelection: self.openRouterSelectionPayload
+                )
+            }
+            return AddProviderResult(
+                preset: .preset,
+                label: selected?.displayName ?? self.selectedPresetID,
+                baseURL: selected?.baseURL ?? "",
+                accountLabel: accountLabel,
+                apiKey: apiKey,
+                wireAPI: selected?.wireAPI ?? .chat,
+                presetID: selected?.id,
+                model: presetModelID,
+                modelCatalog: selected?.defaultModels ?? [],
+                openRouterSelection: nil
+            )
+        case .custom:
+            return AddProviderResult(
+                preset: .custom,
+                label: label,
+                baseURL: baseURL,
+                accountLabel: accountLabel,
+                apiKey: apiKey,
+                wireAPI: customWireAPI,
+                presetID: nil,
+                model: customWireAPI == .chat ? customModel : nil,
+                modelCatalog: [],
+                openRouterSelection: nil
+            )
         }
     }
 }
