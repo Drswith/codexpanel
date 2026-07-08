@@ -25,18 +25,27 @@ struct DesktopSettingsUpdate: Equatable {
     var preferredCodexAppPath: String?
 }
 
+struct GlobalSettingsUpdate: Equatable {
+    var defaultModel: String
+    var reviewModel: String
+    var reasoningEffort: String
+}
+
 struct SettingsSaveRequests: Equatable {
+    var global: GlobalSettingsUpdate?
     var openAIAccount: OpenAIAccountSettingsUpdate?
     var openAIUsage: OpenAIUsageSettingsUpdate?
     var modelPricing: ModelPricingSettingsUpdate?
     var desktop: DesktopSettingsUpdate?
 
     init(
+        global: GlobalSettingsUpdate? = nil,
         openAIAccount: OpenAIAccountSettingsUpdate? = nil,
         openAIUsage: OpenAIUsageSettingsUpdate? = nil,
         modelPricing: ModelPricingSettingsUpdate? = nil,
         desktop: DesktopSettingsUpdate? = nil
     ) {
+        self.global = global
         self.openAIAccount = openAIAccount
         self.openAIUsage = openAIUsage
         self.modelPricing = modelPricing
@@ -44,6 +53,7 @@ struct SettingsSaveRequests: Equatable {
     }
 
     var isEmpty: Bool {
+        self.global == nil &&
         self.openAIAccount == nil &&
         self.openAIUsage == nil &&
         self.modelPricing == nil &&
@@ -227,6 +237,11 @@ final class TokenStore: ObservableObject {
            activeProvider.kind == .openRouter,
            let selectedModelID = activeProvider.openRouterEffectiveModelID {
             return selectedModelID
+        }
+        if let activeProvider = self.config.activeProvider(),
+           activeProvider.kind == .openAICompatible,
+           let defaultModel = activeProvider.defaultModel {
+            return defaultModel
         }
         return self.config.global.defaultModel
     }
@@ -634,6 +649,64 @@ final class TokenStore: ObservableObject {
         )
     }
 
+    func saveGlobalSettings(_ request: GlobalSettingsUpdate) throws {
+        try self.saveSettings(
+            SettingsSaveRequests(global: request)
+        )
+    }
+
+    func updateRouteModel(_ modelID: String) throws {
+        let trimmedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedModelID.isEmpty == false else {
+            throw TokenStoreError.invalidInput
+        }
+
+        if let activeProvider = self.config.activeProvider() {
+            switch activeProvider.kind {
+            case .openRouter:
+                try self.config.setOpenRouterSelectedModel(trimmedModelID)
+                try self.persist(syncCodex: true)
+            case .openAICompatible:
+                try self.updateProviderDefaultModel(
+                    providerID: activeProvider.id,
+                    modelID: trimmedModelID
+                )
+            case .openAIOAuth:
+                try self.saveGlobalSettings(
+                    GlobalSettingsUpdate(
+                        defaultModel: trimmedModelID,
+                        reviewModel: trimmedModelID,
+                        reasoningEffort: self.config.global.reasoningEffort
+                    )
+                )
+            }
+            return
+        }
+
+        try self.saveGlobalSettings(
+            GlobalSettingsUpdate(
+                defaultModel: trimmedModelID,
+                reviewModel: trimmedModelID,
+                reasoningEffort: self.config.global.reasoningEffort
+            )
+        )
+    }
+
+    func updateReasoningEffort(_ effort: String) throws {
+        let trimmedEffort = effort.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedEffort.isEmpty == false else {
+            throw TokenStoreError.invalidInput
+        }
+
+        try self.saveGlobalSettings(
+            GlobalSettingsUpdate(
+                defaultModel: self.config.global.defaultModel,
+                reviewModel: self.config.global.reviewModel,
+                reasoningEffort: trimmedEffort
+            )
+        )
+    }
+
     func saveSettings(_ requests: SettingsSaveRequests) throws {
         guard requests.isEmpty == false else { return }
 
@@ -655,6 +728,23 @@ final class TokenStore: ObservableObject {
         if requests.modelPricing != nil {
             self.refreshLocalCostSummary(force: true, minimumInterval: 0)
         }
+    }
+
+    private func updateProviderDefaultModel(providerID: String, modelID: String) throws {
+        guard let providerIndex = self.config.providers.firstIndex(where: { $0.id == providerID }) else {
+            throw TokenStoreError.providerNotFound
+        }
+
+        if self.config.providers[providerIndex].kind == .openRouter {
+            try self.config.setOpenRouterSelectedModel(modelID)
+            try self.persist(syncCodex: true)
+            return
+        }
+
+        self.config.providers[providerIndex].defaultModel = modelID
+        self.config.global.defaultModel = modelID
+        self.config.global.reviewModel = modelID
+        try self.persist(syncCodex: true)
     }
 
     func hasStaleOAuthUsageSnapshot(maxAge: TimeInterval, now: Date = Date()) -> Bool {
@@ -1384,10 +1474,10 @@ final class TokenStore: ObservableObject {
         )
 
         self.config = CodexPanelConfig(
-            global: CodexPanelGlobalSettings(defaultModel: "gpt-5.4", reviewModel: "gpt-5.4", reasoningEffort: "high"),
+            global: CodexPanelGlobalSettings(defaultModel: "gpt-5.5", reviewModel: "gpt-5.5", reasoningEffort: "high"),
             active: CodexPanelActiveSelection(providerId: oauthProviderID, accountId: primaryAccountID),
             modelPricing: [
-                "gpt-5.4": CodexPanelModelPricing(inputUSDPerToken: 0.00000125, cachedInputUSDPerToken: 0.000000125, outputUSDPerToken: 0.00001)
+                "gpt-5.5": CodexPanelModelPricing(inputUSDPerToken: 0.00000125, cachedInputUSDPerToken: 0.000000125, outputUSDPerToken: 0.00001)
             ],
             openAI: CodexPanelOpenAISettings(
                 accountOrder: [primaryAccountID, secondaryAccountID],
@@ -1402,7 +1492,7 @@ final class TokenStore: ObservableObject {
                     id: oauthProviderID,
                     kind: .openAIOAuth,
                     label: "OpenAI",
-                    defaultModel: "gpt-5.4",
+                    defaultModel: "gpt-5.5",
                     activeAccountId: primaryAccountID,
                     accounts: [primaryAccount, secondaryAccount]
                 ),
@@ -1473,6 +1563,9 @@ final class TokenStore: ObservableObject {
         previousUsageMode: CodexPanelOpenAIAccountUsageMode,
         updatedConfig: CodexPanelConfig
     ) -> Bool {
+        if requests.global != nil {
+            return updatedConfig.activeProvider() != nil
+        }
         guard let openAIAccountRequest = requests.openAIAccount else { return false }
         let oauthProviderID = updatedConfig.oauthProvider()?.id
         let openAIIsSelected = updatedConfig.active.providerId == oauthProviderID
