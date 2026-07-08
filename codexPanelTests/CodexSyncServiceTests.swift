@@ -53,7 +53,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         XCTAssertEqual(try Data(contentsOf: CodexPaths.configTomlURL), originalToml)
     }
 
-    func testSynchronizePreservesChatGPTAuthAndServiceTierWhenAggregateModeIsEnabled() throws {
+    func testSynchronizePreservesChatGPTAuthAndWritesConfiguredServiceTierWhenAggregateModeIsEnabled() throws {
         try CodexPaths.ensureDirectories()
         try CodexPaths.writeSecureFile(
             Data(
@@ -84,6 +84,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
             accounts: [account]
         )
         let config = CodexPanelConfig(
+            global: CodexPanelGlobalSettings(serviceTier: "fast"),
             active: CodexPanelActiveSelection(providerId: provider.id, accountId: account.id),
             openAI: CodexPanelOpenAISettings(accountUsageMode: .aggregateGateway),
             providers: [provider]

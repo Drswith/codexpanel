@@ -4,6 +4,7 @@ struct LegacyCodexTomlSnapshot {
     var model: String?
     var reviewModel: String?
     var reasoningEffort: String?
+    var serviceTier: String?
     var openAIBaseURL: String?
 }
 
@@ -139,7 +140,8 @@ final class CodexPanelConfigStore {
         let global = CodexPanelGlobalSettings(
             defaultModel: toml.model ?? "gpt-5.5",
             reviewModel: toml.reviewModel ?? toml.model ?? "gpt-5.5",
-            reasoningEffort: toml.reasoningEffort ?? "medium"
+            reasoningEffort: toml.reasoningEffort ?? "medium",
+            serviceTier: toml.serviceTier ?? "standard"
         )
 
         let active = self.resolveActiveSelection(
@@ -711,7 +713,10 @@ final class CodexPanelConfigStore {
             ($0.element.openAIAccountId ?? $0.element.id) == snapshot.remoteAccountID
         }
         if remoteMatches.count == 1 {
-            return remoteMatches[0].offset
+            return CodexPanelConfig.canMatchOAuthAccountsByRemoteID(
+                remoteMatches[0].element,
+                snapshot.account
+            ) ? remoteMatches[0].offset : nil
         }
 
         guard let email = snapshot.email?.lowercased(), remoteMatches.isEmpty == false else {
@@ -786,6 +791,7 @@ final class CodexPanelConfigStore {
             model: self.matchValue(for: "model", in: text),
             reviewModel: self.matchValue(for: "review_model", in: text),
             reasoningEffort: self.matchValue(for: "model_reasoning_effort", in: text),
+            serviceTier: self.matchValue(for: "service_tier", in: text),
             openAIBaseURL: self.matchOpenAIBaseURL(in: text)
         )
     }
