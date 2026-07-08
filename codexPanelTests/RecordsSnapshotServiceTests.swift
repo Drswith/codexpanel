@@ -28,7 +28,7 @@ final class RecordsSnapshotServiceTests: XCTestCase {
             sessions: [
                 HistoricalSessionRecord(
                     sessionID: "session-b",
-                    modelID: "gpt-5.4",
+                    modelID: "gpt-5.5",
                     startedAt: self.date("2026-04-21T08:00:00Z"),
                     lastActivityAt: self.date("2026-04-21T09:00:00Z"),
                     isArchived: false,
@@ -44,7 +44,7 @@ final class RecordsSnapshotServiceTests: XCTestCase {
                 ),
                 HistoricalSessionRecord(
                     sessionID: "session-c",
-                    modelID: "gpt-5.4",
+                    modelID: "gpt-5.5",
                     startedAt: self.date("2026-04-21T06:00:00Z"),
                     lastActivityAt: self.date("2026-04-21T09:00:00Z"),
                     isArchived: false,
@@ -83,7 +83,7 @@ final class RecordsSnapshotServiceTests: XCTestCase {
                     lastSeenAt: self.date("2026-04-21T11:00:00Z")
                 ),
                 HistoricalModelRecord(
-                    modelID: "gpt-5.4",
+                    modelID: "gpt-5.5",
                     sessionCount: 2,
                     lastSeenAt: self.date("2026-04-21T09:00:00Z")
                 ),
@@ -101,7 +101,7 @@ final class RecordsSnapshotServiceTests: XCTestCase {
             sessions: [
                 HistoricalSessionRecord(
                     sessionID: "session-1",
-                    modelID: "gpt-5.4",
+                    modelID: "gpt-5.5",
                     startedAt: self.date("2026-04-21T08:00:00Z"),
                     lastActivityAt: self.date("2026-04-21T12:00:00Z"),
                     isArchived: false,
@@ -109,7 +109,7 @@ final class RecordsSnapshotServiceTests: XCTestCase {
                 ),
                 HistoricalSessionRecord(
                     sessionID: "session-2",
-                    modelID: "gpt-5.4",
+                    modelID: "gpt-5.5",
                     startedAt: self.date("2026-04-21T07:00:00Z"),
                     lastActivityAt: self.date("2026-04-21T10:00:00Z"),
                     isArchived: true,
@@ -127,7 +127,7 @@ final class RecordsSnapshotServiceTests: XCTestCase {
         XCTAssertEqual(recordedModes, [.rebuildAll])
         XCTAssertEqual(snapshot.refreshMode, .rebuildAll)
         XCTAssertEqual(snapshot.models.count, 1)
-        XCTAssertEqual(snapshot.models[0].modelID, "gpt-5.4")
+        XCTAssertEqual(snapshot.models[0].modelID, "gpt-5.5")
         XCTAssertEqual(snapshot.models[0].sessionCount, 2)
         XCTAssertEqual(snapshot.models[0].lastSeenAt, self.date("2026-04-21T12:00:00Z"))
     }
@@ -180,7 +180,7 @@ final class RecordsSnapshotServiceTests: XCTestCase {
                 sessions: [
                     HistoricalSessionRecord(
                         sessionID: "session-1",
-                        modelID: "gpt-5.4",
+                        modelID: "gpt-5.5",
                         startedAt: self.date("2026-04-21T08:00:00Z"),
                         lastActivityAt: self.date("2026-04-21T09:00:00Z"),
                         isArchived: false,

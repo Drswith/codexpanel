@@ -84,7 +84,9 @@ struct CodexSyncService: CodexSynchronizing {
                 throw CodexSyncError.missingOpenRouterModel
             }
             effectiveModel = selectedModelID
-        case .openAIOAuth, .openAICompatible:
+        case .openAICompatible:
+            effectiveModel = provider.defaultModel ?? config.global.defaultModel
+        case .openAIOAuth:
             effectiveModel = config.global.defaultModel
         }
 

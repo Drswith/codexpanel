@@ -65,7 +65,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "today-fast.jsonl",
             id: "today-fast",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             inputTokens: 100,
             cachedInputTokens: 20,
             outputTokens: 50
@@ -133,7 +133,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "mutable.jsonl",
             id: "mutable",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4-mini",
+            model: "gpt-5.5-mini",
             inputTokens: 100,
             cachedInputTokens: 10,
             outputTokens: 20,
@@ -149,7 +149,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "mutable.jsonl",
             id: "mutable",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4-mini",
+            model: "gpt-5.5-mini",
             inputTokens: 200,
             cachedInputTokens: 10,
             outputTokens: 50,
@@ -175,7 +175,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "equal-deltas.jsonl",
             id: "equal-deltas",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             inputTokens: 100,
             cachedInputTokens: 20,
             outputTokens: 20,
@@ -191,7 +191,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "equal-deltas.jsonl",
             id: "equal-deltas",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             inputTokens: 200,
             cachedInputTokens: 40,
             outputTokens: 40,
@@ -216,7 +216,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "duplicate-token-counts.jsonl",
             lines: [
                 #"{"payload":{"type":"session_meta","id":"duplicate-token-counts","timestamp":"2026-04-05T08:00:00Z"}}"#,
-                #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+                #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
                 #"{"timestamp":"2026-04-05T08:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
                 #"{"timestamp":"2026-04-05T08:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
                 #"{"timestamp":"2026-04-05T09:10:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
@@ -247,7 +247,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "replayed-token-blocks.jsonl",
             lines: [
                 #"{"payload":{"type":"session_meta","id":"replayed-token-blocks","timestamp":"2026-04-05T08:00:00Z"}}"#,
-                #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+                #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
                 #"{"timestamp":"2026-04-05T08:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
                 #"{"timestamp":"2026-04-05T09:10:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
                 #"{"timestamp":"2026-04-05T10:15:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
@@ -276,7 +276,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
 
         let detailedLines = [
             #"{"payload":{"type":"session_meta","id":"shared-session","timestamp":"2026-04-05T08:00:00Z"}}"#,
-            #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+            #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
             #"{"timestamp":"2026-04-05T08:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
             #"{"timestamp":"2026-04-05T09:10:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
         ]
@@ -290,7 +290,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "shared-archived.jsonl",
             id: "shared-session",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             inputTokens: 170,
             cachedInputTokens: 30,
             outputTokens: 30
@@ -321,7 +321,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "rollback.jsonl",
             lines: [
                 #"{"payload":{"type":"session_meta","id":"rollback-session","timestamp":"2026-04-05T08:00:00Z"}}"#,
-                #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+                #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
                 #"{"timestamp":"2026-04-05T08:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
                 #"{"timestamp":"2026-04-05T09:10:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
             ]
@@ -337,7 +337,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "rollback.jsonl",
             id: "rollback-session",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             eventTimestamp: "2026-04-05T10:30:00Z"
         )
 
@@ -370,7 +370,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "seed-reference.jsonl",
             lines: [
                 #"{"payload":{"type":"session_meta","id":"seed-reference","timestamp":"2026-04-05T08:00:00Z"}}"#,
-                #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+                #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
                 #"{"timestamp":"2026-04-05T08:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
                 #"{"timestamp":"2026-04-05T09:10:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
             ]
@@ -385,7 +385,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "seed-reference.jsonl",
             id: "seed-reference",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             eventTimestamp: "2026-04-05T10:30:00Z"
         )
         try self.writeLegacyCostSessionCache(
@@ -395,7 +395,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             startedAt: self.date("2026-04-05T08:00:00Z"),
             lastActivityAt: self.date("2026-04-05T10:00:00Z"),
             isArchived: false,
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             finalUsage: SessionLogStore.Usage(inputTokens: 170, cachedInputTokens: 30, outputTokens: 30),
             usageEvents: referenceEvents
         )
@@ -418,7 +418,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "fractional-seed.jsonl",
             lines: [
                 #"{"payload":{"type":"session_meta","id":"fractional-seed","timestamp":"2026-04-05T08:00:00Z"}}"#,
-                #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+                #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
                 #"{"timestamp":"2026-04-05T08:05:00.123Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
                 #"{"timestamp":"2026-04-05T09:10:00.456Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
             ]
@@ -431,7 +431,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             startedAt: self.date("2026-04-05T08:00:00Z"),
             lastActivityAt: self.date("2026-04-05T09:10:00Z"),
             isArchived: false,
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             finalUsage: SessionLogStore.Usage(inputTokens: 170, cachedInputTokens: 30, outputTokens: 30),
             usageEvents: [
                 SessionLogStore.UsageEvent(
@@ -467,7 +467,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "ledger-repair.jsonl",
             lines: [
                 #"{"payload":{"type":"session_meta","id":"ledger-repair","timestamp":"2026-04-05T08:00:00Z"}}"#,
-                #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+                #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
                 #"{"timestamp":"2026-04-05T08:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
                 #"{"timestamp":"2026-04-05T09:10:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
             ]
@@ -518,7 +518,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "cross-day.jsonl",
             lines: [
                 #"{"payload":{"type":"session_meta","id":"cross-day","timestamp":"2026-04-04T23:50:00Z"}}"#,
-                #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+                #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
                 #"{"timestamp":"2026-04-04T23:55:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
                 #"{"timestamp":"2026-04-05T01:10:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
             ]
@@ -548,7 +548,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "cross-day.jsonl",
             id: "cross-day",
             timestamp: "2026-04-04T23:50:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             eventTimestamp: "2026-04-05T02:00:00Z"
         )
         try FileManager.default.removeItem(
@@ -572,7 +572,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "pricing.jsonl",
             lines: [
                 #"{"payload":{"type":"session_meta","id":"pricing","timestamp":"2026-04-05T08:00:00Z"}}"#,
-                #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+                #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
                 #"{"timestamp":"2026-04-05T08:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
             ]
         )
@@ -584,7 +584,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
         let repricedSummary = initialService.load(
             now: self.date("2026-04-05T12:00:00Z"),
             modelPricingOverrides: [
-                "gpt-5.4": CodexPanelModelPricing(
+                "gpt-5.5": CodexPanelModelPricing(
                     inputUSDPerToken: 1,
                     cachedInputUSDPerToken: 0.5,
                     outputUSDPerToken: 2
@@ -637,7 +637,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
         XCTAssertEqual(summary.dailyEntries[0].costUSD, expectedCost, accuracy: 1e-12)
     }
 
-    func testLoadAppliesGPT54LongContextPremiumForSessionsAbove272KInputTokens() throws {
+    func testLoadAppliesGPT55LongContextPremiumForSessionsAbove272KInputTokens() throws {
         let home = try self.makeCodexHome()
         let codexRoot = home.appendingPathComponent(".codex", isDirectory: true)
         let service = self.makeService(home: home)
@@ -649,10 +649,10 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
 
         try self.writeFastSession(
             directory: codexRoot.appendingPathComponent("sessions", isDirectory: true),
-            fileName: "gpt54-long-context.jsonl",
-            id: "gpt54-long-context",
+            fileName: "gpt55-long-context.jsonl",
+            id: "gpt55-long-context",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             inputTokens: usage.inputTokens,
             cachedInputTokens: usage.cachedInputTokens,
             outputTokens: usage.outputTokens
@@ -660,11 +660,11 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
 
         let summary = service.load(now: self.date("2026-04-05T12:00:00Z"))
         let expectedCost = LocalCostPricing.costUSD(
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             usage: usage,
             sessionUsage: usage
         )
-        let baselineCost = LocalCostPricing.costUSD(model: "gpt-5.4", usage: usage)
+        let baselineCost = LocalCostPricing.costUSD(model: "gpt-5.5", usage: usage)
 
         XCTAssertGreaterThan(expectedCost, baselineCost)
         XCTAssertEqual(summary.todayTokens, 321_000)
@@ -779,7 +779,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "alpha.jsonl",
             id: "alpha",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             inputTokens: 10,
             cachedInputTokens: 0,
             outputTokens: 5
@@ -799,7 +799,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "gamma.jsonl",
             id: "gamma",
             timestamp: "2026-04-03T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             inputTokens: 10,
             cachedInputTokens: 0,
             outputTokens: 5
@@ -809,7 +809,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
 
         XCTAssertEqual(
             service.historicalModels(),
-            ["google/gemini-2.5-pro", "gpt-5.4"]
+            ["google/gemini-2.5-pro", "gpt-5.5"]
         )
     }
 
@@ -823,7 +823,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             fileName: "alpha.jsonl",
             id: "alpha",
             timestamp: "2026-04-05T08:00:00Z",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             inputTokens: 10,
             cachedInputTokens: 0,
             outputTokens: 5
@@ -845,7 +845,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
 
         XCTAssertEqual(
             service.historicalModels(),
-            ["google/gemini-2.5-pro", "gpt-5.4"]
+            ["google/gemini-2.5-pro", "gpt-5.5"]
         )
     }
 
@@ -855,7 +855,7 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
         try self.writePersistedLedger(
             home: home,
             sessionID: "persisted-only",
-            model: "gpt-5.4",
+            model: "gpt-5.5",
             events: [
                 .init(
                     timestamp: self.date("2026-04-05T08:05:00Z"),

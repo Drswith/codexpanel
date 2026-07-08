@@ -3,6 +3,14 @@ import XCTest
 
 @MainActor
 final class TokenStoreSettingsTests: CodexPanelTestCase {
+    func testDefaultGlobalSettingsUseUpstreamDefaults() {
+        let config = CodexPanelConfig()
+
+        XCTAssertEqual(config.global.defaultModel, "gpt-5.5")
+        XCTAssertEqual(config.global.reviewModel, "gpt-5.5")
+        XCTAssertEqual(config.global.reasoningEffort, "medium")
+    }
+
     func testDebugDefaultEmptyProvidersInjectsMockDataEvenWhenCostCacheExists() {
         #if DEBUG
         let profile = CodexPanelRuntimeProfile.resolve(
@@ -92,7 +100,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         let sessionStart = Date().addingTimeInterval(-24 * 60 * 60)
         let content = [
             #"{"payload":{"type":"session_meta","id":"cost-rebuild","timestamp":"\#(self.iso8601String(sessionStart))"}}"#,
-            #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+            #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
             #"{"timestamp":"\#(self.iso8601String(sessionStart.addingTimeInterval(5 * 60)))","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
             #"{"timestamp":"\#(self.iso8601String(sessionStart.addingTimeInterval(70 * 60)))","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
         ].joined(separator: "\n") + "\n"
@@ -145,7 +153,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         let sessionURL = sessionDirectory.appendingPathComponent("historical-models.jsonl")
         let content = [
             #"{"payload":{"type":"session_meta","id":"historical-models","timestamp":"2026-04-05T08:00:00Z"}}"#,
-            #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+            #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
             #"{"timestamp":"2026-04-05T08:05:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
         ].joined(separator: "\n") + "\n"
         try content.write(to: sessionURL, atomically: true, encoding: .utf8)
@@ -168,11 +176,11 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertEqual(store.historicalModels, ["google/gemini-2.5-pro"])
 
         let timeout = Date().addingTimeInterval(3)
-        while Set(store.historicalModels) != Set(["google/gemini-2.5-pro", "gpt-5.4"]) && Date() < timeout {
+        while Set(store.historicalModels) != Set(["google/gemini-2.5-pro", "gpt-5.5"]) && Date() < timeout {
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         }
 
-        XCTAssertEqual(Set(store.historicalModels), Set(["google/gemini-2.5-pro", "gpt-5.4"]))
+        XCTAssertEqual(Set(store.historicalModels), Set(["google/gemini-2.5-pro", "gpt-5.5"]))
     }
 
     func testSaveModelPricingSettingsPersistsAcrossReload() throws {
@@ -185,7 +193,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         try store.saveModelPricingSettings(
             ModelPricingSettingsUpdate(
                 upserts: [
-                    "gpt-5.4": CodexPanelModelPricing(
+                    "gpt-5.5": CodexPanelModelPricing(
                         inputUSDPerToken: 9.9e-6,
                         cachedInputUSDPerToken: 9.9e-7,
                         outputUSDPerToken: 2.4e-5
@@ -196,7 +204,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         )
 
         XCTAssertEqual(
-            store.config.modelPricing["gpt-5.4"],
+            store.config.modelPricing["gpt-5.5"],
             CodexPanelModelPricing(
                 inputUSDPerToken: 9.9e-6,
                 cachedInputUSDPerToken: 9.9e-7,
@@ -206,7 +214,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
 
         let reloaded = try CodexPanelConfigStore().loadOrMigrate()
         XCTAssertEqual(
-            reloaded.modelPricing["gpt-5.4"],
+            reloaded.modelPricing["gpt-5.5"],
             CodexPanelModelPricing(
                 inputUSDPerToken: 9.9e-6,
                 cachedInputUSDPerToken: 9.9e-7,
@@ -225,7 +233,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         try store.saveModelPricingSettings(
             ModelPricingSettingsUpdate(
                 upserts: [
-                    "gpt-5.4": CodexPanelModelPricing(
+                    "gpt-5.5": CodexPanelModelPricing(
                         inputUSDPerToken: .infinity,
                         cachedInputUSDPerToken: -1,
                         outputUSDPerToken: 2.4e-5
@@ -236,13 +244,91 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         )
 
         XCTAssertEqual(
-            store.config.modelPricing["gpt-5.4"],
+            store.config.modelPricing["gpt-5.5"],
             CodexPanelModelPricing(
                 inputUSDPerToken: 0,
                 cachedInputUSDPerToken: 0,
                 outputUSDPerToken: 2.4e-5
             )
         )
+    }
+
+    func testSaveGlobalSettingsPersistsAndSyncsCodexConfig() throws {
+        try self.writeConfig(self.activeOpenAIConfig())
+        let store = self.makeTokenStore(
+            syncService: CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()),
+            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
+                result: .failure(URLError(.notConnectedToInternet))
+            )
+        )
+
+        try store.saveGlobalSettings(
+            GlobalSettingsUpdate(
+                defaultModel: "gpt-5.5-mini",
+                reviewModel: "gpt-5.5-mini",
+                reasoningEffort: "medium"
+            )
+        )
+
+        XCTAssertEqual(store.config.global.defaultModel, "gpt-5.5-mini")
+        XCTAssertEqual(store.config.global.reviewModel, "gpt-5.5-mini")
+        XCTAssertEqual(store.config.global.reasoningEffort, "medium")
+
+        let reloaded = try CodexPanelConfigStore().loadOrMigrate()
+        XCTAssertEqual(reloaded.global.defaultModel, "gpt-5.5-mini")
+        XCTAssertEqual(reloaded.global.reviewModel, "gpt-5.5-mini")
+        XCTAssertEqual(reloaded.global.reasoningEffort, "medium")
+
+        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.5-mini""#))
+        XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-mini""#))
+        XCTAssertTrue(tomlText.contains(#"model_reasoning_effort = "medium""#))
+    }
+
+    func testUpdateRouteModelUpdatesGlobalModelAndSyncsCodexConfig() throws {
+        try self.writeConfig(self.activeOpenAIConfig())
+        let store = self.makeTokenStore(
+            syncService: CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()),
+            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
+                result: .failure(URLError(.notConnectedToInternet))
+            )
+        )
+
+        try store.updateRouteModel("gpt-5.5-nano")
+
+        XCTAssertEqual(store.config.global.defaultModel, "gpt-5.5-nano")
+        XCTAssertEqual(store.config.global.reviewModel, "gpt-5.5-nano")
+
+        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.5-nano""#))
+        XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-nano""#))
+    }
+
+    func testUpdateReasoningEffortPreservesModelsAndSyncsCodexConfig() throws {
+        var config = self.activeOpenAIConfig()
+        config.global = CodexPanelGlobalSettings(
+            defaultModel: "gpt-5.5-mini",
+            reviewModel: "gpt-5.5-mini",
+            reasoningEffort: "medium"
+        )
+        try self.writeConfig(config)
+        let store = self.makeTokenStore(
+            syncService: CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()),
+            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
+                result: .failure(URLError(.notConnectedToInternet))
+            )
+        )
+
+        try store.updateReasoningEffort("high")
+
+        XCTAssertEqual(store.config.global.defaultModel, "gpt-5.5-mini")
+        XCTAssertEqual(store.config.global.reviewModel, "gpt-5.5-mini")
+        XCTAssertEqual(store.config.global.reasoningEffort, "high")
+
+        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.5-mini""#))
+        XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-mini""#))
+        XCTAssertTrue(tomlText.contains(#"model_reasoning_effort = "high""#))
     }
 
     func testInitializationRebuildsLocalCostSummaryWhenCachedSummaryIsZeroButLedgerExists() throws {
@@ -254,7 +340,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         let sessionStart = Date().addingTimeInterval(-24 * 60 * 60)
         let content = [
             #"{"payload":{"type":"session_meta","id":"cost-zero-cache","timestamp":"\#(self.iso8601String(sessionStart))"}}"#,
-            #"{"payload":{"type":"turn_context","model":"gpt-5.4"}}"#,
+            #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
             #"{"timestamp":"\#(self.iso8601String(sessionStart.addingTimeInterval(5 * 60)))","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20},"last_token_usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":20}}}}"#,
             #"{"timestamp":"\#(self.iso8601String(sessionStart.addingTimeInterval(70 * 60)))","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":170,"cached_input_tokens":30,"output_tokens":30},"last_token_usage":{"input_tokens":70,"cached_input_tokens":10,"output_tokens":10}}}}"#,
         ].joined(separator: "\n") + "\n"
@@ -563,12 +649,45 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         return formatter.string(from: date)
     }
 
+    private func activeOpenAIConfig() -> CodexPanelConfig {
+        let account = CodexPanelProviderAccount(
+            id: "acct_global_settings",
+            kind: .oauthTokens,
+            label: "global@example.com",
+            email: "global@example.com",
+            openAIAccountId: "acct_global_settings",
+            accessToken: "access-global",
+            refreshToken: "refresh-global",
+            idToken: "id-global"
+        )
+        let provider = CodexPanelProvider(
+            id: "openai-oauth",
+            kind: .openAIOAuth,
+            label: "OpenAI",
+            activeAccountId: account.id,
+            accounts: [account]
+        )
+        return CodexPanelConfig(
+            active: CodexPanelActiveSelection(providerId: provider.id, accountId: account.id),
+            providers: [provider]
+        )
+    }
+
+    private func releaseNetworkConfiguration() -> CodexPanelRuntimeNetworkConfiguration {
+        CodexPanelRuntimeProfile.resolve(
+            channel: .release,
+            environment: [:],
+            defaultHome: URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        ).network
+    }
+
     private func makeTokenStore(
+        syncService: any CodexSynchronizing = CodexSyncServiceNoOp(),
         costSummaryService: LocalCostSummaryService = LocalCostSummaryService(),
         openRouterCatalogService: any OpenRouterModelCatalogFetching
     ) -> TokenStore {
         TokenStore(
-            syncService: CodexSyncServiceNoOp(),
+            syncService: syncService,
             costSummaryService: costSummaryService,
             openAIAccountGatewayService: OpenAIAccountGatewayControllerStub(),
             openRouterGatewayService: OpenRouterGatewayControllerStub(),
