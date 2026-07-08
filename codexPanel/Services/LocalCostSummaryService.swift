@@ -1,7 +1,8 @@
 import Foundation
 
 enum LocalCostPricing {
-    private static let gpt55LongContextInputThreshold = 272_000
+    private static let longContextInputThreshold = 272_000
+    private static let longContextPremiumBaseModels = ["gpt-5.4", "gpt-5.5"]
 
     private static let defaultPricingByModel: [String: CodexPanelModelPricing] = [
         "gpt-5": CodexPanelModelPricing(inputUSDPerToken: 1.25e-6, cachedInputUSDPerToken: 1.25e-7, outputUSDPerToken: 1e-5),
@@ -15,9 +16,10 @@ enum LocalCostPricing {
         "gpt-5.2": CodexPanelModelPricing(inputUSDPerToken: 1.75e-6, cachedInputUSDPerToken: 1.75e-7, outputUSDPerToken: 1.4e-5),
         "gpt-5.2-codex": CodexPanelModelPricing(inputUSDPerToken: 1.75e-6, cachedInputUSDPerToken: 1.75e-7, outputUSDPerToken: 1.4e-5),
         "gpt-5.3-codex": CodexPanelModelPricing(inputUSDPerToken: 1.75e-6, cachedInputUSDPerToken: 1.75e-7, outputUSDPerToken: 1.4e-5),
-        "gpt-5.5": CodexPanelModelPricing(inputUSDPerToken: 2.5e-6, cachedInputUSDPerToken: 2.5e-7, outputUSDPerToken: 1.5e-5),
-        "gpt-5.5-mini": CodexPanelModelPricing(inputUSDPerToken: 7.5e-7, cachedInputUSDPerToken: 7.5e-8, outputUSDPerToken: 4.5e-6),
-        "gpt-5.5-nano": CodexPanelModelPricing(inputUSDPerToken: 2e-7, cachedInputUSDPerToken: 2e-8, outputUSDPerToken: 1.25e-6),
+        "gpt-5.4": CodexPanelModelPricing(inputUSDPerToken: 2.5e-6, cachedInputUSDPerToken: 2.5e-7, outputUSDPerToken: 1.5e-5),
+        "gpt-5.4-mini": CodexPanelModelPricing(inputUSDPerToken: 7.5e-7, cachedInputUSDPerToken: 7.5e-8, outputUSDPerToken: 4.5e-6),
+        "gpt-5.4-nano": CodexPanelModelPricing(inputUSDPerToken: 2e-7, cachedInputUSDPerToken: 2e-8, outputUSDPerToken: 1.25e-6),
+        "gpt-5.5": CodexPanelModelPricing(inputUSDPerToken: 5e-6, cachedInputUSDPerToken: 5e-7, outputUSDPerToken: 3e-5),
         "qwen35_4b": .zero,
     ]
 
@@ -53,7 +55,7 @@ enum LocalCostPricing {
         let pricing = self.effectivePricing(for: normalizedModel, customPricingByModel: customPricingByModel)
         let cached = min(max(0, usage.cachedInputTokens), max(0, usage.inputTokens))
         let nonCached = max(0, usage.inputTokens - cached)
-        let longContextRateMultiplier = self.usesGPT55LongContextPremium(
+        let longContextRateMultiplier = self.usesLongContextPremium(
             model: normalizedModel,
             sessionUsage: sessionUsage
         )
@@ -79,16 +81,23 @@ enum LocalCostPricing {
         return trimmed
     }
 
-    private static func usesGPT55LongContextPremium(
+    private static func usesLongContextPremium(
         model: String,
         sessionUsage: SessionLogStore.Usage?
     ) -> Bool {
         guard let sessionUsage,
-              sessionUsage.inputTokens > self.gpt55LongContextInputThreshold else {
+              sessionUsage.inputTokens > self.longContextInputThreshold else {
             return false
         }
 
-        return model == "gpt-5.5" || self.modelID(model, isVariantOf: "gpt-5.5")
+        guard model.hasSuffix("-mini") == false,
+              model.hasSuffix("-nano") == false else {
+            return false
+        }
+
+        return self.longContextPremiumBaseModels.contains { base in
+            model == base || self.modelID(model, isVariantOf: base)
+        }
     }
 
     private static func modelID(_ model: String, isVariantOf baseModel: String) -> Bool {

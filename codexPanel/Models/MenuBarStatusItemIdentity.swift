@@ -10,10 +10,6 @@ enum MenuBarStatusItemIdentity {
         .removalAllowed,
     ]
     static let legacyStatusItemAutosaveNames: [NSStatusItem.AutosaveName] = []
-    static let legacyVisibilityPreferenceKeys = [
-        "menuBarExtra.isInserted",
-        "codexpanel.menu-bar-extra.is-inserted",
-    ]
 
     static var namedVisibleKeys: [String] {
         self.namedVisibleKeys(for: [self.statusItemAutosaveName])
@@ -36,11 +32,6 @@ enum MenuBarStatusItemIdentity {
         ) {
             return legacyNamedVisibility
         }
-        for key in self.legacyVisibilityPreferenceKeys {
-            if let value = self.boolValue(domain[key]) {
-                return value
-            }
-        }
         return true
     }
 
@@ -50,10 +41,7 @@ enum MenuBarStatusItemIdentity {
             autosaveNames: [self.statusItemAutosaveName]
         ) != nil
         let hasLegacyVisibilitySource =
-            self.namedVisibility(domain: domain, autosaveNames: self.legacyStatusItemAutosaveNames) != nil ||
-            self.legacyVisibilityPreferenceKeys.contains {
-                self.boolValue(domain[$0]) != nil
-            }
+            self.namedVisibility(domain: domain, autosaveNames: self.legacyStatusItemAutosaveNames) != nil
         return hasCurrentNamedVisibility == false && hasLegacyVisibilitySource
     }
 

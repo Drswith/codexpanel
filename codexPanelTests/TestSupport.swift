@@ -87,6 +87,8 @@ class CodexPanelTestCase: XCTestCase {
         planType: String = "plus",
         localAccountID: String? = nil,
         remoteAccountID: String? = nil,
+        userID: String? = nil,
+        includeAccountUserID: Bool = true,
         accessTokenExpiresAt: Date = Date(timeIntervalSinceNow: 3_600),
         subscriptionActiveUntil: String = "2026-12-31T00:00:00Z",
         oauthClientID: String? = nil,
@@ -95,22 +97,27 @@ class CodexPanelTestCase: XCTestCase {
         let resolvedLocalAccountID = localAccountID ?? accountID
         let resolvedRemoteAccountID = remoteAccountID ?? accountID
         let resolvedUserID: String
-        if let userComponent = resolvedLocalAccountID.split(separator: "__").first, userComponent.hasPrefix("user-") {
+        if let userID {
+            resolvedUserID = userID
+        } else if let userComponent = resolvedLocalAccountID.split(separator: "__").first, userComponent.hasPrefix("user-") {
             resolvedUserID = String(userComponent)
         } else {
             resolvedUserID = "user-\(resolvedLocalAccountID)"
+        }
+        var authClaims: [String: Any] = [
+            "chatgpt_account_id": resolvedRemoteAccountID,
+            "chatgpt_user_id": resolvedUserID,
+            "user_id": resolvedUserID,
+            "chatgpt_plan_type": planType,
+        ]
+        if includeAccountUserID {
+            authClaims["chatgpt_account_user_id"] = resolvedLocalAccountID
         }
         let accessToken = try self.makeJWT(
             payload: [
                 "exp": accessTokenExpiresAt.timeIntervalSince1970,
                 "client_id": oauthClientID as Any,
-                "https://api.openai.com/auth": [
-                    "chatgpt_account_id": resolvedRemoteAccountID,
-                    "chatgpt_account_user_id": resolvedLocalAccountID,
-                    "chatgpt_user_id": resolvedUserID,
-                    "user_id": resolvedUserID,
-                    "chatgpt_plan_type": planType,
-                ],
+                "https://api.openai.com/auth": authClaims,
             ]
         )
         let idToken = try self.makeJWT(
