@@ -5,7 +5,7 @@ import XCTest
 final class SettingsRecordsViewModelTests: XCTestCase {
     func testPageDidAppearLoadsCurrentSnapshotWithoutForcingFullRefresh() async throws {
         let service = RecordsSnapshotServiceStub()
-        await service.enqueueLoadCurrent(self.makeSnapshot(sessionID: "load-current", modelID: "gpt-5.4"))
+        await service.enqueueLoadCurrent(self.makeSnapshot(sessionID: "load-current", modelID: "gpt-5.5"))
         let viewModel = SettingsRecordsViewModel(service: service)
 
         viewModel.pageDidAppear()
@@ -23,7 +23,7 @@ final class SettingsRecordsViewModelTests: XCTestCase {
 
     func testPageDidAppearShowsCachedSnapshotThenReplacesWithLatestSnapshot() async throws {
         let service = RecordsSnapshotServiceStub()
-        await service.enqueueCached(self.makeSnapshot(sessionID: "cached", modelID: "gpt-5.4"))
+        await service.enqueueCached(self.makeSnapshot(sessionID: "cached", modelID: "gpt-5.5"))
         let viewModel = SettingsRecordsViewModel(service: service)
 
         viewModel.pageDidAppear()
@@ -33,7 +33,7 @@ final class SettingsRecordsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.statusText, L.settingsRecordsRefreshingIncremental)
 
         await service.resumeLoadCurrent(
-            with: .success(self.makeSnapshot(sessionID: "latest", modelID: "gpt-5.4-mini"))
+            with: .success(self.makeSnapshot(sessionID: "latest", modelID: "gpt-5.5-mini"))
         )
         try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "latest" }
         XCTAssertFalse(viewModel.isLoadingSnapshot)
@@ -56,12 +56,12 @@ final class SettingsRecordsViewModelTests: XCTestCase {
         }
 
         await service.resumeRefreshAll(
-            with: .success(self.makeSnapshot(sessionID: "refresh", modelID: "gpt-5.4"))
+            with: .success(self.makeSnapshot(sessionID: "refresh", modelID: "gpt-5.5"))
         )
         try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "refresh" }
 
         await service.resumeLoadCurrent(
-            with: .success(self.makeSnapshot(sessionID: "stale-load", modelID: "gpt-5.4-mini"))
+            with: .success(self.makeSnapshot(sessionID: "stale-load", modelID: "gpt-5.5-mini"))
         )
         try await Task.sleep(nanoseconds: 50_000_000)
 
@@ -79,13 +79,13 @@ final class SettingsRecordsViewModelTests: XCTestCase {
                 generatedAt: self.date("2026-04-21T10:00:00Z"),
                 refreshMode: .incremental,
                 models: [
-                    HistoricalModelRecord(modelID: "gpt-5.4", sessionCount: 1, lastSeenAt: self.date("2026-04-21T10:00:00Z")),
+                    HistoricalModelRecord(modelID: "gpt-5.5", sessionCount: 1, lastSeenAt: self.date("2026-04-21T10:00:00Z")),
                     HistoricalModelRecord(modelID: "google/gemini-2.5-pro", sessionCount: 1, lastSeenAt: self.date("2026-04-21T09:00:00Z")),
                 ],
                 sessions: [
                     HistoricalSessionRecord(
                         sessionID: "session-alpha",
-                        modelID: "gpt-5.4",
+                        modelID: "gpt-5.5",
                         startedAt: self.date("2026-04-21T08:00:00Z"),
                         lastActivityAt: self.date("2026-04-21T10:00:00Z"),
                         isArchived: false,
@@ -111,14 +111,14 @@ final class SettingsRecordsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.filteredSessions.map(\.sessionID), ["session-beta"])
         XCTAssertEqual(viewModel.filteredModels.map(\.modelID), ["google/gemini-2.5-pro"])
 
-        viewModel.searchText = "gpt-5.4"
+        viewModel.searchText = "gpt-5.5"
         XCTAssertEqual(viewModel.filteredSessions.map(\.sessionID), ["session-alpha"])
-        XCTAssertEqual(viewModel.filteredModels.map(\.modelID), ["gpt-5.4"])
+        XCTAssertEqual(viewModel.filteredModels.map(\.modelID), ["gpt-5.5"])
     }
 
     func testRefreshButtonStaysDisabledWhileRefreshIsInFlight() async throws {
         let service = RecordsSnapshotServiceStub()
-        await service.enqueueLoadCurrent(self.makeSnapshot(sessionID: "initial", modelID: "gpt-5.4"))
+        await service.enqueueLoadCurrent(self.makeSnapshot(sessionID: "initial", modelID: "gpt-5.5"))
         let viewModel = SettingsRecordsViewModel(service: service)
 
         viewModel.loadCurrent()
@@ -136,7 +136,7 @@ final class SettingsRecordsViewModelTests: XCTestCase {
         XCTAssertEqual(refreshCallCount, 1)
 
         await service.resumeRefreshAll(
-            with: .success(self.makeSnapshot(sessionID: "refreshed", modelID: "gpt-5.4"))
+            with: .success(self.makeSnapshot(sessionID: "refreshed", modelID: "gpt-5.5"))
         )
         try await self.waitUntil(timeout: 1) { viewModel.isRefreshingAll == false }
         XCTAssertEqual(viewModel.snapshot?.sessions.map(\.sessionID), ["refreshed"])
@@ -156,7 +156,7 @@ final class SettingsRecordsViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.shouldShowSkeleton)
 
         await service.resumeLoadCurrent(
-            with: .success(self.makeSnapshot(sessionID: "loaded", modelID: "gpt-5.4"))
+            with: .success(self.makeSnapshot(sessionID: "loaded", modelID: "gpt-5.5"))
         )
         try await self.waitUntil(timeout: 1) { viewModel.isLoadingSnapshot == false }
         XCTAssertFalse(viewModel.isSlowLoadingSnapshot)
@@ -164,7 +164,7 @@ final class SettingsRecordsViewModelTests: XCTestCase {
 
     func testLatestRequestStillWinsWhenPageLoadIsReplacedByManualRefreshAll() async throws {
         let service = RecordsSnapshotServiceStub()
-        await service.enqueueCached(self.makeSnapshot(sessionID: "cached", modelID: "gpt-5.4"))
+        await service.enqueueCached(self.makeSnapshot(sessionID: "cached", modelID: "gpt-5.5"))
         let viewModel = SettingsRecordsViewModel(service: service)
 
         viewModel.pageDidAppear()
@@ -177,12 +177,12 @@ final class SettingsRecordsViewModelTests: XCTestCase {
         }
 
         await service.resumeRefreshAll(
-            with: .success(self.makeSnapshot(sessionID: "refresh-all", modelID: "gpt-5.4"))
+            with: .success(self.makeSnapshot(sessionID: "refresh-all", modelID: "gpt-5.5"))
         )
         try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "refresh-all" }
 
         await service.resumeLoadCurrent(
-            with: .success(self.makeSnapshot(sessionID: "stale-page-load", modelID: "gpt-5.4-mini"))
+            with: .success(self.makeSnapshot(sessionID: "stale-page-load", modelID: "gpt-5.5-mini"))
         )
         try await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertEqual(viewModel.snapshot?.sessions.first?.sessionID, "refresh-all")
@@ -200,7 +200,7 @@ final class SettingsRecordsViewModelTests: XCTestCase {
         }
 
         await service.resumeLoadCurrent(
-            with: .success(self.makeSnapshot(sessionID: "no-cache-latest", modelID: "gpt-5.4"))
+            with: .success(self.makeSnapshot(sessionID: "no-cache-latest", modelID: "gpt-5.5"))
         )
         try await self.waitUntil(timeout: 1) { viewModel.snapshot?.sessions.first?.sessionID == "no-cache-latest" }
         XCTAssertFalse(viewModel.isLoadingSnapshot)
@@ -209,7 +209,7 @@ final class SettingsRecordsViewModelTests: XCTestCase {
 
     func testTimedOutRefreshKeepsOldSnapshotAndDropsLateResult() async throws {
         let service = RecordsSnapshotServiceStub()
-        await service.enqueueLoadCurrent(self.makeSnapshot(sessionID: "initial", modelID: "gpt-5.4"))
+        await service.enqueueLoadCurrent(self.makeSnapshot(sessionID: "initial", modelID: "gpt-5.5"))
         let viewModel = SettingsRecordsViewModel(service: service)
 
         viewModel.loadCurrent()
