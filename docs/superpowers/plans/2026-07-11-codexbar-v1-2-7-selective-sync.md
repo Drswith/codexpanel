@@ -118,13 +118,18 @@ git commit -m "feat(网关): 支持按账号代理路由"
 
 **Files:**
 - Modify: codexPanel/Models/CodexPanelConfig.swift:231-360
+- Modify: codexPanel/Services/TokenStore.swift:5-10
+- Modify: codexPanel/Services/SettingsSaveRequestApplier.swift:15-28
+- Modify: codexPanel/Views/Settings/SettingsWindowCoordinator.swift:17-55, 145-180, 340-430
 - Modify: codexPanel/Views/Settings/SettingsWindowView.swift:281-320, 650-720
 - Modify: codexPanel/Localization.swift:410-440
 - Test: codexPanelTests/TokenStoreSettingsTests.swift
+- Test: codexPanelTests/SettingsWindowCoordinatorTests.swift
 
 **Interfaces:**
 - Consumes: Task 1 的 OpenAIAccountGatewayConfiguredProxy(address:)。
 - Produces: CodexPanelOpenAISettings.aggregateGatewayProxyURL: String? 和 normalizedAggregateGatewayProxyURL(_:)。
+- Produces: OpenAIAccountSettingsUpdate.aggregateGatewayProxyURL，并通过 SettingsWindowDraft 和 SettingsSaveRequestApplier 完整持久化该值。
 
 - [ ] **Step 1: 写失败的配置兼容与归一化测试**
 
@@ -162,7 +167,7 @@ static func normalizedAggregateGatewayProxyURL(_ value: String?) -> String? {
 }
 ~~~
 
-Add the coding key, initializer value, decoder fallback, an Accounts-page TextField, and localized title, hint, and input example that explicitly state HTTP(S)/SOCKS without authentication.
+Add the coding key, initializer value, decoder fallback, an Accounts-page TextField, and localized title, hint, and input example that explicitly state HTTP(S)/SOCKS without authentication. Add aggregateGatewayProxyURL to OpenAIAccountSettingsUpdate with a nil default, SettingsWindowDraft, SettingsDirtyField and reconcile/makeSaveRequests. The applier must assign the normalized value to config.openAI so save triggers the existing persist -> publishState path.
 
 - [ ] **Step 4: 运行测试，确认通过**
 
@@ -173,7 +178,7 @@ Expected: TokenStoreSettingsTests passes.
 - [ ] **Step 5: 提交配置改动**
 
 ~~~bash
-git add codexPanel/Models/CodexPanelConfig.swift codexPanel/Views/Settings/SettingsWindowView.swift codexPanel/Localization.swift codexPanelTests/TokenStoreSettingsTests.swift
+git add codexPanel/Models/CodexPanelConfig.swift codexPanel/Services/TokenStore.swift codexPanel/Services/SettingsSaveRequestApplier.swift codexPanel/Views/Settings/SettingsWindowCoordinator.swift codexPanel/Views/Settings/SettingsWindowView.swift codexPanel/Localization.swift codexPanelTests/TokenStoreSettingsTests.swift codexPanelTests/SettingsWindowCoordinatorTests.swift
 git commit -m "feat(网关): 增加聚合代理配置"
 ~~~
 
