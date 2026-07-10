@@ -22,6 +22,17 @@ final class OpenAIAccountGatewayServiceTests: CodexPanelTestCase {
         XCTAssertNil(OpenAIAccountGatewayConfiguredProxy(address: "http://127.0.0.1:0"))
     }
 
+    func testConfiguredProxyRejectsNonEndpointURLComponents() {
+        [
+            "http://proxy.example:7890/path",
+            "http://proxy.example:7890?mode=direct",
+            "http://proxy.example:7890#fragment",
+            "http://user@proxy.example:7890",
+        ].forEach { address in
+            XCTAssertNil(OpenAIAccountGatewayConfiguredProxy(address: address), address)
+        }
+    }
+
     func testProfilesByKeyAcceptsAnonymousImportedHTTPAndSOCKSProfiles() {
         let profiles = profilesByKey(
             fromInteropProxiesJSON: """
@@ -47,6 +58,51 @@ final class OpenAIAccountGatewayServiceTests: CodexPanelTestCase {
         )
 
         XCTAssertTrue(profiles.isEmpty)
+    }
+
+    func testProfilesByKeyRejectsImportedHostWithUserinfoOrURLSyntax() {
+        let profiles = profilesByKey(
+            fromInteropProxiesJSON: """
+            [
+              {"proxy_key":"http|userinfo.example|7890||","protocol":"http","host":"user:secret@proxy.example","port":7890},
+              {"proxy_key":"http|path.example|7891||","protocol":"http","host":"proxy.example/path","port":7891},
+              {"proxy_key":"http|query.example|7892||","protocol":"http","host":"proxy.example?mode=direct","port":7892},
+              {"proxy_key":"http|fragment.example|7893||","protocol":"http","host":"proxy.example#fragment","port":7893}
+            ]
+            """
+        )
+
+        XCTAssertTrue(profiles.isEmpty)
+    }
+
+    func testProfilesByKeyIgnoresDisabledImportedProfiles() {
+        let profiles = profilesByKey(
+            fromInteropProxiesJSON: """
+            [
+              {"proxy_key":"http|disabled.example|7890||","protocol":"http","host":"disabled.example","port":7890,"status":"disabled"},
+              {"proxy_key":"http|inactive.example|7891||","protocol":"http","host":"inactive.example","port":7891,"status":"inactive"},
+              {"proxy_key":"http|off.example|7892||","protocol":"http","host":"off.example","port":7892,"status":"off"}
+            ]
+            """
+        )
+
+        XCTAssertTrue(profiles.isEmpty)
+    }
+
+    func testProfilesByKeyKeepsValidDomainAndIPv6Hosts() {
+        let profiles = profilesByKey(
+            fromInteropProxiesJSON: """
+            [
+              {"proxy_key":"https|proxy.example|8443||","protocol":"https","host":"proxy.example","port":8443,"status":"active"},
+              {"proxy_key":"socks5|2001:db8::7|7891||","protocol":"socks5","host":"2001:db8::7","port":7891},
+              {"proxy_key":"socks5|[2001:db8::8]|7892||","protocol":"socks5","host":"[2001:db8::8]","port":7892,"status":"enabled"}
+            ]
+            """
+        )
+
+        XCTAssertEqual(profiles["https|proxy.example|8443||"]?.address, "https://proxy.example:8443")
+        XCTAssertEqual(profiles["socks5|2001:db8::7|7891||"]?.address, "socks5://[2001:db8::7]:7891")
+        XCTAssertEqual(profiles["socks5|[2001:db8::8]|7892||"]?.address, "socks5://[2001:db8::8]:7892")
     }
 
     func testDefaultProxyIsUsedWhenAccountDoesNotHaveAnExplicitProxy() {

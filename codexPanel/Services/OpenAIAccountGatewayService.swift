@@ -255,6 +255,9 @@ nonisolated struct OpenAIAccountGatewayConfiguredProxy: Hashable {
               let scheme = Self.normalizedScheme(components.scheme),
               components.user == nil,
               components.password == nil,
+              components.path.isEmpty,
+              components.query == nil,
+              components.fragment == nil,
               let host = components.host,
               let port = components.port else {
             return nil
@@ -265,7 +268,8 @@ nonisolated struct OpenAIAccountGatewayConfiguredProxy: Hashable {
 
     init?(interopObject object: [String: Any]) {
         let proxyKey = Self.trimmedString(object["proxy_key"])
-        guard Self.hasNoCredentials(in: object, proxyKey: proxyKey),
+        guard Self.isDisabledInteropProfile(object) == false,
+              Self.hasNoCredentials(in: object, proxyKey: proxyKey),
               let scheme = Self.normalizedScheme(
                 Self.trimmedString(object["protocol"])
                     ?? Self.trimmedString(object["scheme"])
@@ -321,10 +325,7 @@ nonisolated struct OpenAIAccountGatewayConfiguredProxy: Hashable {
     }
 
     private init?(scheme: String, host: String, port: Int) {
-        let normalizedHost = host
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
-        guard normalizedHost.isEmpty == false,
+        guard let normalizedHost = Self.normalizedHost(host),
               (1...65_535).contains(port),
               let kind = Self.kind(for: scheme) else {
             return nil
@@ -357,6 +358,17 @@ nonisolated struct OpenAIAccountGatewayConfiguredProxy: Hashable {
 
     private static func addressHost(_ host: String) -> String {
         host.contains(":") ? "[\(host)]" : host
+    }
+
+    private static func normalizedHost(_ value: String) -> String? {
+        let host = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        guard host.isEmpty == false,
+              host.rangeOfCharacter(from: CharacterSet(charactersIn: "/?#@")) == nil else {
+            return nil
+        }
+        return host
     }
 
     private static func trimmedString(_ value: Any?) -> String? {
@@ -392,6 +404,13 @@ nonisolated struct OpenAIAccountGatewayConfiguredProxy: Hashable {
         guard let proxyKey else { return true }
         return Self.proxyKeyPart(proxyKey, index: 3) == nil &&
             Self.proxyKeyPart(proxyKey, index: 4) == nil
+    }
+
+    private static func isDisabledInteropProfile(_ object: [String: Any]) -> Bool {
+        guard let status = Self.trimmedString(object["status"])?.lowercased() else {
+            return false
+        }
+        return ["disabled", "inactive", "off"].contains(status)
     }
 }
 
