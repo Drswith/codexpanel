@@ -2,12 +2,46 @@ import AppKit
 import Combine
 import Foundation
 
+enum OpenAIAccountSettingsAggregateGatewayProxyURLUpdate: Equatable {
+    case unchanged
+    case set(String?)
+}
+
 struct OpenAIAccountSettingsUpdate: Equatable {
     var accountOrder: [String]
     var accountUsageMode: CodexPanelOpenAIAccountUsageMode
     var accountOrderingMode: CodexPanelOpenAIAccountOrderingMode
     var manualActivationBehavior: CodexPanelOpenAIManualActivationBehavior
-    var aggregateGatewayProxyURL: String? = nil
+    var aggregateGatewayProxyURLUpdate: OpenAIAccountSettingsAggregateGatewayProxyURLUpdate
+
+    init(
+        accountOrder: [String],
+        accountUsageMode: CodexPanelOpenAIAccountUsageMode,
+        accountOrderingMode: CodexPanelOpenAIAccountOrderingMode,
+        manualActivationBehavior: CodexPanelOpenAIManualActivationBehavior
+    ) {
+        self.accountOrder = accountOrder
+        self.accountUsageMode = accountUsageMode
+        self.accountOrderingMode = accountOrderingMode
+        self.manualActivationBehavior = manualActivationBehavior
+        self.aggregateGatewayProxyURLUpdate = .unchanged
+    }
+
+    init(
+        accountOrder: [String],
+        accountUsageMode: CodexPanelOpenAIAccountUsageMode,
+        accountOrderingMode: CodexPanelOpenAIAccountOrderingMode,
+        manualActivationBehavior: CodexPanelOpenAIManualActivationBehavior,
+        aggregateGatewayProxyURL: String?
+    ) {
+        self.init(
+            accountOrder: accountOrder,
+            accountUsageMode: accountUsageMode,
+            accountOrderingMode: accountOrderingMode,
+            manualActivationBehavior: manualActivationBehavior
+        )
+        self.aggregateGatewayProxyURLUpdate = .set(aggregateGatewayProxyURL)
+    }
 }
 
 struct OpenAIUsageSettingsUpdate: Equatable {

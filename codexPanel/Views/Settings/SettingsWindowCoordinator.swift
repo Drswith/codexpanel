@@ -386,13 +386,22 @@ final class SettingsWindowCoordinator: ObservableObject {
             self.draft.accountOrderingMode != self.baseline.accountOrderingMode ||
             self.draft.manualActivationBehavior != self.baseline.manualActivationBehavior ||
             self.draft.aggregateGatewayProxyURL != self.baseline.aggregateGatewayProxyURL {
-            requests.openAIAccount = OpenAIAccountSettingsUpdate(
-                accountOrder: self.draft.accountOrder,
-                accountUsageMode: self.draft.accountUsageMode,
-                accountOrderingMode: self.draft.accountOrderingMode,
-                manualActivationBehavior: .updateConfigOnly,
-                aggregateGatewayProxyURL: self.draft.aggregateGatewayProxyURL
-            )
+            if self.draft.aggregateGatewayProxyURL != self.baseline.aggregateGatewayProxyURL {
+                requests.openAIAccount = OpenAIAccountSettingsUpdate(
+                    accountOrder: self.draft.accountOrder,
+                    accountUsageMode: self.draft.accountUsageMode,
+                    accountOrderingMode: self.draft.accountOrderingMode,
+                    manualActivationBehavior: self.draft.manualActivationBehavior,
+                    aggregateGatewayProxyURL: self.draft.aggregateGatewayProxyURL
+                )
+            } else {
+                requests.openAIAccount = OpenAIAccountSettingsUpdate(
+                    accountOrder: self.draft.accountOrder,
+                    accountUsageMode: self.draft.accountUsageMode,
+                    accountOrderingMode: self.draft.accountOrderingMode,
+                    manualActivationBehavior: self.draft.manualActivationBehavior
+                )
+            }
         }
 
         if self.draft.usageDisplayMode != self.baseline.usageDisplayMode ||
