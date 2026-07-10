@@ -511,7 +511,10 @@ struct MenuBarView: View {
     private let openAIAccountCSVPanelService = OpenAIAccountCSVPanelService()
     private let codexAppPathPanelService = CodexAppPathPanelService.shared
     private let codexDesktopLaunchProbeService = CodexDesktopLaunchProbeService()
-    private let codexModelOptions = [
+    static let codexModelOptions: [String] = [
+        "gpt-5.6",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
         "gpt-5.5",
         "gpt-5.4",
         "gpt-5.4-mini",
@@ -921,11 +924,13 @@ struct MenuBarView: View {
     }
 
     private func modelSelectionRow(currentModel: String) -> some View {
-        HStack(alignment: .center, spacing: 8) {
+        let displayedCurrentModel = self.modelSelectionDisplayValue(currentModel: currentModel)
+
+        return HStack(alignment: .center, spacing: 8) {
             self.compactSelectionMenu(
-                title: currentModel,
+                title: displayedCurrentModel,
                 options: self.modelSelectionOptions(currentModel: currentModel),
-                currentValue: currentModel
+                currentValue: displayedCurrentModel
             ) { modelID in
                 Task { await self.updateSelectedRouteModel(modelID) }
             }
@@ -993,14 +998,34 @@ struct MenuBarView: View {
     }
 
     private func modelSelectionOptions(currentModel: String) -> [String] {
-        var candidates = [currentModel]
         if let openRouterProvider = self.modelSelectionOpenRouterProvider {
+            var candidates = [currentModel]
             candidates.append(contentsOf: openRouterProvider.pinnedModelIDs)
             candidates.append(contentsOf: openRouterProvider.cachedModelCatalog.prefix(10).map(\.id))
-        } else {
-            candidates.append(contentsOf: self.codexModelOptions)
+            return Self.uniqueTrimmedModelOptions(candidates)
         }
 
+        return Self.codexModelSelectionOptions(currentModel: currentModel)
+    }
+
+    private func modelSelectionDisplayValue(currentModel: String) -> String {
+        guard self.modelSelectionOpenRouterProvider == nil else {
+            return currentModel
+        }
+        return Self.normalizedCodexModelID(currentModel)
+    }
+
+    static func codexModelSelectionOptions(currentModel: String) -> [String] {
+        Self.uniqueTrimmedModelOptions([
+            Self.normalizedCodexModelID(currentModel),
+        ] + Self.codexModelOptions)
+    }
+
+    private static func normalizedCodexModelID(_ modelID: String) -> String {
+        modelID == "gpt-5.6-sol" ? "gpt-5.6" : modelID
+    }
+
+    private static func uniqueTrimmedModelOptions(_ candidates: [String]) -> [String] {
         var seen: Set<String> = []
         return candidates.compactMap { modelID in
             let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)

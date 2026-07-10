@@ -80,6 +80,27 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
         )
     }
 
+    func testGPT56FamilyDefaultPricingMatchesPerMillionRates() {
+        let usage = SessionLogStore.Usage(inputTokens: 1_000_000, cachedInputTokens: 0, outputTokens: 0)
+        for (model, expectedCost) in [
+            ("gpt-5.6", 5.0),
+            ("gpt-5.6-sol", 5.0),
+            ("gpt-5.6-terra", 2.5),
+            ("gpt-5.6-luna", 1.0),
+        ] {
+            XCTAssertEqual(LocalCostPricing.costUSD(model: model, usage: usage), expectedCost, accuracy: 1e-12)
+        }
+    }
+
+    func testGPT56FamilyUsesLongContextPremium() {
+        let usage = SessionLogStore.Usage(inputTokens: 300_000, cachedInputTokens: 20_000, outputTokens: 1_000)
+        for model in ["gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"] {
+            let baseline = LocalCostPricing.costUSD(model: model, usage: usage)
+            let premium = LocalCostPricing.costUSD(model: model, usage: usage, sessionUsage: usage)
+            XCTAssertGreaterThan(premium, baseline, "\(model) 应使用长上下文溢价")
+        }
+    }
+
     func testGPT54LongContextUsesPremiumButMiniDoesNot() {
         let usage = SessionLogStore.Usage(
             inputTokens: 300_000,
