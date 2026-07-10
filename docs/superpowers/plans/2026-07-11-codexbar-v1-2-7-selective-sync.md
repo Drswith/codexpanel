@@ -22,7 +22,12 @@
 
 **Files:**
 - Modify: codexPanel/Services/OpenAIAccountGatewayService.swift:12-25, 286-350, 410-655, 1060-1450
+- Modify: codexPanel/Services/TokenStore.swift:952-960
 - Test: codexPanelTests/OpenAIAccountGatewayServiceTests.swift
+- Modify: codexPanelTests/TokenStoreGatewayLifecycleTests.swift:698-735
+- Modify: codexPanelTests/TokenStoreSettingsTests.swift:749-765
+- Modify: codexPanelTests/WhamServiceTests.swift:195-215
+- Modify: codexPanelTests/OpenAIOAuthRefreshServiceTests.swift:95-115
 
 **Interfaces:**
 - Produces: OpenAIAccountGatewayConfiguredProxy、profilesByKey(fromInteropProxiesJSON:)、updateState(... defaultProxy:proxyByAccountID:)。
@@ -94,7 +99,7 @@ private func configuredProxy(forAccountID accountID: String) -> OpenAIAccountGat
 }
 ~~~
 
-Implement a Hashable proxy value that parses URL or imported profile records, rejects credentials and invalid ports, and produces connectionProxyDictionary. Extend the snapshot and state update, cache sessions by proxy, prune sessions no longer referenced by state, and route both bytes(for:) and webSocketTask(with:) through upstreamSession(for:). Keep the existing system-policy urlSession as fallback.
+Implement a Hashable proxy value that parses URL or imported profile records, rejects credentials and invalid ports, and produces connectionProxyDictionary. Extend the snapshot and state update, cache sessions by proxy, prune sessions no longer referenced by state, and route both bytes(for:) and webSocketTask(with:) through upstreamSession(for:). Keep the existing system-policy urlSession as fallback. Update TokenStore's protocol call with nil defaultProxy and an empty proxyByAccountID until Task 3 supplies the configured values. Update every OpenAIAccountGatewayControlling test double to match the expanded signature; the lifecycle spy retains the passed proxy values for Task 3 assertions.
 
 - [ ] **Step 4: 运行测试，确认通过**
 
@@ -105,7 +110,7 @@ Expected: OpenAIAccountGatewayServiceTests passes.
 - [ ] **Step 5: 提交网关路由改动**
 
 ~~~bash
-git add codexPanel/Services/OpenAIAccountGatewayService.swift codexPanelTests/OpenAIAccountGatewayServiceTests.swift
+git add codexPanel/Services/OpenAIAccountGatewayService.swift codexPanel/Services/TokenStore.swift codexPanelTests/OpenAIAccountGatewayServiceTests.swift codexPanelTests/TokenStoreGatewayLifecycleTests.swift codexPanelTests/TokenStoreSettingsTests.swift codexPanelTests/WhamServiceTests.swift codexPanelTests/OpenAIOAuthRefreshServiceTests.swift
 git commit -m "feat(网关): 支持按账号代理路由"
 ~~~
 
