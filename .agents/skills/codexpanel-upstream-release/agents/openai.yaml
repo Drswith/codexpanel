@@ -1,0 +1,4 @@
+interface:
+  display_name: "CodexPanel Upstream Release"
+  short_description: "Sync codexbar through mapped releases"
+  default_prompt: "Use $codexpanel-upstream-release to sync codexbar upstream versions, validate Xcode and visual E2E, and publish mapped releases."
