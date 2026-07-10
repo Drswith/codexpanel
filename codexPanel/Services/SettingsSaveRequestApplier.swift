@@ -32,6 +32,8 @@ enum SettingsSaveRequestApplier {
         config.setOpenAIAccountUsageMode(request.accountUsageMode)
         config.setOpenAIAccountOrderingMode(request.accountOrderingMode)
         config.setOpenAIManualActivationBehavior(request.manualActivationBehavior)
+        config.openAI.aggregateGatewayProxyURL = CodexPanelOpenAISettings
+            .normalizedAggregateGatewayProxyURL(request.aggregateGatewayProxyURL)
     }
 
     static func apply(_ request: OpenAIUsageSettingsUpdate?, to config: inout CodexPanelConfig) {

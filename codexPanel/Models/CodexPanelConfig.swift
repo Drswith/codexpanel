@@ -293,6 +293,7 @@ struct CodexPanelOpenAISettings: Codable, Equatable {
     var usageDisplayMode: CodexPanelUsageDisplayMode
     var quotaSort: QuotaSortSettings
     var interopProxiesJSON: String?
+    var aggregateGatewayProxyURL: String?
 
     enum CodingKeys: String, CodingKey {
         case accountOrder
@@ -303,6 +304,7 @@ struct CodexPanelOpenAISettings: Codable, Equatable {
         case usageDisplayMode
         case quotaSort
         case interopProxiesJSON
+        case aggregateGatewayProxyURL
     }
 
     init(
@@ -313,7 +315,8 @@ struct CodexPanelOpenAISettings: Codable, Equatable {
         manualActivationBehavior: CodexPanelOpenAIManualActivationBehavior = .updateConfigOnly,
         usageDisplayMode: CodexPanelUsageDisplayMode = .used,
         quotaSort: QuotaSortSettings = QuotaSortSettings(),
-        interopProxiesJSON: String? = nil
+        interopProxiesJSON: String? = nil,
+        aggregateGatewayProxyURL: String? = nil
     ) {
         self.accountOrder = accountOrder
         self.accountUsageMode = accountUsageMode
@@ -323,6 +326,7 @@ struct CodexPanelOpenAISettings: Codable, Equatable {
         self.usageDisplayMode = usageDisplayMode
         self.quotaSort = quotaSort
         self.interopProxiesJSON = interopProxiesJSON
+        self.aggregateGatewayProxyURL = Self.normalizedAggregateGatewayProxyURL(aggregateGatewayProxyURL)
     }
 
     init(from decoder: Decoder) throws {
@@ -354,6 +358,17 @@ struct CodexPanelOpenAISettings: Codable, Equatable {
         )
         self.quotaSort = try container.decodeIfPresent(QuotaSortSettings.self, forKey: .quotaSort) ?? QuotaSortSettings()
         self.interopProxiesJSON = try container.decodeIfPresent(String.self, forKey: .interopProxiesJSON)
+        self.aggregateGatewayProxyURL = Self.normalizedAggregateGatewayProxyURL(
+            try container.decodeIfPresent(String.self, forKey: .aggregateGatewayProxyURL)
+        )
+    }
+
+    static func normalizedAggregateGatewayProxyURL(_ value: String?) -> String? {
+        guard let raw = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let proxy = OpenAIAccountGatewayConfiguredProxy(address: raw) else {
+            return nil
+        }
+        return proxy.address
     }
 
     var preferredDisplayAccountOrder: [String] {

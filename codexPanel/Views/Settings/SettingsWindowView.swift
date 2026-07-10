@@ -294,6 +294,13 @@ private struct SettingsAccountsPage: View {
                 )
             )
 
+            SettingsAggregateGatewayProxySection(
+                aggregateGatewayProxyURL: Binding(
+                    get: { self.coordinator.draft.aggregateGatewayProxyURL },
+                    set: { self.coordinator.update(\.aggregateGatewayProxyURL, to: $0, field: .aggregateGatewayProxyURL) }
+                )
+            )
+
             SettingsAccountOrderingModeSection(
                 mode: Binding(
                     get: { self.coordinator.draft.accountOrderingMode },
@@ -696,6 +703,32 @@ private struct SettingsAccountUsageModeSection: View {
                     .buttonStyle(.plain)
                 }
             }
+        }
+    }
+}
+
+private struct SettingsAggregateGatewayProxySection: View {
+    @Binding var aggregateGatewayProxyURL: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(L.aggregateGatewayProxyTitle)
+                .font(.system(size: 12, weight: .medium))
+
+            Text(L.aggregateGatewayProxyHint)
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField(
+                L.aggregateGatewayProxyInputExample,
+                text: Binding(
+                    get: { self.aggregateGatewayProxyURL ?? "" },
+                    set: { self.aggregateGatewayProxyURL = $0 }
+                )
+            )
+            .textFieldStyle(.roundedBorder)
+            .font(.system(size: 11, design: .monospaced))
         }
     }
 }

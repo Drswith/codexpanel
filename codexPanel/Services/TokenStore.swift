@@ -7,6 +7,7 @@ struct OpenAIAccountSettingsUpdate: Equatable {
     var accountUsageMode: CodexPanelOpenAIAccountUsageMode
     var accountOrderingMode: CodexPanelOpenAIAccountOrderingMode
     var manualActivationBehavior: CodexPanelOpenAIManualActivationBehavior
+    var aggregateGatewayProxyURL: String? = nil
 }
 
 struct OpenAIUsageSettingsUpdate: Equatable {

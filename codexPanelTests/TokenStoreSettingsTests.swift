@@ -11,6 +11,18 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertEqual(config.global.reasoningEffort, "medium")
     }
 
+    func testAggregateGatewayProxyURLPersistsAndRejectsCredentials() throws {
+        var config = CodexPanelConfig()
+        config.openAI.aggregateGatewayProxyURL = "socks5://127.0.0.1:7890"
+
+        let data = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(CodexPanelConfig.self, from: data)
+
+        XCTAssertEqual(decoded.openAI.aggregateGatewayProxyURL, "socks5://127.0.0.1:7890")
+        XCTAssertNil(CodexPanelOpenAISettings.normalizedAggregateGatewayProxyURL("http://user:secret@127.0.0.1:7890"))
+        XCTAssertNil(CodexPanelOpenAISettings.normalizedAggregateGatewayProxyURL("http://127.0.0.1:70000"))
+    }
+
     func testDebugDefaultEmptyProvidersInjectsMockDataEvenWhenCostCacheExists() {
         #if DEBUG
         let profile = CodexPanelRuntimeProfile.resolve(
@@ -455,6 +467,37 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertEqual(store.config.openAI.accountOrder, ["acct_beta", "acct_alpha"])
         XCTAssertEqual(store.config.openAI.accountOrderingMode, .manual)
         XCTAssertEqual(store.config.openAI.manualActivationBehavior, .launchNewInstance)
+    }
+
+    func testSaveOpenAIAccountSettingsNormalizesAndPersistsAggregateGatewayProxyURL() throws {
+        let store = TokenStore.shared
+        store.load()
+
+        try store.saveOpenAIAccountSettings(
+            OpenAIAccountSettingsUpdate(
+                accountOrder: [],
+                accountUsageMode: .switchAccount,
+                accountOrderingMode: .quotaSort,
+                manualActivationBehavior: .updateConfigOnly,
+                aggregateGatewayProxyURL: " socks5://127.0.0.1:7890 "
+            )
+        )
+
+        XCTAssertEqual(store.config.openAI.aggregateGatewayProxyURL, "socks5://127.0.0.1:7890")
+        let reloaded = try CodexPanelConfigStore().loadOrMigrate()
+        XCTAssertEqual(reloaded.openAI.aggregateGatewayProxyURL, "socks5://127.0.0.1:7890")
+
+        try store.saveOpenAIAccountSettings(
+            OpenAIAccountSettingsUpdate(
+                accountOrder: [],
+                accountUsageMode: .switchAccount,
+                accountOrderingMode: .quotaSort,
+                manualActivationBehavior: .updateConfigOnly,
+                aggregateGatewayProxyURL: "http://user:secret@127.0.0.1:7890"
+            )
+        )
+
+        XCTAssertNil(store.config.openAI.aggregateGatewayProxyURL)
     }
 
     func testSaveOpenAIUsageSettingsOnlyTouchesUsageFields() throws {

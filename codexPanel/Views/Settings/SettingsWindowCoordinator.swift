@@ -32,6 +32,7 @@ struct SettingsWindowDraft: Equatable {
     var teamRelativeToPlusMultiplier: Double
     var modelPricing: [String: CodexPanelModelPricing]
     var preferredCodexAppPath: String?
+    var aggregateGatewayProxyURL: String?
 
     init(config: CodexPanelConfig, accounts: [TokenAccount], historicalModels: [String]) {
         let normalizedHistoricalModels = Self.settingsHistoricalModels(
@@ -54,6 +55,7 @@ struct SettingsWindowDraft: Equatable {
             historicalModels: normalizedHistoricalModels
         )
         self.preferredCodexAppPath = config.desktop.preferredCodexAppPath
+        self.aggregateGatewayProxyURL = config.openAI.aggregateGatewayProxyURL
     }
 
     static func mergedAccountOrder(
@@ -209,6 +211,7 @@ enum SettingsDirtyField: Hashable {
     case teamRelativeToPlusMultiplier
     case modelPricing
     case preferredCodexAppPath
+    case aggregateGatewayProxyURL
 }
 
 @MainActor
@@ -372,6 +375,7 @@ final class SettingsWindowCoordinator: ObservableObject {
             externalHistoricalModels: normalizedHistoricalModels
         )
         self.reconcile(\.preferredCodexAppPath, externalValue: externalDraft.preferredCodexAppPath, field: .preferredCodexAppPath)
+        self.reconcile(\.aggregateGatewayProxyURL, externalValue: externalDraft.aggregateGatewayProxyURL, field: .aggregateGatewayProxyURL)
     }
 
     func makeSaveRequests() -> SettingsSaveRequests {
@@ -380,12 +384,14 @@ final class SettingsWindowCoordinator: ObservableObject {
         if self.draft.accountOrder != self.baseline.accountOrder ||
             self.draft.accountUsageMode != self.baseline.accountUsageMode ||
             self.draft.accountOrderingMode != self.baseline.accountOrderingMode ||
-            self.draft.manualActivationBehavior != self.baseline.manualActivationBehavior {
+            self.draft.manualActivationBehavior != self.baseline.manualActivationBehavior ||
+            self.draft.aggregateGatewayProxyURL != self.baseline.aggregateGatewayProxyURL {
             requests.openAIAccount = OpenAIAccountSettingsUpdate(
                 accountOrder: self.draft.accountOrder,
                 accountUsageMode: self.draft.accountUsageMode,
                 accountOrderingMode: self.draft.accountOrderingMode,
-                manualActivationBehavior: .updateConfigOnly
+                manualActivationBehavior: .updateConfigOnly,
+                aggregateGatewayProxyURL: self.draft.aggregateGatewayProxyURL
             )
         }
 
