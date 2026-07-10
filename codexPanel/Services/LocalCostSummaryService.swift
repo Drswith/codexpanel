@@ -2,7 +2,9 @@ import Foundation
 
 enum LocalCostPricing {
     private static let longContextInputThreshold = 272_000
-    private static let longContextPremiumBaseModels = ["gpt-5.4", "gpt-5.5"]
+    private static let longContextPremiumBaseModels = [
+        "gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna",
+    ]
 
     private static let defaultPricingByModel: [String: CodexPanelModelPricing] = [
         "gpt-5": CodexPanelModelPricing(inputUSDPerToken: 1.25e-6, cachedInputUSDPerToken: 1.25e-7, outputUSDPerToken: 1e-5),
@@ -20,6 +22,9 @@ enum LocalCostPricing {
         "gpt-5.4-mini": CodexPanelModelPricing(inputUSDPerToken: 7.5e-7, cachedInputUSDPerToken: 7.5e-8, outputUSDPerToken: 4.5e-6),
         "gpt-5.4-nano": CodexPanelModelPricing(inputUSDPerToken: 2e-7, cachedInputUSDPerToken: 2e-8, outputUSDPerToken: 1.25e-6),
         "gpt-5.5": CodexPanelModelPricing(inputUSDPerToken: 5e-6, cachedInputUSDPerToken: 5e-7, outputUSDPerToken: 3e-5),
+        "gpt-5.6": CodexPanelModelPricing(inputUSDPerToken: 5e-6, cachedInputUSDPerToken: 5e-7, outputUSDPerToken: 3e-5),
+        "gpt-5.6-terra": CodexPanelModelPricing(inputUSDPerToken: 2.5e-6, cachedInputUSDPerToken: 2.5e-7, outputUSDPerToken: 1.5e-5),
+        "gpt-5.6-luna": CodexPanelModelPricing(inputUSDPerToken: 1e-6, cachedInputUSDPerToken: 1e-7, outputUSDPerToken: 6e-6),
         "qwen35_4b": .zero,
     ]
 

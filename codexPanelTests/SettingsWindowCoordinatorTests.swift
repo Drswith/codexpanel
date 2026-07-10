@@ -1,4 +1,5 @@
 import AppKit
+import Foundation
 import SwiftUI
 import XCTest
 
@@ -119,6 +120,10 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
     }
 
     func testSaveEmitsChangedDomainRequestsAndReopenReflectsSavedValues() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+        let codexAppURL = try self.makeValidCodexApp(in: temporaryDirectory)
         let accounts = [
             self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
             self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
@@ -147,7 +152,7 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
             )
         )
         coordinator.selectedPage = .accounts
-        coordinator.update(\.preferredCodexAppPath, to: "/Applications/Codex.app", field: .preferredCodexAppPath)
+        coordinator.update(\.preferredCodexAppPath, to: codexAppURL.path, field: .preferredCodexAppPath)
 
         let requests = try coordinator.save(using: sink)
 
@@ -172,7 +177,7 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         )
         XCTAssertEqual(
             requests.desktop,
-            DesktopSettingsUpdate(preferredCodexAppPath: "/Applications/Codex.app")
+            DesktopSettingsUpdate(preferredCodexAppPath: codexAppURL.path)
         )
         XCTAssertEqual(
             requests.modelPricing,
@@ -200,7 +205,7 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         XCTAssertEqual(reopened.draft.plusRelativeWeight, 12)
         XCTAssertEqual(reopened.draft.proRelativeToPlusMultiplier, 14)
         XCTAssertEqual(reopened.draft.teamRelativeToPlusMultiplier, 2.2)
-        XCTAssertEqual(reopened.draft.preferredCodexAppPath, "/Applications/Codex.app")
+        XCTAssertEqual(reopened.draft.preferredCodexAppPath, codexAppURL.path)
         XCTAssertEqual(
             reopened.draft.modelPricing["google/gemini-2.5-pro"],
             CodexPanelModelPricing(
@@ -639,6 +644,14 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
             planType: planType,
             organizationName: organizationName
         )
+    }
+
+    private func makeValidCodexApp(in directory: URL) throws -> URL {
+        let appURL = directory.appendingPathComponent("Codex.app", isDirectory: true)
+        let resourcesURL = appURL.appendingPathComponent("Contents/Resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: resourcesURL, withIntermediateDirectories: true)
+        try Data().write(to: resourcesURL.appendingPathComponent("codex"))
+        return appURL
     }
 }
 
