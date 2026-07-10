@@ -990,8 +990,10 @@ final class TokenStore: ObservableObject {
             accounts: self.accounts,
             quotaSortSettings: self.config.openAI.quotaSort,
             accountUsageMode: effectiveGatewayMode,
-            defaultProxy: nil,
-            proxyByAccountID: [:]
+            defaultProxy: OpenAIAccountGatewayConfiguredProxy(
+                address: self.config.openAI.aggregateGatewayProxyURL
+            ),
+            proxyByAccountID: self.aggregateGatewayProxyByAccountID()
         )
         self.openRouterGatewayService.updateState(
             provider: self.config.openRouterProvider(),
@@ -1006,6 +1008,25 @@ final class TokenStore: ObservableObject {
         self.reconcileChatCompletionsGatewayLifecycle()
         self.aggregateRoutedAccountID = self.openAIAccountGatewayService.currentRoutedAccountID()
         self.lastPublishedOpenRouterSelected = self.config.activeProvider()?.kind == .openRouter
+    }
+
+    private func aggregateGatewayProxyByAccountID() -> [String: OpenAIAccountGatewayConfiguredProxy] {
+        let profiles = profilesByKey(fromInteropProxiesJSON: self.config.openAI.interopProxiesJSON)
+        let routableAccountIDs = Set(self.accounts.map(\.accountId))
+        guard profiles.isEmpty == false,
+              routableAccountIDs.isEmpty == false,
+              let provider = self.config.oauthProvider() else {
+            return [:]
+        }
+
+        return provider.accounts.reduce(into: [:]) { result, account in
+            guard routableAccountIDs.contains(account.id),
+                  let proxyKey = account.interopProxyKey?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let proxy = profiles[proxyKey] else {
+                return
+            }
+            result[account.id] = proxy
+        }
     }
 
     private var effectiveGatewayMode: CodexPanelOpenAIAccountUsageMode {
@@ -1227,6 +1248,15 @@ final class TokenStore: ObservableObject {
         self.aggregateGatewayLeaseTimer = nil
     }
 
+    static func shouldRefreshLocalCostSummary(
+        updatedAt: Date?,
+        force: Bool,
+        minimumInterval: TimeInterval,
+        now: Date
+    ) -> Bool {
+        force || updatedAt.map { now.timeIntervalSince($0) >= minimumInterval } ?? true
+    }
+
     func refreshLocalCostSummary(
         force: Bool = false,
         minimumInterval: TimeInterval = 5 * 60,
@@ -1236,12 +1266,12 @@ final class TokenStore: ObservableObject {
         guard self.isDebugMockDataActive == false else { return }
         #endif
 
-        guard force || self.localCostSummary.updatedAt == nil else { return }
-        if force == false,
-           let updatedAt = self.localCostSummary.updatedAt,
-           Date().timeIntervalSince(updatedAt) < minimumInterval {
-            return
-        }
+        guard Self.shouldRefreshLocalCostSummary(
+            updatedAt: self.localCostSummary.updatedAt,
+            force: force,
+            minimumInterval: minimumInterval,
+            now: Date()
+        ) else { return }
 
         let service = self.costSummaryService
         let modelPricing = self.config.modelPricing

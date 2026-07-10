@@ -693,6 +693,37 @@ final class TokenStoreGatewayLifecycleTests: CodexPanelTestCase {
         XCTAssertEqual(synchronizedAccount.oauthClientID, "app_activate_auth")
         XCTAssertEqual(store.activeAccount()?.accessToken, authAccount.accessToken)
     }
+
+    func testAggregateGatewayPublishesAccountProfileBeforeDefaultProxy() throws {
+        let account = try self.makeOAuthAccount(accountID: "acct-proxy", email: "proxy@example.com")
+        var stored = CodexPanelProviderAccount.fromTokenAccount(account)
+        stored.interopProxyKey = "socks5|127.0.0.1|7891||"
+        let provider = CodexPanelProvider(
+            id: "openai-oauth",
+            kind: .openAIOAuth,
+            label: "OpenAI",
+            activeAccountId: stored.id,
+            accounts: [stored]
+        )
+        var config = CodexPanelConfig(
+            active: .init(providerId: provider.id, accountId: stored.id),
+            providers: [provider]
+        )
+        config.openAI.accountUsageMode = .aggregateGateway
+        config.openAI.aggregateGatewayProxyURL = "http://127.0.0.1:7890"
+        config.openAI.interopProxiesJSON = #"[{"proxy_key":"socks5|127.0.0.1|7891||","protocol":"socks5","host":"127.0.0.1","port":7891,"status":"active"}]"#
+        try self.writeConfig(config)
+
+        let gateway = OpenAIAccountGatewayControllerSpy()
+        _ = TokenStore(
+            openAIAccountGatewayService: gateway,
+            aggregateGatewayLeaseStore: OpenAIAggregateGatewayLeaseStoreSpy(),
+            codexRunningProcessIDs: { [] }
+        )
+
+        XCTAssertEqual(gateway.lastDefaultProxy?.address, "http://127.0.0.1:7890")
+        XCTAssertEqual(gateway.lastProxyByAccountID["acct-proxy"]?.address, "socks5://127.0.0.1:7891")
+    }
 }
 
 private final class OpenAIAccountGatewayControllerSpy: OpenAIAccountGatewayControlling {

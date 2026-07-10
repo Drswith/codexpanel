@@ -36,6 +36,22 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertNil(decoded.openAI.aggregateGatewayProxyURL)
     }
 
+    func testLocalCostSummaryRefreshAllowsExpiredCacheAndBlocksFreshCache() {
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        XCTAssertTrue(TokenStore.shouldRefreshLocalCostSummary(
+            updatedAt: now.addingTimeInterval(-301),
+            force: false,
+            minimumInterval: 300,
+            now: now
+        ))
+        XCTAssertFalse(TokenStore.shouldRefreshLocalCostSummary(
+            updatedAt: now.addingTimeInterval(-299),
+            force: false,
+            minimumInterval: 300,
+            now: now
+        ))
+    }
+
     func testDebugDefaultEmptyProvidersInjectsMockDataEvenWhenCostCacheExists() {
         #if DEBUG
         let profile = CodexPanelRuntimeProfile.resolve(
