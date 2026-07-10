@@ -699,6 +699,8 @@ private final class OpenAIAccountGatewayControllerSpy: OpenAIAccountGatewayContr
     var startCount = 0
     var stopCount = 0
     var updatedModes: [CodexPanelOpenAIAccountUsageMode] = []
+    var lastDefaultProxy: OpenAIAccountGatewayConfiguredProxy?
+    var lastProxyByAccountID: [String: OpenAIAccountGatewayConfiguredProxy] = [:]
     var currentRoutedAccountIDValue: String?
     var stickyBindings: [OpenAIAggregateStickyBindingSnapshot] = []
     private(set) var clearedStickyThreadIDs: [String] = []
@@ -714,8 +716,14 @@ private final class OpenAIAccountGatewayControllerSpy: OpenAIAccountGatewayContr
     func updateState(
         accounts: [TokenAccount],
         quotaSortSettings: CodexPanelOpenAISettings.QuotaSortSettings,
-        accountUsageMode: CodexPanelOpenAIAccountUsageMode
+        accountUsageMode: CodexPanelOpenAIAccountUsageMode,
+        defaultProxy: OpenAIAccountGatewayConfiguredProxy?,
+        proxyByAccountID: [String: OpenAIAccountGatewayConfiguredProxy]
     ) {
+        _ = accounts
+        _ = quotaSortSettings
+        self.lastDefaultProxy = defaultProxy
+        self.lastProxyByAccountID = proxyByAccountID
         self.updatedModes.append(accountUsageMode)
     }
 

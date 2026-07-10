@@ -752,7 +752,9 @@ private final class OpenAIAccountGatewayControllerStub: OpenAIAccountGatewayCont
     func updateState(
         accounts _: [TokenAccount],
         quotaSortSettings _: CodexPanelOpenAISettings.QuotaSortSettings,
-        accountUsageMode _: CodexPanelOpenAIAccountUsageMode
+        accountUsageMode _: CodexPanelOpenAIAccountUsageMode,
+        defaultProxy _: OpenAIAccountGatewayConfiguredProxy?,
+        proxyByAccountID _: [String: OpenAIAccountGatewayConfiguredProxy]
     ) {}
 
     func currentRoutedAccountID() -> String? { nil }

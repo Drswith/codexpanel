@@ -954,7 +954,9 @@ final class TokenStore: ObservableObject {
         self.openAIAccountGatewayService.updateState(
             accounts: self.accounts,
             quotaSortSettings: self.config.openAI.quotaSort,
-            accountUsageMode: effectiveGatewayMode
+            accountUsageMode: effectiveGatewayMode,
+            defaultProxy: nil,
+            proxyByAccountID: [:]
         )
         self.openRouterGatewayService.updateState(
             provider: self.config.openRouterProvider(),

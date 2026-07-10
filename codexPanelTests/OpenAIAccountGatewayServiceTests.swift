@@ -3,6 +3,109 @@ import Network
 import XCTest
 
 final class OpenAIAccountGatewayServiceTests: CodexPanelTestCase {
+    func testConfiguredProxyAcceptsAnonymousHTTPAndSOCKS() throws {
+        XCTAssertEqual(
+            try XCTUnwrap(OpenAIAccountGatewayConfiguredProxy(address: "http://127.0.0.1:7890")).address,
+            "http://127.0.0.1:7890"
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(OpenAIAccountGatewayConfiguredProxy(address: "socks5://[::1]:7891")).address,
+            "socks5://[::1]:7891"
+        )
+    }
+
+    func testConfiguredProxyRejectsCredentialsAndOutOfRangePort() {
+        XCTAssertNil(OpenAIAccountGatewayConfiguredProxy(address: "http://user:secret@127.0.0.1:7890"))
+        XCTAssertNil(OpenAIAccountGatewayConfiguredProxy(address: "http://127.0.0.1:65536"))
+        XCTAssertNil(OpenAIAccountGatewayConfiguredProxy(address: "ftp://127.0.0.1:7890"))
+        XCTAssertNil(OpenAIAccountGatewayConfiguredProxy(address: "http://:7890"))
+        XCTAssertNil(OpenAIAccountGatewayConfiguredProxy(address: "http://127.0.0.1:0"))
+    }
+
+    func testProfilesByKeyAcceptsAnonymousImportedHTTPAndSOCKSProfiles() {
+        let profiles = profilesByKey(
+            fromInteropProxiesJSON: """
+            [
+              {"proxy_key":"http|127.0.0.1|7890||","protocol":"http","host":"127.0.0.1","port":7890},
+              {"proxy_key":"socks5|::1|7891||","protocol":"socks5","host":"::1","port":7891}
+            ]
+            """
+        )
+
+        XCTAssertEqual(profiles["http|127.0.0.1|7890||"]?.address, "http://127.0.0.1:7890")
+        XCTAssertEqual(profiles["socks5|::1|7891||"]?.address, "socks5://[::1]:7891")
+    }
+
+    func testProfilesByKeyRejectsAuthenticatedAndInvalidImportedProfiles() {
+        let profiles = profilesByKey(
+            fromInteropProxiesJSON: """
+            [
+              {"proxy_key":"http|127.0.0.1|7890|user|secret","protocol":"http","host":"127.0.0.1","port":7890},
+              {"proxy_key":"http|127.0.0.1|65536||","protocol":"http","host":"127.0.0.1","port":65536}
+            ]
+            """
+        )
+
+        XCTAssertTrue(profiles.isEmpty)
+    }
+
+    func testDefaultProxyIsUsedWhenAccountDoesNotHaveAnExplicitProxy() {
+        let account = self.makeGatewayAccount(
+            email: "default-proxy@example.com",
+            accountId: "acct-default-proxy",
+            openAIAccountId: "remote-default-proxy",
+            accessToken: "access-default-proxy",
+            refreshToken: "refresh-default-proxy",
+            idToken: "id-default-proxy",
+            planType: "plus"
+        )
+        let service = self.makeService()
+        service.updateState(
+            accounts: [account],
+            quotaSortSettings: .init(),
+            accountUsageMode: .aggregateGateway,
+            defaultProxy: OpenAIAccountGatewayConfiguredProxy(address: "https://127.0.0.1:7890"),
+            proxyByAccountID: [:]
+        )
+
+        XCTAssertEqual(
+            service.configuredProxyForTesting(accountID: account.accountId)?.address,
+            "https://127.0.0.1:7890"
+        )
+    }
+
+    func testAccountProxyOverridesDefaultAndUsesSameSessionForHTTPAndWebSocket() {
+        let account = self.makeGatewayAccount(
+            email: "proxy@example.com",
+            accountId: "acct-proxy",
+            openAIAccountId: "remote-proxy",
+            accessToken: "access-proxy",
+            refreshToken: "refresh-proxy",
+            idToken: "id-proxy",
+            planType: "plus"
+        )
+        let service = self.makeService()
+        service.updateState(
+            accounts: [account],
+            quotaSortSettings: .init(),
+            accountUsageMode: .aggregateGateway,
+            defaultProxy: OpenAIAccountGatewayConfiguredProxy(address: "http://127.0.0.1:7890"),
+            proxyByAccountID: [
+                account.accountId: try! XCTUnwrap(
+                    OpenAIAccountGatewayConfiguredProxy(address: "socks5://127.0.0.1:7891")
+                ),
+            ]
+        )
+
+        XCTAssertEqual(
+            service.configuredProxyForTesting(accountID: account.accountId)?.address,
+            "socks5://127.0.0.1:7891"
+        )
+        XCTAssertTrue(
+            service.usesSameExplicitProxySessionForHTTPAndWebSocketForTesting(accountID: account.accountId)
+        )
+    }
+
     func testDefaultServiceUsesDedicatedUpstreamSessionConfiguration() {
         let service = OpenAIAccountGatewayService()
 
