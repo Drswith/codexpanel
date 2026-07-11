@@ -63,10 +63,10 @@ enum MenuBarPopoverSizing {
     static let sectionHorizontalInset: CGFloat = 8
     static let sectionVerticalInset: CGFloat = 12
     static let verticalMargin: CGFloat = 12
-    private static let legacyTopContentInset: CGFloat = 10
-    private static let legacyBottomContentInset: CGFloat = 12
-    private static let macOS15TopContentInset: CGFloat = 16
-    private static let macOS15BottomContentInset: CGFloat = 18
+    private static let legacyTopContentInset: CGFloat = 6
+    private static let legacyBottomContentInset: CGFloat = 6
+    private static let macOS15TopContentInset: CGFloat = 8
+    private static let macOS15BottomContentInset: CGFloat = 8
 
     static var defaultHeight: CGFloat {
         self.defaultHeight(for: ProcessInfo.processInfo.operatingSystemVersion)

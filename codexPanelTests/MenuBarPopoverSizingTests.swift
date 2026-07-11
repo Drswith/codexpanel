@@ -135,9 +135,9 @@ final class MenuBarPopoverSizingTests: XCTestCase {
     }
 
     func testMacOS15UsesRoomierTopAndBottomInsets() {
-        XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS14).top, 10)
-        XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS14).bottom, 12)
-        XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS15).top, 16)
-        XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS15).bottom, 18)
+        XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS14).top, 6)
+        XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS14).bottom, 6)
+        XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS15).top, 8)
+        XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS15).bottom, 8)
     }
 }
