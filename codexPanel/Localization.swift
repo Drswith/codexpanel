@@ -429,6 +429,15 @@ enum L {
             ? "保持当前行为：手动点账号后才切换，Codex 直接使用那个账号写入的 auth/config。"
             : "Keep the current behavior: switching only happens when you explicitly choose an account, and Codex uses that account's synced auth/config directly."
     }
+    static var aggregateGatewayProxyTitle: String { zh ? "聚合网关默认代理" : "Aggregate Gateway Default Proxy" }
+    static var aggregateGatewayProxyHint: String {
+        zh
+            ? "可选。仅支持无认证的 HTTP(S) 或 SOCKS/SOCKS5 代理地址；必须填写主机和 1 到 65535 的端口，不能包含用户名或密码。"
+            : "Optional. Only unauthenticated HTTP(S) or SOCKS/SOCKS5 proxy endpoints are supported; enter a host and port from 1 to 65535, with no username or password."
+    }
+    static var aggregateGatewayProxyInputExample: String {
+        zh ? "示例：http://127.0.0.1:7890 或 socks5://127.0.0.1:7890（均无认证）" : "Example: http://127.0.0.1:7890 or socks5://127.0.0.1:7890 (no authentication)"
+    }
     static func quotaSortPlusWeightValue(_ value: Double) -> String {
         let formatted = String(format: "%.1f", value)
         return zh ? "plus=\(formatted)" : "plus=\(formatted)"

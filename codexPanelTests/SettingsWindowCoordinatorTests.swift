@@ -163,7 +163,7 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
                 accountOrder: ["acct_beta", "acct_alpha"],
                 accountUsageMode: .switchAccount,
                 accountOrderingMode: .manual,
-                manualActivationBehavior: .updateConfigOnly
+                manualActivationBehavior: .launchNewInstance
             )
         )
         XCTAssertEqual(
@@ -200,7 +200,7 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         )
         XCTAssertEqual(reopened.draft.accountOrder, ["acct_beta", "acct_alpha"])
         XCTAssertEqual(reopened.draft.accountOrderingMode, .manual)
-        XCTAssertEqual(reopened.draft.manualActivationBehavior, .updateConfigOnly)
+        XCTAssertEqual(reopened.draft.manualActivationBehavior, .launchNewInstance)
         XCTAssertEqual(reopened.draft.usageDisplayMode, .remaining)
         XCTAssertEqual(reopened.draft.plusRelativeWeight, 12)
         XCTAssertEqual(reopened.draft.proRelativeToPlusMultiplier, 14)
@@ -214,6 +214,90 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
                 outputUSDPerToken: 1.8e-6
             )
         )
+    }
+
+    func testAggregateGatewayProxyURLSavesThroughAccountRequestAndNormalizesValue() throws {
+        let accounts = [
+            self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
+            self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
+        ]
+        let sink = TestSettingsSaveSink(config: self.makeConfig())
+        let coordinator = SettingsWindowCoordinator(
+            config: sink.config,
+            accounts: accounts,
+            historicalModels: ["gpt-5.5"]
+        )
+
+        coordinator.update(
+            \.aggregateGatewayProxyURL,
+            to: " socks5://127.0.0.1:7890 ",
+            field: .aggregateGatewayProxyURL
+        )
+
+        let requests = try coordinator.save(using: sink)
+
+        XCTAssertEqual(
+            requests.openAIAccount,
+            OpenAIAccountSettingsUpdate(
+                accountOrder: ["acct_alpha", "acct_beta"],
+                accountUsageMode: .switchAccount,
+                accountOrderingMode: .quotaSort,
+                manualActivationBehavior: .updateConfigOnly,
+                aggregateGatewayProxyURL: " socks5://127.0.0.1:7890 "
+            )
+        )
+        XCTAssertEqual(sink.config.openAI.aggregateGatewayProxyURL, "socks5://127.0.0.1:7890")
+
+        let reopened = SettingsWindowCoordinator(
+            config: sink.config,
+            accounts: accounts,
+            historicalModels: ["gpt-5.5"]
+        )
+        XCTAssertEqual(reopened.draft.aggregateGatewayProxyURL, "socks5://127.0.0.1:7890")
+    }
+
+    func testChangingOrClearingAggregateGatewayProxyPreservesLaunchNewInstanceBehavior() throws {
+        let accounts = [
+            self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
+            self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
+        ]
+        var config = self.makeConfig()
+        config.openAI.manualActivationBehavior = .launchNewInstance
+        config.openAI.aggregateGatewayProxyURL = "socks5://127.0.0.1:7890"
+        let sink = TestSettingsSaveSink(config: config)
+        let coordinator = SettingsWindowCoordinator(
+            config: sink.config,
+            accounts: accounts,
+            historicalModels: ["gpt-5.5"]
+        )
+
+        coordinator.update(
+            \.aggregateGatewayProxyURL,
+            to: "http://127.0.0.1:7891",
+            field: .aggregateGatewayProxyURL
+        )
+
+        let changedRequests = try coordinator.save(using: sink)
+        XCTAssertEqual(
+            try XCTUnwrap(changedRequests.openAIAccount).manualActivationBehavior,
+            .launchNewInstance
+        )
+        XCTAssertEqual(sink.config.openAI.manualActivationBehavior, .launchNewInstance)
+        XCTAssertEqual(sink.config.openAI.aggregateGatewayProxyURL, "http://127.0.0.1:7891")
+
+        coordinator.update(
+            \.aggregateGatewayProxyURL,
+            to: nil,
+            field: .aggregateGatewayProxyURL
+        )
+
+        let clearedRequests = try coordinator.save(using: sink)
+        XCTAssertEqual(
+            try XCTUnwrap(clearedRequests.openAIAccount).manualActivationBehavior,
+            .launchNewInstance
+        )
+        XCTAssertEqual(sink.config.openAI.manualActivationBehavior, .launchNewInstance)
+        XCTAssertNil(sink.config.openAI.aggregateGatewayProxyURL)
     }
 
     func testCancelRollsBackAcrossPagesAndDoesNotTriggerRequests() {
