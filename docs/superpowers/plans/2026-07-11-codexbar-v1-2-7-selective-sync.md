@@ -297,7 +297,7 @@ git commit -m "fix(用量): 恢复本地成本周期刷新"
 **Interfaces:**
 - Produces: MARKETING_VERSION = 1.5.9 与 marker 的 v1.2.7 / cc1faaa10bab1e07943c1f91b666d2b6749f4eb8 标记。
 
-- [ ] **Step 1: 更新版本与 marker**
+- [x] **Step 1: 更新版本与 marker**
 
 ~~~json
 {
@@ -308,13 +308,13 @@ git commit -m "fix(用量): 恢复本地成本周期刷新"
 
 Keep the marker's annotated-tag-object convention and update only the two app MARKETING_VERSION entries from 1.5.8 to 1.5.9.
 
-- [ ] **Step 2: 静态检查与全量测试**
+- [x] **Step 2: 静态检查与全量测试**
 
 Run: git diff --check && xcodebuild test -project codexpanel.xcodeproj -scheme codexpanel -destination 'platform=macOS' -derivedDataPath /tmp/codexpanel-v1.5.9-test -resultBundlePath /tmp/codexpanel-v1.5.9-test.xcresult -quiet && xcrun xcresulttool get test-results summary --path /tmp/codexpanel-v1.5.9-test.xcresult
 
 Expected: git diff --check 无输出，test result failedTests: 0。
 
-- [ ] **Step 3: Debug/Release build 和隔离运行态检查**
+- [x] **Step 3: Debug/Release build 和隔离运行态检查**
 
 Run: xcodebuild -project codexpanel.xcodeproj -scheme codexpanel -configuration Debug -destination 'platform=macOS' -derivedDataPath /tmp/codexpanel-v1.5.9-debug -quiet build && xcodebuild -project codexpanel.xcodeproj -scheme codexpanel -configuration Release -destination 'platform=macOS,arch=arm64' -derivedDataPath /tmp/codexpanel-v1.5.9-release CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet build
 
@@ -324,7 +324,7 @@ Expected: 两个 build 退出码均为 0；不安装或触碰正式 home。
 
 Create a review package against origin/main, dispatch a fresh reviewer with the approved design and this plan, then apply and re-review all Critical/Important findings.
 
-- [ ] **Step 5: 最终提交**
+- [x] **Step 5: 最终提交**
 
 ~~~bash
 git add docs/development/codexbar-upstream-sync.json codexpanel.xcodeproj/project.pbxproj docs/superpowers
