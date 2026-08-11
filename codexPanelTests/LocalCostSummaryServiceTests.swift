@@ -99,6 +99,11 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
             let premium = LocalCostPricing.costUSD(model: model, usage: usage, sessionUsage: usage)
             XCTAssertGreaterThan(premium, baseline, "\(model) 应使用长上下文溢价")
         }
+        XCTAssertEqual(
+            LocalCostPricing.costUSD(model: "gpt-5.6", usage: usage, sessionUsage: usage),
+            2.865,
+            accuracy: 1e-12
+        )
     }
 
     func testGPT54LongContextUsesPremiumButMiniDoesNot() {

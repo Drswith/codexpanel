@@ -69,8 +69,8 @@ enum LocalCostPricing {
         let outputRateMultiplier = longContextRateMultiplier > 1 ? 1.5 : 1.0
 
         return Double(nonCached) * pricing.inputUSDPerToken * longContextRateMultiplier +
-            Double(cached) * pricing.cachedInputUSDPerToken +
-            Double(usage.outputTokens) * pricing.outputUSDPerToken * outputRateMultiplier
+            Double(cached) * pricing.cachedInputUSDPerToken * longContextRateMultiplier +
+            Double(max(0, usage.outputTokens)) * pricing.outputUSDPerToken * outputRateMultiplier
     }
 
     private static let defaultPricingKeysBySpecificity = defaultPricingByModel.keys.sorted {

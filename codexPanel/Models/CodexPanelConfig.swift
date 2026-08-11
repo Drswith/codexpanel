@@ -78,6 +78,14 @@ enum CodexPanelAccountKind: String, Codable {
 }
 
 struct CodexPanelGlobalSettings: Codable {
+    static let baseReasoningEffortOptions = ["low", "medium", "high", "xhigh"]
+    static let reasoningEffortOptionsByModel = [
+        "gpt-5.6": baseReasoningEffortOptions + ["max", "ultra"],
+        "gpt-5.6-sol": baseReasoningEffortOptions + ["max", "ultra"],
+        "gpt-5.6-terra": baseReasoningEffortOptions + ["max", "ultra"],
+        "gpt-5.6-luna": baseReasoningEffortOptions + ["max"],
+    ]
+
     var defaultModel: String
     var reviewModel: String
     var reasoningEffort: String
@@ -110,6 +118,40 @@ struct CodexPanelGlobalSettings: Codable {
             reasoningEffort: try container.decodeIfPresent(String.self, forKey: .reasoningEffort) ?? "medium",
             serviceTier: try container.decodeIfPresent(String.self, forKey: .serviceTier) ?? "standard"
         )
+    }
+
+    static func reasoningEffortOptions(
+        for modelID: String,
+        currentValue: String? = nil
+    ) -> [String] {
+        let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let options = Self.reasoningEffortOptionsByModel[normalizedModelID] {
+            return options
+        }
+
+        let trimmedCurrentValue = currentValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmedCurrentValue.isEmpty == false,
+              Self.baseReasoningEffortOptions.contains(trimmedCurrentValue) == false else {
+            return Self.baseReasoningEffortOptions
+        }
+        return Self.baseReasoningEffortOptions + [trimmedCurrentValue]
+    }
+
+    static func compatibleReasoningEffort(_ effort: String, for modelID: String) -> String {
+        let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let options = Self.reasoningEffortOptionsByModel[normalizedModelID],
+              options.contains(effort) == false else {
+            return effort
+        }
+        return options.last ?? effort
+    }
+
+    static func supportsReasoningEffort(_ effort: String, for modelID: String) -> Bool {
+        let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let options = Self.reasoningEffortOptionsByModel[normalizedModelID] else {
+            return true
+        }
+        return options.contains(effort)
     }
 
     private static func normalizedServiceTier(_ value: String) -> String? {
@@ -577,6 +619,23 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
             organizationName: normalizedAccount.organizationName
         )
     }
+
+    mutating func preserveNewerQuotaSnapshot(from candidate: CodexPanelProviderAccount) -> Bool {
+        guard let candidateLastChecked = candidate.lastChecked else { return false }
+        if let lastChecked, candidateLastChecked <= lastChecked {
+            return false
+        }
+
+        self.planType = candidate.planType
+        self.primaryUsedPercent = candidate.primaryUsedPercent
+        self.secondaryUsedPercent = candidate.secondaryUsedPercent
+        self.primaryResetAt = candidate.primaryResetAt
+        self.secondaryResetAt = candidate.secondaryResetAt
+        self.primaryLimitWindowSeconds = candidate.primaryLimitWindowSeconds
+        self.secondaryLimitWindowSeconds = candidate.secondaryLimitWindowSeconds
+        self.lastChecked = candidateLastChecked
+        return true
+    }
 }
 
 struct CodexPanelOpenRouterModel: Codable, Equatable, Identifiable {
@@ -885,6 +944,24 @@ struct CodexPanelConfig: Codable {
 }
 
 extension CodexPanelConfig {
+    mutating func preserveNewerOAuthQuotaSnapshots(from previous: CodexPanelConfig) -> Bool {
+        var changed = false
+        let previousOAuthAccounts = Dictionary(
+            uniqueKeysWithValues: previous.oauthProvider()?.accounts.map { ($0.id, $0) } ?? []
+        )
+
+        if let providerIndex = self.providers.firstIndex(where: { $0.kind == .openAIOAuth }) {
+            for accountIndex in self.providers[providerIndex].accounts.indices {
+                let accountID = self.providers[providerIndex].accounts[accountIndex].id
+                guard let previousAccount = previousOAuthAccounts[accountID] else { continue }
+                changed = self.providers[providerIndex].accounts[accountIndex]
+                    .preserveNewerQuotaSnapshot(from: previousAccount) || changed
+            }
+        }
+
+        return changed
+    }
+
     mutating func upsertOAuthAccount(_ account: TokenAccount, activate: Bool) -> (storedAccount: CodexPanelProviderAccount, syncCodex: Bool) {
         var provider = self.ensureOAuthProvider()
         let existingStoredAccount = provider.accounts.first(where: { $0.id == account.accountId })

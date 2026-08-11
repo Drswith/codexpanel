@@ -11,6 +11,31 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertEqual(config.global.reasoningEffort, "medium")
     }
 
+    func testReasoningEffortOptionsFollowGPT56ModelCapabilities() {
+        XCTAssertEqual(
+            CodexPanelGlobalSettings.reasoningEffortOptions(for: "gpt-5.6-sol"),
+            ["low", "medium", "high", "xhigh", "max", "ultra"]
+        )
+        XCTAssertEqual(
+            CodexPanelGlobalSettings.reasoningEffortOptions(for: "gpt-5.6"),
+            ["low", "medium", "high", "xhigh", "max", "ultra"]
+        )
+        XCTAssertEqual(
+            CodexPanelGlobalSettings.reasoningEffortOptions(for: "gpt-5.6-luna"),
+            ["low", "medium", "high", "xhigh", "max"]
+        )
+    }
+
+    func testReasoningEffortOptionsPreserveUnknownCurrentValue() {
+        XCTAssertEqual(
+            CodexPanelGlobalSettings.reasoningEffortOptions(
+                for: "future-model",
+                currentValue: "future-effort"
+            ),
+            ["low", "medium", "high", "xhigh", "future-effort"]
+        )
+    }
+
     func testAggregateGatewayProxyURLPersistsAndRejectsCredentials() throws {
         var config = CodexPanelConfig()
         config.openAI.aggregateGatewayProxyURL = "socks5://127.0.0.1:7890"
@@ -377,6 +402,64 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-mini""#))
         XCTAssertTrue(tomlText.contains(#"model_reasoning_effort = "high""#))
         XCTAssertTrue(tomlText.contains(#"service_tier = "standard""#))
+    }
+
+    func testSwitchingFromUltraToLunaFallsBackToMax() throws {
+        var config = self.activeOpenAIConfig()
+        config.global = CodexPanelGlobalSettings(
+            defaultModel: "gpt-5.6-terra",
+            reviewModel: "gpt-5.6-terra",
+            reasoningEffort: "ultra",
+            serviceTier: "standard"
+        )
+        try self.writeConfig(config)
+
+        let store = self.makeTokenStore(
+            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
+                result: .failure(URLError(.notConnectedToInternet))
+            )
+        )
+
+        try store.updateRouteModel("gpt-5.6-luna")
+
+        XCTAssertEqual(store.config.global.defaultModel, "gpt-5.6-luna")
+        XCTAssertEqual(store.config.global.reasoningEffort, "max")
+    }
+
+    func testLunaRejectsUnsupportedUltraReasoningEffort() throws {
+        var config = self.activeOpenAIConfig()
+        config.global = CodexPanelGlobalSettings(
+            defaultModel: "gpt-5.6-luna",
+            reviewModel: "gpt-5.6-luna",
+            reasoningEffort: "max",
+            serviceTier: "standard"
+        )
+        try self.writeConfig(config)
+
+        let store = self.makeTokenStore(
+            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
+                result: .failure(URLError(.notConnectedToInternet))
+            )
+        )
+
+        XCTAssertThrowsError(try store.updateReasoningEffort("ultra"))
+        XCTAssertEqual(store.config.global.reasoningEffort, "max")
+    }
+
+    func testPreserveNewerOAuthQuotaSnapshotsKeepsTheNewestRuntimeState() {
+        let oldChecked = Date(timeIntervalSince1970: 1_700_000_000)
+        let newChecked = oldChecked.addingTimeInterval(60)
+        var previous = self.activeOpenAIConfig()
+        previous.providers[0].accounts[0].lastChecked = newChecked
+        previous.providers[0].accounts[0].primaryUsedPercent = 72
+
+        var loaded = self.activeOpenAIConfig()
+        loaded.providers[0].accounts[0].lastChecked = oldChecked
+        loaded.providers[0].accounts[0].primaryUsedPercent = 10
+
+        XCTAssertTrue(loaded.preserveNewerOAuthQuotaSnapshots(from: previous))
+        XCTAssertEqual(loaded.providers[0].accounts[0].primaryUsedPercent, 72)
+        XCTAssertEqual(loaded.providers[0].accounts[0].lastChecked, newChecked)
     }
 
     func testUpdateServiceTierPreservesModelsAndReasoningEffort() throws {
