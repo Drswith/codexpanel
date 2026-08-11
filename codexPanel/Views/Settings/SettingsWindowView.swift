@@ -16,7 +16,6 @@ struct SettingsWindowView: View {
         store: TokenStore,
         updateCoordinator: UpdateCoordinator? = nil,
         codexAppPathPanelService: CodexAppPathPanelService,
-        initialPage: SettingsPage = .accounts,
         onClose: @escaping () -> Void
     ) {
         self._store = ObservedObject(wrappedValue: store)
@@ -27,8 +26,7 @@ struct SettingsWindowView: View {
             wrappedValue: SettingsWindowCoordinator(
                 config: store.config,
                 accounts: store.accounts,
-                historicalModels: store.historicalModels,
-                selectedPage: initialPage
+                historicalModels: store.historicalModels
             )
         )
         self._recordsModel = StateObject(
@@ -45,7 +43,6 @@ struct SettingsWindowView: View {
             self.detail
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityIdentifier("codexpanel.settings.window")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button {
@@ -368,9 +365,7 @@ private struct SettingsUsagePage: View {
 
 private struct SettingsAboutPage: View {
     @ObservedObject var updateCoordinator: UpdateCoordinator
-    @State private var cliInstallMessage: String?
 
-    private let cliInstallService = CodexPanelCLIInstallService()
     private let repositoryURL = URL(string: "https://github.com/Drswith/codexpanel")
     private let issuesURL = URL(string: "https://github.com/Drswith/codexpanel/issues")
 
@@ -411,25 +406,6 @@ private struct SettingsAboutPage: View {
             return L.settingsUpdatesExecuting(availability.release.version)
         case let .failed(message):
             return L.settingsUpdatesFailed(message)
-        }
-    }
-
-    private var cliStatus: CodexPanelCLIInstallStatus {
-        self.cliInstallService.status()
-    }
-
-    private var cliStatusText: String {
-        switch self.cliStatus {
-        case .helperMissing(let helperPath, _):
-            return L.codexPanelCLIInstallHelperMissing(helperPath)
-        case .notInstalled(_, let installPath):
-            return L.codexPanelCLIInstallNotInstalled(installPath)
-        case .installed(let helperPath, let installPath, let linkedTarget):
-            return L.codexPanelCLIInstallInstalled(
-                installPath: installPath,
-                linkedTarget: linkedTarget,
-                helperPath: helperPath
-            )
         }
     }
 
@@ -513,54 +489,6 @@ private struct SettingsAboutPage: View {
                         .fill(Color.white.opacity(0.04))
                 )
 
-                VStack(alignment: .leading, spacing: 12) {
-                    SettingsAboutInfoRow(
-                        title: L.codexPanelCLIInstallStatusTitle(commandName: self.cliInstallService.commandName),
-                        value: self.cliStatusText
-                    )
-
-                    Text(L.codexPanelCLIInstallHint(commandName: self.cliInstallService.commandName))
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 10) {
-                        SettingsAboutActionButton(
-                            title: L.codexPanelCLIInstallAction(commandName: self.cliInstallService.commandName),
-                            icon: "terminal"
-                        ) {
-                            do {
-                                let result = try self.cliInstallService.installSymlink()
-                                self.cliInstallMessage = L.codexPanelCLIInstallSucceeded(
-                                    installPath: result.installPath,
-                                    helperPath: result.helperPath
-                                )
-                            } catch {
-                                self.cliInstallMessage = error.localizedDescription
-                            }
-                        }
-                        .disabled({
-                            if case .helperMissing = self.cliStatus {
-                                return true
-                            }
-                            return false
-                        }())
-
-                        if let cliInstallMessage = self.cliInstallMessage {
-                            Text(cliInstallMessage)
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                }
-                .frame(maxWidth: 560, alignment: .leading)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 18)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.04))
-                )
             }
             .frame(maxWidth: .infinity)
 

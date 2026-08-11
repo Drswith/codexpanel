@@ -21,25 +21,30 @@ fi
 APP_PATH="$1"
 DIST_DIR="$2"
 MAIN_BINARY="$APP_PATH/Contents/MacOS/Codex Panel"
-HELPER_BINARY="$APP_PATH/Contents/Helpers/codexpanel"
+INFO_PLIST="$APP_PATH/Contents/Info.plist"
 UPDATES_JSON="$DIST_DIR/updates.json"
 
 [[ -f "$MAIN_BINARY" ]] || fail "App executable missing: $MAIN_BINARY"
-[[ -f "$HELPER_BINARY" ]] || fail "Bundled CLI helper missing: $HELPER_BINARY"
-[[ -x "$HELPER_BINARY" ]] || fail "Bundled CLI helper is not executable: $HELPER_BINARY"
+[[ -f "$INFO_PLIST" ]] || fail "App Info.plist missing: $INFO_PLIST"
 [[ -f "$UPDATES_JSON" ]] || fail "updates.json missing: $UPDATES_JSON"
 
-main_archs="$(lipo -archs "$MAIN_BINARY" 2>/dev/null || true)"
-helper_archs="$(lipo -archs "$HELPER_BINARY" 2>/dev/null || true)"
-
-[[ -n "$main_archs" ]] || fail "Unable to read app executable architectures: $MAIN_BINARY"
-[[ -n "$helper_archs" ]] || fail "Unable to read helper architectures: $HELPER_BINARY"
-
-for arch in $main_archs; do
-  if [[ " $helper_archs " != *" $arch "* ]]; then
-    fail "Bundled CLI helper missing architecture: $arch (helper archs: $helper_archs)"
+for legacy_helper in \
+  "$APP_PATH/Contents/Helpers/codexpanel" \
+  "$APP_PATH/Contents/Helpers/codexpanel-dev"
+do
+  if [[ -e "$legacy_helper" || -L "$legacy_helper" ]]; then
+    fail "Legacy CLI helper must not be bundled: $legacy_helper"
   fi
 done
+
+url_types="$(/usr/bin/plutil -extract CFBundleURLTypes json -o - "$INFO_PLIST" 2>/dev/null || true)"
+if [[ "$url_types" == *'"codexpanel"'* || "$url_types" == *'"codexpanel-dev"'* ]]; then
+  fail "Legacy CLI automation URL scheme must not be registered"
+fi
+
+main_archs="$(lipo -archs "$MAIN_BINARY" 2>/dev/null || true)"
+
+[[ -n "$main_archs" ]] || fail "Unable to read app executable architectures: $MAIN_BINARY"
 
 extract_raw() {
   local key_path="$1"

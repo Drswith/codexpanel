@@ -802,7 +802,6 @@ cp -R "$ARM64_APP" "$UNIVERSAL_APP"
 
 required_binaries=(
   "Contents/MacOS/$APP_EXECUTABLE_NAME"
-  "Contents/Helpers/codexpanel"
 )
 optional_binaries=(
   "Contents/MacOS/$APP_EXECUTABLE_NAME.debug.dylib"
@@ -831,15 +830,6 @@ for binary in "${optional_binaries[@]}"; do
     echo "Skipping optional binary for lipo: $binary"
   fi
 done
-
-CLI_HELPER_PATH="$UNIVERSAL_APP/Contents/Helpers/codexpanel"
-if [[ ! -f "$CLI_HELPER_PATH" ]]; then
-  echo "Bundled CLI helper missing: $CLI_HELPER_PATH" >&2
-  exit 1
-fi
-if [[ ! -x "$CLI_HELPER_PATH" ]]; then
-  chmod +x "$CLI_HELPER_PATH"
-fi
 
 echo "==> Packaging artifacts"
 ditto -c -k --sequesterRsrc --keepParent "$UNIVERSAL_APP" "$DIST_DIR/$ZIP_NAME"

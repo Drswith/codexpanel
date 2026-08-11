@@ -145,52 +145,22 @@ Run this after the final mapped version is merged and released, or whenever the 
 2. Launch the Debug app with isolated home:
    ```bash
    APP="/tmp/codexpanel-xcode-verify/Build/Products/Debug/Codex Panel DEV.app"
-   CLI="$APP/Contents/Helpers/codexpanel-dev"
    pkill -x "Codex Panel DEV" 2>/dev/null || true
    mkdir -p /tmp/codexpanel-visual-e2e/home
    launchctl setenv CODEXPANEL_HOME /tmp/codexpanel-visual-e2e/home
    /usr/bin/open -n "$APP"
    sleep 4
    launchctl unsetenv CODEXPANEL_HOME
-   "$CLI" doctor --json
-   "$CLI" state --json
    ```
-3. Verify native routes and Accessibility snapshots:
-   ```bash
-   "$CLI" view open settings --page usage --wait 5 --json
-   "$CLI" snapshot --format tree --target settings | tee /tmp/codexpanel-visual-e2e/settings-usage.tree.txt
-
-   "$CLI" view close settings --wait 5 --json
-   "$CLI" view open settings --page accounts --wait 5 --json
-   "$CLI" snapshot --format tree --target settings | tee /tmp/codexpanel-visual-e2e/settings-accounts.tree.txt
-
-   "$CLI" view close all --wait 5 --json
-   "$CLI" view open menu --json
-   sleep 2
-   "$CLI" state --json
-
-   "$CLI" view close all --wait 5 --json
-   "$CLI" view open login --wait 5 --json
-   "$CLI" snapshot --format tree --target all | tee /tmp/codexpanel-visual-e2e/login-all.tree.txt
-   ```
-4. Capture real screenshots when AX state is incomplete. Use `swift`/CoreGraphics to list `Codex Panel DEV` window IDs, then:
-   ```bash
-   screencapture -x -l <window-id> /tmp/codexpanel-visual-e2e/<surface>.png
-   sips -g pixelWidth -g pixelHeight /tmp/codexpanel-visual-e2e/<surface>.png
-   ```
-5. Treat discrepancies between visible windows and CLI state as E2E findings. Known surfaces to distinguish:
-   - `view open settings --page <page>` may return success while an already-open settings window does not switch pages; close and reopen to verify the target page itself.
-   - `view open menu --wait` may time out even when the menu popover visibly opens; confirm with screenshot and CoreGraphics window listing.
-   - `snapshot --target login` may be less complete than `snapshot --target all`; use `target all` to verify the login window tree.
+3. Read and use the available Computer Use skill to inspect the real menu bar app. Cover the menu, settings pages, account-management surface, usage surface, and OpenAI login window; capture screenshots for every material surface.
+4. Codex Panel no longer bundles a CLI helper or automation URL scheme. Do not look for `Contents/Helpers/codexpanel-dev`, `state`, `snapshot`, `doctor`, or `view` commands during E2E.
+5. If macOS permissions block UI inspection, report the exact Accessibility or Screen Recording blocker. Do not claim visual E2E passed from build success alone.
 
 ## Cleanup
 
 Always clean after build/release/E2E work:
 
 ```bash
-if [[ -n "${CLI:-}" && -x "$CLI" ]]; then
-  "$CLI" view close all --wait 5 --json || true
-fi
 pkill -x "Codex Panel DEV" 2>/dev/null || true
 
 for root in /tmp/codexpanel-xcode-verify /tmp/codexpanel-xcode-verify-release .release-tmp; do
@@ -216,6 +186,6 @@ Report compactly:
 - PR URLs and merge status for each sync PR and update-source PR.
 - Release URLs and asset completeness for each codexpanel version.
 - Full Xcode test counts from `.xcresult`.
-- Visual E2E surfaces inspected, screenshot paths, and any real UI/driver findings.
+- Visual E2E surfaces inspected, screenshot paths, and any real UI findings.
 - Current marker contents and any upstream untagged commits left out of the mapped releases.
 - Cleanup result, including LaunchServices/Spotlight visibility and remaining known non-temporary app copies.

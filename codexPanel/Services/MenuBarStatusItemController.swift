@@ -290,10 +290,6 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
         self.popover.delegate = self
     }
 
-    var isMenuVisible: Bool {
-        self.popover.isShown
-    }
-
     func start() {
         guard self.statusItem == nil else {
             self.applyVisibilityPreference()
@@ -343,18 +339,6 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
         }
         self.statusItem = nil
         self.cancellables.removeAll()
-    }
-
-    func openMenuFromExternalCommand() {
-        if self.statusItem == nil {
-            self.start()
-        }
-        guard self.popover.isShown == false else { return }
-        self.showPopover(trigger: "external_command")
-    }
-
-    func closeMenuFromExternalCommand() {
-        self.closePopover()
     }
 
     private func bindState() {
@@ -560,7 +544,6 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
         self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         button.highlight(true)
         self.popover.contentViewController?.view.window?.makeKey()
-        self.popover.contentViewController?.view.window?.setAccessibilityIdentifier("codexpanel.window.menu")
         self.schedulePopoverSizeRefresh(availableHeight: availableHeight)
         AppLifecycleDiagnostics.shared.recordEvent(
             type: "status_item_menu_opened",

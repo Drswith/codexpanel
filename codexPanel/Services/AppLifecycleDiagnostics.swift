@@ -162,7 +162,6 @@ final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
                 "runtimeChannel": runtimeProfile.channel.rawValue,
                 "homeSource": runtimeProfile.homeSource.rawValue,
                 "usesRealHome": runtimeProfile.usesRealHome,
-                "automationURLScheme": runtimeProfile.automationURLScheme,
                 "oauthURLScheme": runtimeProfile.oauthURLScheme,
                 "isMenuHostProcess": false,
                 "statusItemHostMode": "single_process_status_item",

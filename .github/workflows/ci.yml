@@ -73,7 +73,6 @@ jobs:
             -scheme codexpanel \
             -destination 'platform=macOS' \
             -only-testing:codexpanelTests/CodexPanelRuntimeProfileTests \
-            -only-testing:codexpanelTests/CodexPanelCLIInstallServiceTests \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             test

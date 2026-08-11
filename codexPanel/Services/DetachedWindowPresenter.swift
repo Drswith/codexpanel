@@ -32,23 +32,11 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
     private var pendingDetachedWindowPresentations: [String: DispatchWorkItem] = [:]
     private var pendingDetachedWindowPresentationTokens: [String: UUID] = [:]
 
-    private static func accessibilityIdentifier(forWindowID id: String) -> String {
-        "codexpanel.window.\(id)"
-    }
-
     func hoverPanelFrames() -> [CGRect] {
         self.windows.values.compactMap { window in
             guard window is HoverPanelWindow else { return nil }
             return window.frame
         }
-    }
-
-    func hasWindow(id: String) -> Bool {
-        self.windows[id] != nil
-    }
-
-    func visibleWindowIDs() -> [String] {
-        self.windows.keys.sorted()
     }
 
     func show<Content: View>(
@@ -110,7 +98,6 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
     ) {
         if let existing = self.windows[id] {
             existing.title = title
-            existing.setAccessibilityIdentifier(Self.accessibilityIdentifier(forWindowID: id))
             self.applyStandardWindowConfiguration(configuration, to: existing)
             if configuration.resetsContentSizeOnReuse {
                 existing.setContentSize(size)
@@ -133,7 +120,6 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
         let controller = NSHostingController(rootView: rootView)
         let window = NSWindow(contentViewController: controller)
         window.identifier = NSUserInterfaceItemIdentifier(id)
-        window.setAccessibilityIdentifier(Self.accessibilityIdentifier(forWindowID: id))
         window.title = title
         window.isReleasedWhenClosed = false
         self.applyStandardWindowConfiguration(configuration, to: window)
@@ -177,7 +163,6 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
             defer: false
         )
         window.identifier = NSUserInterfaceItemIdentifier(id)
-        window.setAccessibilityIdentifier(Self.accessibilityIdentifier(forWindowID: id))
         window.contentViewController = controller
         window.level = .statusBar
         window.isOpaque = false

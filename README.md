@@ -208,11 +208,10 @@ open codexpanel.xcodeproj
 Debug 构建默认使用开发态隔离 profile，不会直接写真实 `~/.codex` / `~/.codexpanel`：
 
 - Debug app 使用 `~/.codexpanel-dev/home`
-- Debug CLI 命令是 `codexpanel-dev`
 - Debug OAuth / gateway 端口使用 `1555` / `1556` / `1557`
-- Release 正式运行态仍使用真实 `~/.codex` 历史池和正式 `codexpanel` 命令
+- Release 正式运行态仍使用真实 `~/.codex` 历史池
 
-完整开发态运行、测试和 CLI 说明见：
+完整开发态运行和测试说明见：
 
 - [docs/development-isolation.md](./docs/development-isolation.md)
 - [docs/architecture/core-ui-boundary.md](./docs/architecture/core-ui-boundary.md)（Core + UI 分层与迁移边界）
