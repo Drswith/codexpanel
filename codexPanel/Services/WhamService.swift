@@ -281,11 +281,16 @@ class WhamService {
     ) -> [ParsedRateLimitWindow] {
         var result: [ParsedRateLimitWindow] = []
         for window in windows {
-            if let index = result.firstIndex(where: { $0.limitWindowSeconds == window.limitWindowSeconds }) {
+            if let seconds = window.limitWindowSeconds,
+               let index = result.firstIndex(where: { $0.limitWindowSeconds == seconds }) {
                 result[index] = self.mergedDuplicateRateLimitWindow(result[index], window)
             } else {
                 result.append(window)
             }
+        }
+
+        if result.contains(where: { $0.limitWindowSeconds == nil }) {
+            return result
         }
 
         return result.sorted {

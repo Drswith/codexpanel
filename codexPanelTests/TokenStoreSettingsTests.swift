@@ -17,6 +17,10 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
             ["low", "medium", "high", "xhigh", "max", "ultra"]
         )
         XCTAssertEqual(
+            CodexPanelGlobalSettings.reasoningEffortOptions(for: "gpt-5.6"),
+            ["low", "medium", "high", "xhigh", "max", "ultra"]
+        )
+        XCTAssertEqual(
             CodexPanelGlobalSettings.reasoningEffortOptions(for: "gpt-5.6-luna"),
             ["low", "medium", "high", "xhigh", "max"]
         )

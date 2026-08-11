@@ -90,4 +90,27 @@ final class WhamServiceParsingTests: XCTestCase {
         XCTAssertEqual(result.primaryResetAt, Date(timeIntervalSince1970: 1_775_690_771.0))
         XCTAssertNil(result.secondaryResetAt)
     }
+
+    func testUnknownWindowDurationsKeepPrimaryAndSecondaryIdentity() {
+        let result = WhamService.shared.parseUsage([
+            "plan_type": "plus",
+            "rate_limit": [
+                "primary_window": [
+                    "used_percent": 20.0,
+                    "reset_at": 1_775_372_003.0,
+                ],
+                "secondary_window": [
+                    "used_percent": 80.0,
+                    "reset_at": 1_775_690_771.0,
+                ],
+            ],
+        ])
+
+        XCTAssertNil(result.primaryLimitWindowSeconds)
+        XCTAssertNil(result.secondaryLimitWindowSeconds)
+        XCTAssertEqual(result.primaryUsedPercent, 20)
+        XCTAssertEqual(result.secondaryUsedPercent, 80)
+        XCTAssertEqual(result.primaryResetAt, Date(timeIntervalSince1970: 1_775_372_003.0))
+        XCTAssertEqual(result.secondaryResetAt, Date(timeIntervalSince1970: 1_775_690_771.0))
+    }
 }
