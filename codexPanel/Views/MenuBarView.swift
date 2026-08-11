@@ -519,6 +519,7 @@ struct MenuBarView: View {
         "gpt-5.4",
         "gpt-5.4-mini",
     ]
+    static let defaultCodexReasoningEffortOptions = CodexPanelGlobalSettings.baseReasoningEffortOptions
     private let serviceTierOptions = ["standard", "fast"]
 
     @State private var isRefreshing = false
