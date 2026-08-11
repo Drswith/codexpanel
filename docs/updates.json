@@ -2,25 +2,25 @@
   "schemaVersion": 1,
   "channel": "stable",
   "release": {
-    "version": "1.5.9",
-    "publishedAt": "2026-07-11T10:20:11Z",
-    "summary": "v1.5.9",
-    "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.9",
-    "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.9",
+    "version": "1.5.10",
+    "publishedAt": "2026-08-11T01:55:05Z",
+    "summary": "v1.5.10",
+    "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.10",
+    "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.10",
     "deliveryMode": "guidedDownload",
     "minimumAutomaticUpdateVersion": null,
     "artifacts": [
       {
         "architecture": "universal",
         "format": "dmg",
-        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.9/codexpanel-1.5.9-macOS.dmg",
-        "sha256": "87b6ada61e49e97277ecf467ad9c04f746d2fc821c683a205661fee4496aaa11"
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.10/codexpanel-1.5.10-macOS.dmg",
+        "sha256": "fea794b6c6a85aa36c29a55698b1702471f7e81156478f11e3cc662345595ca5"
       },
       {
         "architecture": "universal",
         "format": "zip",
-        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.9/codexpanel-1.5.9-macOS.zip",
-        "sha256": "d091de78c4902536ed7d0769d74e16a9260e00da0be22079862d87f92dc312bd"
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.10/codexpanel-1.5.10-macOS.zip",
+        "sha256": "acdc933a2db995bde72b5068062c5388488c72e775776a23d04cbd291cd502f8"
       }
     ]
   }
