@@ -519,7 +519,6 @@ struct MenuBarView: View {
         "gpt-5.4",
         "gpt-5.4-mini",
     ]
-    private let reasoningEffortOptions = ["low", "medium", "high", "xhigh"]
     private let serviceTierOptions = ["standard", "fast"]
 
     @State private var isRefreshing = false
@@ -937,7 +936,10 @@ struct MenuBarView: View {
 
             self.compactSelectionMenu(
                 title: self.store.config.global.reasoningEffort,
-                options: self.reasoningEffortOptions,
+                options: CodexPanelGlobalSettings.reasoningEffortOptions(
+                    for: currentModel,
+                    currentValue: self.store.config.global.reasoningEffort
+                ),
                 currentValue: self.store.config.global.reasoningEffort
             ) { effort in
                 Task { await self.updateSelectedReasoningEffort(effort) }

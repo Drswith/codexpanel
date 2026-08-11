@@ -291,8 +291,12 @@ final class TokenStore: ObservableObject {
     }
 
     func load() {
-        if let loaded = try? self.configStore.loadOrMigrate() {
+        if var loaded = try? self.configStore.loadOrMigrate() {
+            let preservedNewerQuota = loaded.preserveNewerOAuthQuotaSnapshots(from: self.config)
             self.config = loaded
+            if preservedNewerQuota {
+                try? self.configStore.save(loaded)
+            }
             let injectedDebugMockData = self.injectDebugMockDataIfNeeded()
             self.publishState()
             self.localCostSummary = injectedDebugMockData ? self.localCostSummary : self.loadCachedLocalCostSummary()
@@ -732,21 +736,27 @@ final class TokenStore: ObservableObject {
         }
 
         if let activeProvider = self.config.activeProvider() {
+            let compatibleReasoningEffort = CodexPanelGlobalSettings.compatibleReasoningEffort(
+                self.config.global.reasoningEffort,
+                for: trimmedModelID
+            )
             switch activeProvider.kind {
             case .openRouter:
                 try self.config.setOpenRouterSelectedModel(trimmedModelID)
+                self.config.global.reasoningEffort = compatibleReasoningEffort
                 try self.persist(syncCodex: true)
             case .openAICompatible:
                 try self.updateProviderDefaultModel(
                     providerID: activeProvider.id,
-                    modelID: trimmedModelID
+                    modelID: trimmedModelID,
+                    reasoningEffort: compatibleReasoningEffort
                 )
             case .openAIOAuth:
                 try self.saveGlobalSettings(
                     GlobalSettingsUpdate(
                         defaultModel: trimmedModelID,
                         reviewModel: trimmedModelID,
-                        reasoningEffort: self.config.global.reasoningEffort,
+                        reasoningEffort: compatibleReasoningEffort,
                         serviceTier: self.config.global.serviceTier
                     )
                 )
@@ -758,7 +768,10 @@ final class TokenStore: ObservableObject {
             GlobalSettingsUpdate(
                 defaultModel: trimmedModelID,
                 reviewModel: trimmedModelID,
-                reasoningEffort: self.config.global.reasoningEffort,
+                reasoningEffort: CodexPanelGlobalSettings.compatibleReasoningEffort(
+                    self.config.global.reasoningEffort,
+                    for: trimmedModelID
+                ),
                 serviceTier: self.config.global.serviceTier
             )
         )
@@ -767,6 +780,12 @@ final class TokenStore: ObservableObject {
     func updateReasoningEffort(_ effort: String) throws {
         let trimmedEffort = effort.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedEffort.isEmpty == false else {
+            throw TokenStoreError.invalidInput
+        }
+        guard CodexPanelGlobalSettings.supportsReasoningEffort(
+            trimmedEffort,
+            for: self.activeModel
+        ) else {
             throw TokenStoreError.invalidInput
         }
 
@@ -819,7 +838,11 @@ final class TokenStore: ObservableObject {
         }
     }
 
-    private func updateProviderDefaultModel(providerID: String, modelID: String) throws {
+    private func updateProviderDefaultModel(
+        providerID: String,
+        modelID: String,
+        reasoningEffort: String? = nil
+    ) throws {
         guard let providerIndex = self.config.providers.firstIndex(where: { $0.id == providerID }) else {
             throw TokenStoreError.providerNotFound
         }
@@ -834,6 +857,9 @@ final class TokenStore: ObservableObject {
         self.config.providers[providerIndex].selectedModelID = modelID
         self.config.global.defaultModel = modelID
         self.config.global.reviewModel = modelID
+        if let reasoningEffort {
+            self.config.global.reasoningEffort = reasoningEffort
+        }
         try self.persist(syncCodex: true)
     }
 
