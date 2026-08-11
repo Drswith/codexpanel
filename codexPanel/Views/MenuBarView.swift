@@ -923,13 +923,15 @@ struct MenuBarView: View {
     }
 
     private func modelSelectionRow(currentModel: String) -> some View {
+        let currentModelValue = self.modelSelectionValue(currentModel: currentModel)
         let displayedCurrentModel = self.modelSelectionDisplayValue(currentModel: currentModel)
 
         return HStack(alignment: .center, spacing: 8) {
             self.compactSelectionMenu(
                 title: displayedCurrentModel,
                 options: self.modelSelectionOptions(currentModel: currentModel),
-                currentValue: displayedCurrentModel
+                currentValue: currentModelValue,
+                displayValue: self.modelSelectionOptionDisplayValue
             ) { modelID in
                 Task { await self.updateSelectedRouteModel(modelID) }
             }
@@ -962,6 +964,7 @@ struct MenuBarView: View {
         title: String,
         options: [String],
         currentValue: String,
+        displayValue: @escaping (String) -> String = { $0 },
         onSelect: @escaping (String) -> Void
     ) -> some View {
         Menu {
@@ -970,7 +973,7 @@ struct MenuBarView: View {
                     onSelect(value)
                 } label: {
                     HStack {
-                        Text(value)
+                        Text(displayValue(value))
                         if value == currentValue {
                             Image(systemName: "checkmark")
                         }
@@ -1011,16 +1014,58 @@ struct MenuBarView: View {
     }
 
     private func modelSelectionDisplayValue(currentModel: String) -> String {
-        guard self.modelSelectionOpenRouterProvider == nil else {
-            return currentModel
-        }
+        self.modelSelectionOptionDisplayValue(
+            self.modelSelectionValue(currentModel: currentModel)
+        )
+    }
+
+    private func modelSelectionValue(currentModel: String) -> String {
+        guard self.modelSelectionOpenRouterProvider == nil else { return currentModel }
         return Self.normalizedCodexModelID(currentModel)
     }
 
+    private func modelSelectionOptionDisplayValue(_ modelID: String) -> String {
+        guard self.modelSelectionOpenRouterProvider == nil else { return modelID }
+        return Self.codexModelDisplayName(for: modelID)
+    }
+
     static func codexModelSelectionOptions(currentModel: String) -> [String] {
-        Self.uniqueTrimmedModelOptions([
-            Self.normalizedCodexModelID(currentModel),
-        ] + Self.codexModelOptions)
+        let normalizedCurrentModel = Self.normalizedCodexModelID(currentModel)
+        var options = Self.codexModelOptions
+        if options.contains(normalizedCurrentModel) == false {
+            options.append(normalizedCurrentModel)
+        }
+        return Self.uniqueTrimmedModelOptions(options)
+    }
+
+    static func codexModelDisplayName(for modelID: String) -> String {
+        switch Self.normalizedCodexModelID(modelID) {
+        case "gpt-5.6": "5.6 Sol"
+        case "gpt-5.6-terra": "5.6 Terra"
+        case "gpt-5.6-luna": "5.6 Luna"
+        case "gpt-5.5": "5.5"
+        case "gpt-5.4": "5.4"
+        case "gpt-5.4-mini": "5.4 Mini"
+        default: modelID
+        }
+    }
+
+    static func codexReasoningEffortOptions(for modelID: String) -> [String] {
+        switch Self.normalizedCodexModelID(modelID) {
+        case "gpt-5.6", "gpt-5.6-terra":
+            Self.defaultCodexReasoningEffortOptions + ["max", "ultra"]
+        case "gpt-5.6-luna":
+            Self.defaultCodexReasoningEffortOptions + ["max"]
+        default:
+            Self.defaultCodexReasoningEffortOptions
+        }
+    }
+
+    private func reasoningEffortOptions(currentModel: String) -> [String] {
+        guard self.modelSelectionOpenRouterProvider == nil else {
+            return Self.defaultCodexReasoningEffortOptions
+        }
+        return Self.codexReasoningEffortOptions(for: currentModel)
     }
 
     private static func normalizedCodexModelID(_ modelID: String) -> String {
