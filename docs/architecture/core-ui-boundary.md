@@ -63,7 +63,7 @@ GitHub Actions 的 `core (Linux)` job 使用官方 Swift Linux 镜像执行同�
 - App adapter 回归测试；
 - 敏感字段与路径边界说明。
 
-未来引入 Rust sidecar 时，Swift Client 应在 adapter 后替换执行器，保持 UI 只面向同一契约。业务型 CLI 也必须调用同一执行器或 sidecar；在此之前不在 `codexpanelCLI` 中复制配置渲染和文件写入逻辑。
+未来引入 Rust sidecar 时，Swift Client 应在 adapter 后替换执行器，保持菜单栏 App 只面向同一契约；本仓库不再为 Codex Panel 维护独立 CLI 客户端。
 
 ## 非目标
 
