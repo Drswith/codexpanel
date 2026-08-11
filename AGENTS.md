@@ -38,9 +38,8 @@ This repository ships a single operator surface:
 
 For OpenAI OAuth account import, use the menu bar app and its localhost callback listener.
 
-The app also ships an agent-facing native CLI driver named `codexpanel`.
-Use it for top-level UI intent routing and native Accessibility inspection instead of visual simulation when possible.
-V1 supports `view`, `state`, `snapshot`, and `doctor`; it does not support generic `click` / `fill` / `press` operations or MCP.
+The app does not ship a `codexpanel` / `codexpanel-dev` CLI helper or an automation URL scheme.
+Use the menu bar app directly for user-facing operations.
 
 ## 开发态隔离
 
@@ -48,8 +47,8 @@ V1 supports `view`, `state`, `snapshot`, and `doctor`; it does not support gener
 - Debug 默认 home 是 `~/.codexpanel-dev/home`；其中 `.codex` 与 `.codexpanel` 都属于开发态隔离数据。
 - 只有明确做低层迁移或兼容性验证时，才允许设置 `CODEXPANEL_ALLOW_REAL_HOME=1` 让 Debug app 触碰真实 home。
 - 需要临时隔离目录时，优先设置 `CODEXPANEL_HOME=/tmp/codexpanel-dev-home` 或测试框架提供的临时目录。
-- Debug app 的 CLI 命令是 `codexpanel-dev`，URL scheme 是 `codexpanel-dev://`，bundle id 是 `com.codexpanel.dev`。
-- Release 正式运行态继续使用真实 `~/.codex` 历史池、正式 `codexpanel` 命令和正式 `codexpanel://` 路由。
+- Debug app 的 bundle id 是 `com.codexpanel.dev`，OAuth URL scheme 是 `com.codexpanel.dev.oauth`。
+- Release 正式运行态继续使用真实 `~/.codex` 历史池，OAuth URL scheme 是 `com.codexpanel.oauth`。
 - 开发态隔离细节见 `docs/development-isolation.md`。
 
 ## Safety rules
@@ -76,36 +75,5 @@ V1 supports `view`, `state`, `snapshot`, and `doctor`; it does not support gener
 
 本仓库常用示例：
 
-- `$codexpanel-cli-driver 打开 Codex Panel 设置页、读取 state/snapshot，或排查 CLI 安装与 Accessibility 权限。`
 - `$codexpanel-local-release 按仓库约定执行一次本地发版闭环并汇报结果。`
 - `$codexpanel 用作 Codex Panel 仓库通用入口，并根据任务转向更具体的 repo-local skill。`
-
-## Codex Panel CLI Driver 使用边界
-
-- 已安装 CLI 命令名是 `codexpanel`，不是旧的 `codexpanel-ctl`。
-- 操作 Debug 构建时使用 `codexpanel-dev`，不要用正式 `codexpanel` 命令去路由开发态 app。
-- 需要 agent 友好地操作界面时，优先使用 `$codexpanel-cli-driver`。
-- `snapshot` 与 `view --wait` 依赖 macOS Accessibility 授权；未授权时应明确说明权限阻塞，不要退回到截图/OCR 伪装成功。
-- V1 只能打开/关闭已知视图并读取原生结构；不要承诺任意控件点击、输入或 ref action。
-
-正式安装常用命令：
-
-```bash
-codexpanel view open settings --page usage --wait 3 --json
-codexpanel view open menu --wait 3 --json
-codexpanel view close all --wait 3 --json
-codexpanel state --json
-codexpanel snapshot --format tree --target auto
-codexpanel doctor --json
-```
-
-开发态 Debug app 常用命令：
-
-```bash
-codexpanel-dev view open settings --page usage --wait 3 --json
-codexpanel-dev view open menu --wait 3 --json
-codexpanel-dev view close all --wait 3 --json
-codexpanel-dev state --json
-codexpanel-dev snapshot --format tree --target auto
-codexpanel-dev doctor --json
-```

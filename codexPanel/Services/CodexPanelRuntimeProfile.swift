@@ -53,24 +53,6 @@ struct CodexPanelRuntimeProfile: Equatable {
         }
     }
 
-    var automationURLScheme: String {
-        switch self.channel {
-        case .debug:
-            return "codexpanel-dev"
-        case .release:
-            return "codexpanel"
-        }
-    }
-
-    var cliCommandName: String {
-        switch self.channel {
-        case .debug:
-            return "codexpanel-dev"
-        case .release:
-            return "codexpanel"
-        }
-    }
-
     var oauthURLScheme: String {
         switch self.channel {
         case .debug:

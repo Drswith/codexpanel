@@ -116,8 +116,7 @@ UNIVERSAL_APP="$UNIVERSAL_DIR/$APP_NAME"
 cp -R "$ARM64_APP" "$UNIVERSAL_APP"
 
 for binary in \
-  "Contents/MacOS/$APP_EXECUTABLE_NAME" \
-  "Contents/Helpers/codexpanel"
+  "Contents/MacOS/$APP_EXECUTABLE_NAME"
 do
   lipo -create \
     "$ARM64_APP/$binary" \
@@ -138,7 +137,6 @@ do
 done
 
 file "$UNIVERSAL_APP/Contents/MacOS/$APP_EXECUTABLE_NAME"
-file "$UNIVERSAL_APP/Contents/Helpers/codexpanel"
 ```
 
 ## 4. 可选：签名与公证
@@ -206,7 +204,6 @@ cp "$DIST_DIR/updates.json" docs/updates.json
 
 - GitHub release 页面存在 `dmg` 和 `zip` 资产
 - `sha256` 文件与对应资产匹配
-- `Codex Panel.app/Contents/Helpers/codexpanel` 存在且可执行
-- `scripts/verify_release_artifacts.sh` 校验通过（helper 架构、可执行位、updates.json 字段完整）
+- `scripts/verify_release_artifacts.sh` 校验通过（App 主程序架构、CLI helper/自动化 scheme 不存在、updates.json 字段完整）
 - 更新仓库内 `docs/updates.json`，并确保 `version`、下载 URL、`sha256` 与本次 release 一致
 - 客户端“检查更新”可识别该正式 release（优先读 `updates.json`，失败后回退 `releases/latest`，最后兜底 Releases API）

@@ -10,15 +10,6 @@ final class ReleaseArtifactVerificationScriptTests: XCTestCase {
         XCTAssertEqual(result.status, 0, result.stderr)
     }
 
-    func testVerificationScriptFailsWhenHelperMissing() throws {
-        let fixture = try self.makeFixture(includeHelper: false)
-        defer { try? FileManager.default.removeItem(at: fixture.root) }
-
-        let result = try self.runVerificationScript(appURL: fixture.appBundleURL, distURL: fixture.distURL)
-        XCTAssertNotEqual(result.status, 0)
-        XCTAssertTrue(result.stderr.contains("Bundled CLI helper missing"))
-    }
-
     func testVerificationScriptFailsWhenUpdatesFieldMissing() throws {
         let fixture = try self.makeFixture(includeZipDownloadURL: false)
         defer { try? FileManager.default.removeItem(at: fixture.root) }
@@ -28,23 +19,22 @@ final class ReleaseArtifactVerificationScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("release.artifacts.1.downloadURL"))
     }
 
-    func testVerificationScriptFailsWhenHelperNotExecutable() throws {
-        let fixture = try self.makeFixture()
+    func testVerificationScriptFailsWhenLegacyCLIHelperIsBundled() throws {
+        let fixture = try self.makeFixture(includeLegacyCLIHelper: true)
         defer { try? FileManager.default.removeItem(at: fixture.root) }
-
-        let helperPath = fixture.appBundleURL
-            .appendingPathComponent("Contents", isDirectory: true)
-            .appendingPathComponent("Helpers", isDirectory: true)
-            .appendingPathComponent("codexpanel", isDirectory: false)
-            .path
-        try FileManager.default.setAttributes(
-            [.posixPermissions: NSNumber(value: Int16(0o644))],
-            ofItemAtPath: helperPath
-        )
 
         let result = try self.runVerificationScript(appURL: fixture.appBundleURL, distURL: fixture.distURL)
         XCTAssertNotEqual(result.status, 0)
-        XCTAssertTrue(result.stderr.contains("not executable"))
+        XCTAssertTrue(result.stderr.contains("Legacy CLI helper must not be bundled"))
+    }
+
+    func testVerificationScriptFailsWhenLegacyAutomationSchemeIsRegistered() throws {
+        let fixture = try self.makeFixture(includeLegacyAutomationScheme: true)
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+
+        let result = try self.runVerificationScript(appURL: fixture.appBundleURL, distURL: fixture.distURL)
+        XCTAssertNotEqual(result.status, 0)
+        XCTAssertTrue(result.stderr.contains("Legacy CLI automation URL scheme must not be registered"))
     }
 
     func testVerificationScriptFailsWhenMainExecutableMissing() throws {
@@ -89,8 +79,9 @@ final class ReleaseArtifactVerificationScriptTests: XCTestCase {
     }
 
     private func makeFixture(
-        includeHelper: Bool = true,
-        includeZipDownloadURL: Bool = true
+        includeZipDownloadURL: Bool = true,
+        includeLegacyCLIHelper: Bool = false,
+        includeLegacyAutomationScheme: Bool = false
     ) throws -> (root: URL, appBundleURL: URL, distURL: URL) {
         let fileManager = FileManager.default
         let root = fileManager.temporaryDirectory
@@ -101,9 +92,6 @@ final class ReleaseArtifactVerificationScriptTests: XCTestCase {
         let mainBinaryDir = appBundleURL
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("MacOS", isDirectory: true)
-        let helperDir = appBundleURL
-            .appendingPathComponent("Contents", isDirectory: true)
-            .appendingPathComponent("Helpers", isDirectory: true)
         let distURL = root.appendingPathComponent("dist", isDirectory: true)
 
         try fileManager.createDirectory(at: mainBinaryDir, withIntermediateDirectories: true)
@@ -112,10 +100,39 @@ final class ReleaseArtifactVerificationScriptTests: XCTestCase {
         let mainBinaryURL = mainBinaryDir.appendingPathComponent("Codex Panel", isDirectory: false)
         try fileManager.copyItem(at: URL(fileURLWithPath: "/bin/ls"), to: mainBinaryURL)
 
-        if includeHelper {
-            try fileManager.createDirectory(at: helperDir, withIntermediateDirectories: true)
-            let helperBinaryURL = helperDir.appendingPathComponent("codexpanel", isDirectory: false)
-            try fileManager.copyItem(at: URL(fileURLWithPath: "/bin/ls"), to: helperBinaryURL)
+        let infoPlistURL = appBundleURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("Info.plist", isDirectory: false)
+        let legacySchemeEntry = includeLegacyAutomationScheme ? "<string>codexpanel</string>" : ""
+        let infoPlist = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleURLTypes</key>
+            <array>
+                <dict>
+                    <key>CFBundleURLSchemes</key>
+                    <array>
+                        <string>com.codexpanel.oauth</string>
+                        \(legacySchemeEntry)
+                    </array>
+                </dict>
+            </array>
+        </dict>
+        </plist>
+        """
+        try infoPlist.write(to: infoPlistURL, atomically: true, encoding: .utf8)
+
+        if includeLegacyCLIHelper {
+            let helperDirectory = appBundleURL
+                .appendingPathComponent("Contents", isDirectory: true)
+                .appendingPathComponent("Helpers", isDirectory: true)
+            try fileManager.createDirectory(at: helperDirectory, withIntermediateDirectories: true)
+            try fileManager.copyItem(
+                at: URL(fileURLWithPath: "/bin/ls"),
+                to: helperDirectory.appendingPathComponent("codexpanel", isDirectory: false)
+            )
         }
 
         let updatesJSONURL = distURL.appendingPathComponent("updates.json", isDirectory: false)

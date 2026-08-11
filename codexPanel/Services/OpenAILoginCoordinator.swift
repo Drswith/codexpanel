@@ -131,11 +131,6 @@ final class OpenAILoginCoordinator {
         self.closeWindowAction()
     }
 
-    func closeWindow() {
-        self.stopCallbackServer()
-        self.closeWindowAction()
-    }
-
     private static func defaultOpenWindow() {
         DetachedWindowPresenter.shared.show(
             id: Self.windowID,
@@ -174,11 +169,21 @@ final class OpenAILoginCoordinator {
 enum CodexPanelURLRouter {
     @MainActor
     static func handle(_ url: URL) {
-        guard let command = CodexPanelURLCommandParser.parse(url) else { return }
-        do {
-            try CodexPanelUICommandRouter.shared.handle(command)
-        } catch {
-            NSLog("codexpanel URL command failed: %@", error.localizedDescription)
+        guard self.isLoginURL(url, profile: CodexPanelRuntimeProfile.current) else { return }
+        OpenAILoginCoordinator.shared.start()
+    }
+
+    @MainActor
+    static func isLoginURL(
+        _ url: URL,
+        profile: CodexPanelRuntimeProfile
+    ) -> Bool {
+        guard url.scheme?.caseInsensitiveCompare(profile.oauthURLScheme) == .orderedSame else {
+            return false
         }
+
+        let host = url.host?.lowercased()
+        let path = url.path.lowercased()
+        return host == OpenAILoginCoordinator.loginHost || path == "/\(OpenAILoginCoordinator.loginHost)"
     }
 }
