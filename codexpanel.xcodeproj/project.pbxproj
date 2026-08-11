@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E55E00040000000000000001 /* CodexPanelCore in Frameworks */ = {isa = PBXBuildFile; productRef = E55E00020000000000000001 /* CodexPanelCore */; };
+		E55E00050000000000000001 /* CodexPanelCore in Frameworks */ = {isa = PBXBuildFile; productRef = E55E00030000000000000001 /* CodexPanelCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -107,6 +109,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E55E00040000000000000001 /* CodexPanelCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,6 +124,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E55E00050000000000000001 /* CodexPanelCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -186,6 +190,7 @@
 			);
 			name = codexpanel;
 			packageProductDependencies = (
+				E55E00020000000000000001 /* CodexPanelCore */,
 			);
 			productName = codexpanel;
 			productReference = C0C16B462F7423BE00A2A16F /* Codex Panel.app */;
@@ -210,6 +215,7 @@
 				);
 			name = codexpanelTests;
 			packageProductDependencies = (
+				E55E00030000000000000001 /* CodexPanelCore */,
 			);
 			productName = codexpanelTests;
 			productReference = C0C16B6B2F7428A100A2A16F /* codexpanelTests.xctest */;
@@ -266,6 +272,9 @@
 			);
 			mainGroup = C0C16B3D2F7423BE00A2A16F;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E55E00010000000000000001 /* XCLocalSwiftPackageReference "Packages/CodexPanelCore" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C0C16B472F7423BE00A2A16F /* Products */;
 			projectDirPath = "";
@@ -319,6 +328,24 @@
 			targetProxy = D1D100070000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		E55E00010000000000000001 /* XCLocalSwiftPackageReference "Packages/CodexPanelCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/CodexPanelCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E55E00020000000000000001 /* CodexPanelCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CodexPanelCore;
+		};
+		E55E00030000000000000001 /* CodexPanelCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CodexPanelCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		C0C16B4F2F7423BF00A2A16F /* Debug */ = {

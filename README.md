@@ -215,6 +215,7 @@ Debug 构建默认使用开发态隔离 profile，不会直接写真实 `~/.code
 完整开发态运行、测试和 CLI 说明见：
 
 - [docs/development-isolation.md](./docs/development-isolation.md)
+- [docs/architecture/core-ui-boundary.md](./docs/architecture/core-ui-boundary.md)（Core + UI 分层与迁移边界）
 
 ## 发版方式（本地）
 
