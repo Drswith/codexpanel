@@ -194,6 +194,11 @@ Then:
 1. Select your signing team in Xcode
 2. Build and run the `codexpanel` target
 
+Architecture and development references:
+
+- [docs/development-isolation.md](./docs/development-isolation.md)
+- [docs/architecture/core-ui-boundary.md](./docs/architecture/core-ui-boundary.md) (Core + UI boundary and migration contract)
+
 ## Release Process (Local Only)
 
 This repository no longer uses GitHub Actions for release automation.  

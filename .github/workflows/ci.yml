@@ -14,6 +14,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  core:
+    name: core (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    container:
+      image: swift:6.2-noble
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Test Core
+        run: swift test --package-path Packages/CodexPanelCore
+
   build:
     name: build
     runs-on: macos-15
