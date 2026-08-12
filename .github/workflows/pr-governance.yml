@@ -1,0 +1,39 @@
+name: PR 门禁
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  metadata:
+    name: 标题与正文
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # 从目标分支检出校验器，避免 PR 修改自己正在接受检查的规则。
+      - name: Checkout validation scripts
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: |
+            scripts/validate_pr.py
+            scripts/tests/test_validate_pr.py
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Test validator
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+
+      - name: Validate pull request metadata
+        env:
+          PR_EVENT_FILE: ${{ github.event_path }}
+        run: python3 scripts/validate_pr.py --event-file "$PR_EVENT_FILE"

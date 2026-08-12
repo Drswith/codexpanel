@@ -20,6 +20,10 @@ dist/
 .swiftpm/
 *.resolved
 
+# Python tooling
+__pycache__/
+*.py[cod]
+
 # CocoaPods
 Pods/
 Podfile.lock
