@@ -54,6 +54,10 @@ class ValidatePRTests(unittest.TestCase):
         self.assertTrue(errors)
         self.assertIn("type(scope)", errors[0])
 
+    def test_rejects_english_only_title(self) -> None:
+        errors = validate_title("fix: update documentation")
+        self.assertTrue(any("中文" in error for error in errors))
+
     def test_accepts_completed_body(self) -> None:
         self.assertEqual(validate_body(VALID_BODY), [])
         self.assertEqual(validate_pr(VALID_TITLE, VALID_BODY), [])
@@ -70,10 +74,25 @@ class ValidatePRTests(unittest.TestCase):
         errors = validate_body(body)
         self.assertTrue(any("提交前确认" in error for error in errors))
 
+    def test_requires_every_confirmation_item(self) -> None:
+        confirmation = """- [x] 标题遵循 `type(scope): 简短中文描述` 格式，且准确概括本次变更
+- [x] 变更说明与实际 diff 一致，没有混入无关改动
+- [x] 验证命令和结果已如实填写
+- [x] 已检查敏感信息、凭据和本地环境文件，没有提交到仓库
+"""
+        body = VALID_BODY.replace(confirmation, "- [x] 任意确认\n")
+        errors = validate_body(body)
+        self.assertTrue(any("缺少必填项" in error for error in errors))
+
     def test_requires_issue_reference_or_explicit_none(self) -> None:
         body = VALID_BODY.replace("无，本次为仓库协作流程改进。", "待补充。")
         errors = validate_body(body)
         self.assertTrue(any("关联问题" in error for error in errors))
+
+    def test_rejects_placeholder_issue_text(self) -> None:
+        body = VALID_BODY.replace("无，本次为仓库协作流程改进。", "暂无，待补充。")
+        errors = validate_body(body)
+        self.assertTrue(any("占位" in error for error in errors))
 
     def test_requires_validation_result(self) -> None:
         body = VALID_BODY.replace(

@@ -32,11 +32,18 @@ REQUIRED_SECTIONS = (
     "关联问题",
     "提交前确认",
 )
+REQUIRED_CONFIRMATIONS = (
+    "标题遵循 `type(scope): 简短中文描述` 格式，且准确概括本次变更",
+    "变更说明与实际 diff 一致，没有混入无关改动",
+    "验证命令和结果已如实填写",
+    "已检查敏感信息、凭据和本地环境文件，没有提交到仓库",
+)
 TITLE_PATTERN = re.compile(
     rf"^(?P<kind>{'|'.join(ALLOWED_TYPES)})"
     r"(?P<scope>\([^()\s:]+\))?"
     r"(?P<breaking>!)?:\s+(?P<description>\S(?:.*\S)?)$"
 )
+CJK_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
 HEADING_PATTERN = re.compile(r"(?m)^##[ \t]+(?P<name>[^\r\n]+?)[ \t]*$")
 CHECKBOX_PATTERN = re.compile(
     r"^\s*-\s*\[(?P<mark>[ xX])\]\s+(?P<label>.+?)\s*$"
@@ -45,10 +52,10 @@ PLACEHOLDER_PATTERN = re.compile(
     r"(?i)\b(?:todo|tbd)\b|待填写|待补充|请填写|(?:\.\.\.|…{2,})"
 )
 ISSUE_REFERENCE_PATTERN = re.compile(
-    r"#\d+|https?://\S+/(?:issues|discussions)/\d+|"
-    r"(?:无|无需关联|不适用)|\b(?:none|n/a|na)\b",
+    r"#\d+|https?://\S+/(?:issues|discussions)/\d+",
     re.IGNORECASE,
 )
+NO_ISSUE_VALUES = frozenset({"无", "无需关联", "不适用", "none", "n/a", "na"})
 
 
 def _without_comments(text: str) -> str:
@@ -79,6 +86,23 @@ def _meaningful_lines(text: str) -> list[str]:
 
 def _meaningful_text(text: str) -> str:
     return "\n".join(_meaningful_lines(text))
+
+
+def _normalize_label(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip())
+
+
+def _is_explicit_no_issue(value: str) -> bool:
+    normalized = _normalize_label(value)
+    if normalized.casefold() in NO_ISSUE_VALUES:
+        return True
+    return bool(
+        re.fullmatch(
+            r"(?:无|无需关联|不适用)\s*[,，、:：;；.。-]\s*\S.*",
+            normalized,
+            re.IGNORECASE,
+        )
+    )
 
 
 def _parse_sections(body: str) -> dict[str, list[str]]:
@@ -116,6 +140,8 @@ def validate_title(title: str) -> list[str]:
         description = match.group("description")
         if len(description) < 4:
             errors.append("标题描述至少需要 4 个字符，不能使用过于笼统的标题。")
+        if not CJK_PATTERN.search(description):
+            errors.append("标题描述需要包含中文，保持仓库默认的中文协作规范。")
     if len(title) > 80:
         errors.append("标题不能超过 80 个字符。")
     if re.search(r"(?i)\b(?:wip|todo|tbd)\b", title):
@@ -196,13 +222,25 @@ def _validate_body_sections(sections: dict[str, list[str]]) -> list[str]:
     issue = _meaningful_text(sections.get("关联问题", [""])[0])
     if not issue:
         errors.append("`关联问题` 需要填写 issue 引用，或明确填写“无”。")
-    elif not ISSUE_REFERENCE_PATTERN.search(issue):
+    elif PLACEHOLDER_PATTERN.search(issue):
+        errors.append("`关联问题` 不能保留 TODO、待补充或省略号等占位内容。")
+    elif not ISSUE_REFERENCE_PATTERN.search(issue) and not _is_explicit_no_issue(issue):
         errors.append("`关联问题` 需要包含 `#编号`、issue URL，或“无/无需关联”。")
 
     confirmation = _checkboxes(sections.get("提交前确认", [""])[0])
     if not confirmation:
         errors.append("`提交前确认` 需要保留并完成确认清单。")
     else:
+        confirmation_labels = {
+            _normalize_label(match.group("label")) for match in confirmation
+        }
+        missing = [
+            label
+            for label in REQUIRED_CONFIRMATIONS
+            if _normalize_label(label) not in confirmation_labels
+        ]
+        if missing:
+            errors.append("`提交前确认` 缺少必填项：" + "；".join(missing))
         unchecked = [match.group("label") for match in confirmation if match.group("mark") == " "]
         if unchecked:
             errors.append("`提交前确认` 仍有未勾选项：" + "；".join(unchecked))
