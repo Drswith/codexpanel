@@ -14,7 +14,7 @@ type(scope): 简短描述
 
 正文请从 [PR 模板](.github/pull_request_template.md) 开始，并完整填写变更说明、变更类型、验证、风险与回滚、关联问题和提交前确认。验证章节必须记录实际执行的命令和结果；如果没有关联 issue，请明确填写“无”或“无需关联”。
 
-`PR 门禁 / 标题与正文` 会在 PR 创建、编辑、更新提交、重新打开和标记为 ready for review 时运行。校验失败时，请按检查输出修正标题或正文后重新提交；仓库管理员应将该检查加入 `main` 分支的 required status checks，才能把它作为合并门禁。
+`标题与正文` 会在 PR 创建、编辑、更新提交、重新打开和标记为 ready for review 时运行。校验失败时，请按检查输出修正标题或正文后重新提交；该检查已加入 `main` 分支的 required status checks，作为合并门禁。
 
 ## 本地校验
 
