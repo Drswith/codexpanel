@@ -219,8 +219,104 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
         XCTAssertEqual(finished.fields["cacheHitCount"] as? Int, 0)
         XCTAssertEqual(finished.fields["parsedFileCount"] as? Int, 1)
         XCTAssertEqual(finished.fields["changedFileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["incrementallyParsedFileCount"] as? Int, 0)
         XCTAssertEqual(finished.fields["warningCount"] as? Int, 0)
         XCTAssertGreaterThan((finished.fields["totalBytes"] as? Int) ?? 0, 0)
+    }
+
+    func testIncrementalRefreshParsesOnlyAppendedSessionLines() async throws {
+        let home = try self.makeCodexHome()
+        let codexRoot = home.appendingPathComponent(".codex", isDirectory: true)
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(
+            home: home,
+            recordsDiagnosticsRecorder: { type, fields in
+                sink.record(type: type, fields: fields)
+            }
+        )
+
+        try self.writeFastSession(
+            directory: codexRoot.appendingPathComponent("sessions", isDirectory: true),
+            fileName: "alpha.jsonl",
+            id: "alpha",
+            timestamp: "2026-04-21T08:00:00Z",
+            model: "gpt-5.5",
+            inputTokens: 100,
+            cachedInputTokens: 20,
+            outputTokens: 20
+        )
+
+        let firstSnapshot = try await store.loadRecordsSourceSnapshot(refreshMode: .incremental)
+        XCTAssertEqual(firstSnapshot.sessions.first?.totalTokens, 120)
+
+        let sessionURL = codexRoot
+            .appendingPathComponent("sessions", isDirectory: true)
+            .appendingPathComponent("alpha.jsonl")
+        let appendedLine = #"{"payload":{"type":"event_msg","kind":"token_count","total_token_usage":{"input_tokens":150,"cached_input_tokens":20,"output_tokens":50}}}"# + "\n"
+        let handle = try FileHandle(forWritingTo: sessionURL)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(appendedLine.utf8))
+        try handle.close()
+
+        let appendedSnapshot = try await store.loadRecordsSourceSnapshot(refreshMode: .incremental)
+        XCTAssertEqual(appendedSnapshot.sessions.first?.totalTokens, 200)
+
+        let finished = try XCTUnwrap(
+            sink.events().last { $0.type == "records_snapshot_load_finished" }
+        )
+        XCTAssertEqual(finished.fields["fileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["parsedFileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["changedFileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["incrementallyParsedFileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["warningCount"] as? Int, 0)
+    }
+
+    func testChangedSessionFileFallsBackToFullParse() async throws {
+        let home = try self.makeCodexHome()
+        let codexRoot = home.appendingPathComponent(".codex", isDirectory: true)
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(
+            home: home,
+            recordsDiagnosticsRecorder: { type, fields in
+                sink.record(type: type, fields: fields)
+            }
+        )
+
+        let sessionsDirectory = codexRoot.appendingPathComponent("sessions", isDirectory: true)
+        try self.writeFastSession(
+            directory: sessionsDirectory,
+            fileName: "alpha.jsonl",
+            id: "alpha",
+            timestamp: "2026-04-21T08:00:00Z",
+            model: "gpt-5.5",
+            inputTokens: 100,
+            cachedInputTokens: 20,
+            outputTokens: 20
+        )
+        _ = try await store.loadRecordsSourceSnapshot(refreshMode: .incremental)
+
+        try self.writeFastSession(
+            directory: sessionsDirectory,
+            fileName: "alpha.jsonl",
+            id: "alpha",
+            timestamp: "2026-04-21T08:00:00Z",
+            model: "gpt-5.5",
+            inputTokens: 7,
+            cachedInputTokens: 1,
+            outputTokens: 3
+        )
+
+        let rebuiltSnapshot = try await store.loadRecordsSourceSnapshot(refreshMode: .incremental)
+        XCTAssertEqual(rebuiltSnapshot.sessions.first?.totalTokens, 10)
+
+        let finished = try XCTUnwrap(
+            sink.events().last { $0.type == "records_snapshot_load_finished" }
+        )
+        XCTAssertEqual(finished.fields["fileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["parsedFileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["changedFileCount"] as? Int, 1)
+        XCTAssertEqual(finished.fields["incrementallyParsedFileCount"] as? Int, 0)
+        XCTAssertEqual(finished.fields["warningCount"] as? Int, 0)
     }
 
     private func billableSessionIDs(from store: SessionLogStore, refreshSessionCache: Bool) -> [String] {

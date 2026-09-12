@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
@@ -85,12 +86,57 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     private struct FileFingerprint: Codable, Equatable {
         let fileSize: Int
         let modificationDate: Date
+        let fileIdentifier: String?
     }
 
     private struct CachedSessionRecord: Codable {
         let fingerprint: FileFingerprint
         let record: SessionRecord?
         let usageEvents: [UsageEvent]
+        let parsedBytes: Int64
+        let anchorHash: String?
+        let isComplete: Bool
+        let hasTrailingNewline: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case fingerprint
+            case record
+            case usageEvents
+            case parsedBytes
+            case anchorHash
+            case isComplete
+            case hasTrailingNewline
+        }
+
+        init(
+            fingerprint: FileFingerprint,
+            record: SessionRecord?,
+            usageEvents: [UsageEvent],
+            parsedBytes: Int64? = nil,
+            anchorHash: String? = nil,
+            isComplete: Bool = false,
+            hasTrailingNewline: Bool = false
+        ) {
+            self.fingerprint = fingerprint
+            self.record = record
+            self.usageEvents = usageEvents
+            self.parsedBytes = parsedBytes ?? Int64(max(0, fingerprint.fileSize))
+            self.anchorHash = anchorHash
+            self.isComplete = isComplete
+            self.hasTrailingNewline = hasTrailingNewline
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.fingerprint = try container.decode(FileFingerprint.self, forKey: .fingerprint)
+            self.record = try container.decodeIfPresent(SessionRecord.self, forKey: .record)
+            self.usageEvents = try container.decode([UsageEvent].self, forKey: .usageEvents)
+            self.parsedBytes = try container.decodeIfPresent(Int64.self, forKey: .parsedBytes)
+                ?? Int64(max(0, self.fingerprint.fileSize))
+            self.anchorHash = try container.decodeIfPresent(String.self, forKey: .anchorHash)
+            self.isComplete = try container.decodeIfPresent(Bool.self, forKey: .isComplete) ?? false
+            self.hasTrailingNewline = try container.decodeIfPresent(Bool.self, forKey: .hasTrailingNewline) ?? false
+        }
     }
 
     private struct CachedSessionLifecycleRecord: Codable {
@@ -110,6 +156,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         let cacheHitCount: Int
         let parsedFileCount: Int
         let changedFileCount: Int
+        let incrementallyParsedFileCount: Int
         let warningCount: Int
     }
 
@@ -121,6 +168,12 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     private struct ParsedSessionResult {
         let cachedRecord: CachedSessionRecord
         let warning: RecordsSnapshotWarning?
+    }
+
+    private struct IncrementalLineScanResult {
+        let didRead: Bool
+        let parsedBytes: Int64
+        let hasTrailingNewline: Bool
     }
 
     private struct PersistedLedgerEvent: Codable, Equatable {
@@ -182,7 +235,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     private let billableCostCalculator: (String, Usage, Usage) -> Double?
     private let recordsDiagnosticsRecorder: (String, [String: Any]) -> Void
     private let queue = DispatchQueue(label: "com.codexpanel.session-log-store", qos: .utility)
-    private let persistedCacheVersion = 4
+    private let persistedCacheVersion = 5
     private let persistedUsageLedgerVersion = 2
 
     private var sessionCache: [URL: CachedSessionRecord] = [:]
@@ -421,6 +474,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         var cacheHitCount = 0
         var parsedFileCount = 0
         var changedFileCount = 0
+        var incrementallyParsedFileCount = 0
 
         for fileURL in files {
             autoreleasepool {
@@ -453,11 +507,27 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
                 } else if previousSessionCache[fileURL] == nil {
                     changedFileCount += 1
                 }
-                let parsed = self.parseSession(
-                    fileURL,
-                    fingerprint: fingerprint,
-                    collectWarning: collectWarnings
-                )
+                let parsed: ParsedSessionResult
+                if let previous = previousSessionCache[fileURL],
+                   self.canIncrementallyAppend(
+                       previous: previous,
+                       fileURL: fileURL,
+                       fingerprint: fingerprint
+                   ),
+                   let incrementallyParsed = self.parseSessionAppend(
+                       fileURL,
+                       previous: previous,
+                       fingerprint: fingerprint
+                   ) {
+                    parsed = incrementallyParsed
+                    incrementallyParsedFileCount += 1
+                } else {
+                    parsed = self.parseSession(
+                        fileURL,
+                        fingerprint: fingerprint,
+                        collectWarning: collectWarnings
+                    )
+                }
                 nextSessionCache[fileURL] = parsed.cachedRecord
                 cachedSessions.append(parsed.cachedRecord)
                 if let warning = parsed.warning {
@@ -486,6 +556,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
                 cacheHitCount: cacheHitCount,
                 parsedFileCount: parsedFileCount,
                 changedFileCount: changedFileCount,
+                incrementallyParsedFileCount: incrementallyParsedFileCount,
                 warningCount: warnings.count
             )
         )
@@ -528,6 +599,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
             "cacheHitCount": stats?.cacheHitCount ?? 0,
             "parsedFileCount": stats?.parsedFileCount ?? 0,
             "changedFileCount": stats?.changedFileCount ?? 0,
+            "incrementallyParsedFileCount": stats?.incrementallyParsedFileCount ?? 0,
             "warningCount": stats?.warningCount ?? 0,
         ]
         if let errorDescription, errorDescription.isEmpty == false {
@@ -1047,13 +1119,40 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     }
 
     private func fingerprint(for fileURL: URL) -> FileFingerprint? {
-        guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey]),
+        guard let values = try? fileURL.resourceValues(
+            forKeys: [
+                .isRegularFileKey,
+                .contentModificationDateKey,
+                .fileSizeKey,
+                .fileResourceIdentifierKey,
+            ]
+        ),
               values.isRegularFile == true else { return nil }
 
         return FileFingerprint(
             fileSize: values.fileSize ?? 0,
-            modificationDate: values.contentModificationDate ?? .distantPast
+            modificationDate: values.contentModificationDate ?? .distantPast,
+            fileIdentifier: values.fileResourceIdentifier.map { String(describing: $0) }
+                ?? fileURL.standardizedFileURL.path
         )
+    }
+
+    private func canIncrementallyAppend(
+        previous: CachedSessionRecord,
+        fileURL: URL,
+        fingerprint: FileFingerprint
+    ) -> Bool {
+        guard previous.record != nil,
+              previous.isComplete,
+              previous.hasTrailingNewline,
+              previous.parsedBytes > 0,
+              Int64(max(0, fingerprint.fileSize)) > previous.parsedBytes,
+              previous.fingerprint.fileIdentifier == fingerprint.fileIdentifier,
+              let previousAnchorHash = previous.anchorHash else {
+            return false
+        }
+
+        return self.anchorHash(for: fileURL, parsedBytes: previous.parsedBytes) == previousAnchorHash
     }
 
     private func parseSession(
@@ -1091,6 +1190,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         let record: SessionRecord?
         let warning: RecordsSnapshotWarning?
         let resolvedModel = model?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasTrailingNewline = self.hasTrailingNewline(in: fileURL)
 
         if didRead,
            let startedAt = sessionDate,
@@ -1125,9 +1225,87 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
             cachedRecord: CachedSessionRecord(
                 fingerprint: fingerprint,
                 record: record,
-                usageEvents: usageEvents
+                usageEvents: usageEvents,
+                parsedBytes: Int64(max(0, fingerprint.fileSize)),
+                anchorHash: self.anchorHash(
+                    for: fileURL,
+                    parsedBytes: Int64(max(0, fingerprint.fileSize))
+                ),
+                isComplete: didRead && hasTrailingNewline,
+                hasTrailingNewline: hasTrailingNewline
             ),
             warning: warning
+        )
+    }
+
+    private func parseSessionAppend(
+        _ fileURL: URL,
+        previous: CachedSessionRecord,
+        fingerprint: FileFingerprint
+    ) -> ParsedSessionResult? {
+        guard let previousRecord = previous.record,
+              previous.parsedBytes > 0,
+              previous.hasTrailingNewline,
+              previous.isComplete,
+              Int64(max(0, fingerprint.fileSize)) > previous.parsedBytes else {
+            return nil
+        }
+
+        var usageHighWater = previousRecord.usage
+        var usageEvents = previous.usageEvents
+        var taskLifecycleState = previousRecord.taskLifecycleState
+
+        guard let scan = self.enumerateLinesIncrementally(
+            in: fileURL,
+            fromOffset: previous.parsedBytes,
+            handleLine: { line in
+                self.consumeTaskLifecycle(
+                    in: line,
+                    taskLifecycleState: &taskLifecycleState
+                )
+                if let sample = self.parseUsageSample(from: line) {
+                    let incrementalUsage = sample.totalUsage.delta(from: usageHighWater)
+                    usageHighWater = usageHighWater.highWater(with: sample.totalUsage)
+
+                    let eventTimestamp = sample.timestamp
+                        ?? fingerprint.modificationDate.addingTimeInterval(
+                            Double(usageEvents.count) / 1_000
+                        )
+                    if incrementalUsage.isZero == false {
+                        usageEvents.append(
+                            UsageEvent(timestamp: eventTimestamp, usage: incrementalUsage)
+                        )
+                    }
+                }
+            }
+        ) else {
+            return nil
+        }
+
+        let updatedRecord = SessionRecord(
+            id: previousRecord.id,
+            startedAt: previousRecord.startedAt,
+            lastActivityAt: fingerprint.modificationDate,
+            isArchived: previousRecord.isArchived,
+            model: previousRecord.model,
+            usage: usageHighWater,
+            taskLifecycleState: taskLifecycleState
+        )
+        let anchorHash = self.anchorHash(for: fileURL, parsedBytes: scan.parsedBytes)
+
+        guard scan.parsedBytes > 0, anchorHash != nil else { return nil }
+
+        return ParsedSessionResult(
+            cachedRecord: CachedSessionRecord(
+                fingerprint: fingerprint,
+                record: updatedRecord,
+                usageEvents: usageEvents,
+                parsedBytes: scan.parsedBytes,
+                anchorHash: anchorHash,
+                isComplete: scan.didRead && scan.hasTrailingNewline,
+                hasTrailingNewline: scan.hasTrailingNewline
+            ),
+            warning: nil
         )
     }
 
@@ -1331,6 +1509,90 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
             }
 
             return true
+        } catch {
+            return false
+        }
+    }
+
+    private func enumerateLinesIncrementally(
+        in fileURL: URL,
+        fromOffset startOffset: Int64,
+        handleLine: (String) -> Void
+    ) -> IncrementalLineScanResult? {
+        guard startOffset >= 0,
+              let handle = try? FileHandle(forReadingFrom: fileURL) else {
+            return nil
+        }
+        defer { try? handle.close() }
+
+        var buffer = Data()
+        var parsedBytes = startOffset
+        let chunkSize = 64 * 1024
+        let newline = UInt8(ascii: "\n")
+
+        do {
+            try handle.seek(toOffset: UInt64(startOffset))
+            while let chunk = try handle.read(upToCount: chunkSize), chunk.isEmpty == false {
+                buffer.append(chunk)
+                while let newlineIndex = buffer.firstIndex(of: newline) {
+                    autoreleasepool {
+                        self.emitLine(from: buffer[..<newlineIndex], handleLine: handleLine)
+                    }
+                    let nextIndex = buffer.index(after: newlineIndex)
+                    parsedBytes += Int64(nextIndex - buffer.startIndex)
+                    buffer.removeSubrange(buffer.startIndex..<nextIndex)
+                }
+            }
+
+            return IncrementalLineScanResult(
+                didRead: true,
+                parsedBytes: parsedBytes,
+                hasTrailingNewline: buffer.isEmpty
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private func anchorHash(for fileURL: URL, parsedBytes: Int64) -> String? {
+        guard parsedBytes > 0,
+              let handle = try? FileHandle(forReadingFrom: fileURL) else {
+            return nil
+        }
+        defer { try? handle.close() }
+
+        do {
+            let sampleLength = min(Int64(2_048), parsedBytes)
+            try handle.seek(toOffset: 0)
+            let prefix = try handle.read(upToCount: Int(sampleLength)) ?? Data()
+            let suffixOffset = parsedBytes - sampleLength
+            try handle.seek(toOffset: UInt64(suffixOffset))
+            let suffix = try handle.read(upToCount: Int(sampleLength)) ?? Data()
+
+            var input = Data("\(parsedBytes)|".utf8)
+            input.append(prefix)
+            input.append(Data("|".utf8))
+            input.append(suffix)
+            return SHA256.hash(data: input)
+                .map { String(format: "%02x", $0) }
+                .joined()
+        } catch {
+            return nil
+        }
+    }
+
+    private func hasTrailingNewline(in fileURL: URL) -> Bool {
+        guard let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey]),
+              let fileSize = values.fileSize,
+              fileSize > 0,
+              let handle = try? FileHandle(forReadingFrom: fileURL) else {
+            return false
+        }
+        defer { try? handle.close() }
+
+        do {
+            try handle.seek(toOffset: UInt64(fileSize - 1))
+            return (try handle.read(upToCount: 1))?.first == UInt8(ascii: "\n")
         } catch {
             return false
         }
