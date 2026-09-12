@@ -13,6 +13,7 @@ struct AccountBuilder {
         // 从 id_token 取 email
         let idClaims = decodeJWT(tokens.idToken)
         let email = idClaims["email"] as? String ?? ""
+        let displayName = self.stringClaim(idClaims["name"])
 
         // 优先使用 access token 自身过期时间，必要时再退回到 id token / 订阅信息。
         let tokenExp = claims["exp"] as? Double
@@ -35,6 +36,7 @@ struct AccountBuilder {
             email: email,
             accountId: accountId,
             openAIAccountId: openAIAccountId,
+            displayName: displayName,
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken,
             idToken: tokens.idToken,
@@ -76,6 +78,15 @@ struct AccountBuilder {
     static func openAIAccountID(fromAuthClaims authClaims: [String: Any]) -> String {
         self.stringClaim(authClaims["chatgpt_account_id"])
             ?? self.localAccountID(fromAuthClaims: authClaims)
+    }
+
+    static func chatGPTUserID(fromAccessToken accessToken: String) -> String? {
+        self.chatGPTUserID(fromAuthClaims: self.authClaims(fromAccessToken: accessToken))
+    }
+
+    static func chatGPTUserID(fromAuthClaims authClaims: [String: Any]) -> String? {
+        self.stringClaim(authClaims["chatgpt_user_id"])
+            ?? self.stringClaim(authClaims["user_id"])
     }
 
     private static func stringClaim(_ value: Any?) -> String? {

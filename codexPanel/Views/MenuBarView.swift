@@ -62,6 +62,15 @@ struct MenuBarOpenRefreshGate: Equatable {
     }
 }
 
+enum MenuBarRefreshOrigin: Equatable {
+    case menuOpen
+    case manual
+
+    var refreshesSessionCache: Bool {
+        self == .manual
+    }
+}
+
 private struct AdaptiveMenuScrollContainer<Content: View>: NSViewRepresentable {
     let heightLimit: AdaptiveScrollHeightLimit
     let initialHeight: CGFloat
@@ -804,7 +813,7 @@ struct MenuBarView: View {
             Spacer()
 
             Button {
-                Task { await refresh(announceResult: true) }
+                Task { await refresh(origin: .manual, announceResult: true) }
             } label: {
                 Group {
                     if isRefreshing {
@@ -1570,7 +1579,7 @@ struct MenuBarView: View {
 
     private func openAIAccountGroupHeaderLabel(_ group: OpenAIAccountGroup) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-            Text(group.email)
+            Text(group.displayTitle)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
@@ -2312,7 +2321,7 @@ struct MenuBarView: View {
         store.refreshLocalCostSummary(
             force: true,
             minimumInterval: 0,
-            refreshSessionCache: true
+            refreshSessionCache: false
         )
         refreshRunningThreadAttribution()
 
@@ -2350,7 +2359,11 @@ struct MenuBarView: View {
         self.recordMenuDiagnostic(type: "refresh_on_open_finished")
     }
 
-    private func refresh(force: Bool = true, announceResult: Bool = false) async {
+    private func refresh(
+        origin: MenuBarRefreshOrigin,
+        force: Bool = true,
+        announceResult: Bool = false
+    ) async {
         let shouldRefreshOAuth = force || store.hasStaleOAuthUsageSnapshot(maxAge: usageRefreshInterval)
         let shouldRefreshLocalCost = force || store.localCostSummary.updatedAt == nil
 
@@ -2365,7 +2378,7 @@ struct MenuBarView: View {
             store.refreshLocalCostSummary(
                 force: true,
                 minimumInterval: 0,
-                refreshSessionCache: true
+                refreshSessionCache: origin.refreshesSessionCache
             )
             refreshRunningThreadAttribution()
         }
@@ -2387,7 +2400,7 @@ struct MenuBarView: View {
             store.refreshLocalCostSummary(
                 force: true,
                 minimumInterval: usageRefreshInterval,
-                refreshSessionCache: true
+                refreshSessionCache: origin.refreshesSessionCache
             )
         }
         refreshRunningThreadAttribution()
@@ -2469,7 +2482,7 @@ struct MenuBarView: View {
 
     private func refreshFailureMessage(for account: TokenAccount, outcome: WhamRefreshOutcome) -> String? {
         guard let message = outcome.errorMessage else { return nil }
-        let label = account.email.isEmpty ? account.accountId : account.email
+        let label = account.displayIdentifier
         return "\(label): \(message)"
     }
 

@@ -2,6 +2,68 @@ import Foundation
 import XCTest
 
 final class CodexPanelConfigStoreTests: CodexPanelTestCase {
+    func testProfileMetadataRoundTripsThroughConfigStore() throws {
+        let store = CodexPanelConfigStore()
+        var account = try self.makeOAuthAccount(
+            accountID: "acct_profile_roundtrip",
+            email: "profile-roundtrip@example.com"
+        )
+        account.username = "profile-dev"
+        account.displayName = "Profile Dev"
+        account.profileLastCheckedAt = Date(timeIntervalSince1970: 1_787_950_000)
+
+        var config = CodexPanelConfig()
+        _ = config.upsertOAuthAccount(account, activate: true)
+        try store.save(config)
+
+        let loaded = try store.loadOrMigrate()
+        let restored = try XCTUnwrap(loaded.oauthTokenAccounts().first)
+        XCTAssertEqual(restored.username, "profile-dev")
+        XCTAssertEqual(restored.displayName, "Profile Dev")
+        XCTAssertEqual(restored.profileLastCheckedAt, account.profileLastCheckedAt)
+        XCTAssertEqual(restored.accountId, account.accountId)
+        XCTAssertEqual(restored.email, account.email)
+    }
+
+    func testClearingLegacyUsageSuspensionsRestoresOAuthAccountAvailability() throws {
+        var config = CodexPanelConfig()
+        var account = try self.makeOAuthAccount(
+            accountID: "acct_legacy_usage_suspension",
+            email: "legacy-usage-suspension@example.com"
+        )
+        account.isSuspended = true
+        _ = config.upsertOAuthAccount(account, activate: true)
+
+        XCTAssertTrue(config.oauthTokenAccounts().first?.isSuspended == true)
+        XCTAssertTrue(config.clearLegacyUsageEndpointSuspensions())
+        XCTAssertFalse(config.oauthTokenAccounts().first?.isSuspended == true)
+        XCTAssertFalse(config.clearLegacyUsageEndpointSuspensions())
+    }
+
+    func testStaleProfileMetadataDoesNotReplaceNewerSnapshot() throws {
+        var existing = try self.makeOAuthAccount(
+            accountID: "acct_profile_merge",
+            email: "profile-merge@example.com"
+        )
+        existing.username = "new-user"
+        existing.displayName = "New User"
+        existing.profileLastCheckedAt = Date(timeIntervalSince1970: 2_000)
+
+        var config = CodexPanelConfig()
+        _ = config.upsertOAuthAccount(existing, activate: true)
+
+        var stale = existing
+        stale.username = "old-user"
+        stale.displayName = "Old User"
+        stale.profileLastCheckedAt = Date(timeIntervalSince1970: 1_000)
+        _ = config.upsertOAuthAccount(stale, activate: false)
+
+        let restored = try XCTUnwrap(config.oauthTokenAccounts().first)
+        XCTAssertEqual(restored.username, "new-user")
+        XCTAssertEqual(restored.displayName, "New User")
+        XCTAssertEqual(restored.profileLastCheckedAt, Date(timeIntervalSince1970: 2_000))
+    }
+
     func testLoadOrMigrateUpgradesV118ConfigWithoutLosingOAuthAccounts() throws {
         let store = CodexPanelConfigStore()
         let first = try self.makeOAuthAccount(

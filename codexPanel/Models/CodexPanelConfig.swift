@@ -425,6 +425,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
 
     var email: String?
     var openAIAccountId: String?
+    var username: String?
+    var displayName: String?
+    var profileLastCheckedAt: Date?
     var accessToken: String?
     var refreshToken: String?
     var idToken: String?
@@ -463,6 +466,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         label: String,
         email: String? = nil,
         openAIAccountId: String? = nil,
+        username: String? = nil,
+        displayName: String? = nil,
+        profileLastCheckedAt: Date? = nil,
         accessToken: String? = nil,
         refreshToken: String? = nil,
         idToken: String? = nil,
@@ -497,6 +503,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         self.label = label
         self.email = email
         self.openAIAccountId = openAIAccountId
+        self.username = TokenAccount.normalizedProfileString(username)
+        self.displayName = TokenAccount.normalizedProfileString(displayName)
+        self.profileLastCheckedAt = profileLastCheckedAt
         self.accessToken = accessToken
         self.refreshToken = refreshToken
         self.idToken = idToken
@@ -553,7 +562,15 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         sanitized.isSuspended = normalized.isSuspended
         sanitized.tokenExpired = normalized.tokenExpired
         sanitized.organizationName = normalized.organizationName
+        sanitized.username = normalized.username
+        sanitized.displayName = normalized.displayName
+        sanitized.profileLastCheckedAt = normalized.profileLastCheckedAt
         return sanitized
+    }
+
+    nonisolated func replacesProfileSnapshot(from existing: CodexPanelProviderAccount) -> Bool {
+        guard let profileLastCheckedAt else { return false }
+        return profileLastCheckedAt >= (existing.profileLastCheckedAt ?? .distantPast)
     }
 
     private func rawTokenAccount(isActive: Bool) -> TokenAccount? {
@@ -569,6 +586,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
             email: self.email ?? self.label,
             accountId: localAccountID,
             openAIAccountId: remoteAccountID,
+            username: self.username,
+            displayName: self.displayName,
+            profileLastCheckedAt: self.profileLastCheckedAt,
             accessToken: accessToken,
             refreshToken: refreshToken,
             idToken: idToken,
@@ -598,6 +618,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
             label: normalizedAccount.email.isEmpty ? normalizedAccount.accountId : normalizedAccount.email,
             email: normalizedAccount.email,
             openAIAccountId: normalizedAccount.remoteAccountId,
+            username: normalizedAccount.username,
+            displayName: normalizedAccount.displayName,
+            profileLastCheckedAt: normalizedAccount.profileLastCheckedAt,
             accessToken: normalizedAccount.accessToken,
             refreshToken: normalizedAccount.refreshToken,
             idToken: normalizedAccount.idToken,
@@ -944,6 +967,27 @@ struct CodexPanelConfig: Codable {
 }
 
 extension CodexPanelConfig {
+    /// 旧版本把额度专用接口的 402/403 当成永久停用；该信号不能代表认证状态。
+    @discardableResult
+    mutating func clearLegacyUsageEndpointSuspensions() -> Bool {
+        guard let providerIndex = self.providers.firstIndex(where: { $0.kind == .openAIOAuth }) else {
+            return false
+        }
+
+        var provider = self.providers[providerIndex]
+        var changed = false
+        for accountIndex in provider.accounts.indices
+            where provider.accounts[accountIndex].isSuspended == true {
+            provider.accounts[accountIndex].isSuspended = false
+            changed = true
+        }
+        guard changed else { return false }
+        self.providers[providerIndex] = provider
+        return true
+    }
+}
+
+extension CodexPanelConfig {
     mutating func preserveNewerOAuthQuotaSnapshots(from previous: CodexPanelConfig) -> Bool {
         var changed = false
         let previousOAuthAccounts = Dictionary(
@@ -972,6 +1016,11 @@ extension CodexPanelConfig {
             var updated = CodexPanelProviderAccount.fromTokenAccount(account, existingID: existing.id)
             updated.addedAt = existing.addedAt ?? Date()
             updated.label = existing.label
+            if updated.replacesProfileSnapshot(from: existing) == false {
+                updated.username = existing.username ?? updated.username
+                updated.displayName = existing.displayName ?? updated.displayName
+                updated.profileLastCheckedAt = existing.profileLastCheckedAt
+            }
             updated.expiresAt = updated.expiresAt ?? existing.expiresAt
             updated.oauthClientID = updated.oauthClientID ?? existing.oauthClientID
             updated.tokenLastRefreshAt = updated.tokenLastRefreshAt ?? existing.tokenLastRefreshAt ?? existing.lastRefresh
