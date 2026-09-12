@@ -117,10 +117,12 @@ struct OpenAIRunningThreadAttributionService {
 
         let activations = self.switchJournalStore.activationHistory()
         let aggregateRouteHistory = self.aggregateRouteJournalStore.routeHistory()
+        // Session files are keyed by path; a resumed/copied session can share an id.
         let sessionRecordsByID = Dictionary(
-            uniqueKeysWithValues: self.sessionLogStore
+            self.sessionLogStore
                 .currentSessionLifecycleRecords(matchingSessionIDs: relevantSessionIDs)
-                .map { ($0.id, $0) }
+                .map { ($0.id, $0) },
+            uniquingKeysWith: Self.preferredSessionLifecycleRecord
         )
         var threads: [OpenAIRunningThreadAttribution.ThreadAttribution] = []
         var runningThreadCounts: [String: Int] = [:]
@@ -198,5 +200,23 @@ struct OpenAIRunningThreadAttributionService {
         }
 
         return accountID
+    }
+
+    /// Prefer the freshest lifecycle view; on equal timestamps, completed wins so
+    /// finished threads are not shown as running.
+    nonisolated private static func preferredSessionLifecycleRecord(
+        _ existing: SessionLogStore.SessionLifecycleRecord,
+        _ incoming: SessionLogStore.SessionLifecycleRecord
+    ) -> SessionLogStore.SessionLifecycleRecord {
+        if existing.lastActivityAt != incoming.lastActivityAt {
+            return existing.lastActivityAt > incoming.lastActivityAt ? existing : incoming
+        }
+        if existing.taskLifecycleState == .completed {
+            return existing
+        }
+        if incoming.taskLifecycleState == .completed {
+            return incoming
+        }
+        return incoming
     }
 }

@@ -163,7 +163,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         let sessionDirectory = CodexPaths.codexRoot.appendingPathComponent("sessions", isDirectory: true)
         try FileManager.default.createDirectory(at: sessionDirectory, withIntermediateDirectories: true)
         let sessionURL = sessionDirectory.appendingPathComponent("cost-rebuild.jsonl")
-        let sessionStart = Date().addingTimeInterval(-24 * 60 * 60)
+        let sessionStart = self.historicalSessionStart()
         let content = [
             #"{"payload":{"type":"session_meta","id":"cost-rebuild","timestamp":"\#(self.iso8601String(sessionStart))"}}"#,
             #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
@@ -504,7 +504,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         let sessionDirectory = codexRoot.appendingPathComponent("sessions", isDirectory: true)
         try FileManager.default.createDirectory(at: sessionDirectory, withIntermediateDirectories: true)
         let sessionURL = sessionDirectory.appendingPathComponent("cost-zero-cache.jsonl")
-        let sessionStart = Date().addingTimeInterval(-24 * 60 * 60)
+        let sessionStart = self.historicalSessionStart()
         let content = [
             #"{"payload":{"type":"session_meta","id":"cost-zero-cache","timestamp":"\#(self.iso8601String(sessionStart))"}}"#,
             #"{"payload":{"type":"turn_context","model":"gpt-5.5"}}"#,
@@ -907,6 +907,10 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
             environment: [:],
             defaultHome: URL(fileURLWithPath: "/Users/example", isDirectory: true)
         ).network
+    }
+
+    private func historicalSessionStart() -> Date {
+        Calendar.current.startOfDay(for: Date()).addingTimeInterval(-12 * 60 * 60)
     }
 
     private func makeTokenStore(

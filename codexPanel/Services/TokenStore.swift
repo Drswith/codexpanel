@@ -224,15 +224,20 @@ final class TokenStore: ObservableObject {
         self.openRouterGatewayLeaseSnapshot = openRouterGatewayLeaseStore.loadLease()
         self.aggregateGatewayLeaseProcessIDs = aggregateGatewayLeaseStore.loadProcessIDs()
 
-        let initialConfig: CodexPanelConfig
+        var initialConfig: CodexPanelConfig
         if let loaded = try? self.configStore.loadOrMigrate() {
             initialConfig = loaded
         } else {
             initialConfig = CodexPanelConfig()
         }
+        let clearedLegacySuspensions = initialConfig.clearLegacyUsageEndpointSuspensions()
         self.config = initialConfig
         self.historicalModels = Self.normalizedHistoricalModels(Array(initialConfig.modelPricing.keys))
         self.lastPublishedOpenRouterSelected = self.config.activeProvider()?.kind == .openRouter
+
+        if clearedLegacySuspensions {
+            try? self.configStore.save(initialConfig)
+        }
 
         NotificationCenter.default.publisher(for: .openAIAccountGatewayDidRouteAccount)
             .receive(on: RunLoop.main)
