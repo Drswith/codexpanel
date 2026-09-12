@@ -1,7 +1,7 @@
 {
   "upstream": "lizhelang/codexbar",
-  "mergedThroughTag": "v1.2.10",
-  "mergedThroughCommit": "0dad802adb7dfd11ba9841c5ab90d7bf40ecd063",
+  "mergedThroughTag": "v1.2.11",
+  "mergedThroughCommit": "d18c23717616f3bb0c582ec625ae1c55a80b65ad",
   "updatedAt": "2026-09-13",
-  "notes": "Development-only marker for selective upstream sync checks; v1.2.10 ports byte-offset tail scanning for the existing JSON session cache, file identity and content anchors, truncation/replacement fallback, and load diagnostics. The upstream SQLite WAL index, budgeted progress/status UI, service-tier/fork aggregation, and release-feed timestamp changes remain excluded because CodexPanel uses its own JSON ledger, presentation, and release/update sources. Not read by the app or packaged into release artifacts."
+  "notes": "Development-only marker for selective upstream sync checks; v1.2.11 ports per-account Codex Desktop instance launch, isolated Chromium profile and TMPDIR, shared or cloned CODEX_HOME behavior, PID verification and instance registry, plus ChatGPT.app host resolution. Upstream README wording, standalone release-feed files, and upstream version/build identifiers remain excluded because CodexPanel uses its own product docs, update source, bundle identity, and release workflow. The earlier v1.2.10 SQLite WAL index, budgeted progress/status UI, service-tier/fork aggregation, and upstream feed timestamp changes also remain excluded because CodexPanel uses its own JSON ledger, presentation, and release/update sources. Not read by the app or packaged into release artifacts."
 }

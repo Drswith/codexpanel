@@ -5,9 +5,11 @@ struct AccountRowView: View {
     let account: TokenAccount
     let rowState: OpenAIAccountRowState
     let isRefreshing: Bool
+    let isLaunchingInstance: Bool
     let usageDisplayMode: CodexPanelUsageDisplayMode
     let defaultManualActivationBehavior: CodexPanelOpenAIManualActivationBehavior?
     let onActivate: (OpenAIManualActivationTrigger) -> Void
+    let onLaunchInstance: () -> Void
     let onRefresh: () -> Void
     let onReauth: () -> Void
     let onDelete: () -> Void
@@ -127,6 +129,15 @@ struct AccountRowView: View {
                     }
                 }
             }
+
+            if self.canLaunchInstance {
+                Button {
+                    onLaunchInstance()
+                } label: {
+                    Label(L.desktopInstanceAction, systemImage: "macwindow.badge.plus")
+                }
+                .disabled(self.isLaunchingInstance)
+            }
         }
     }
 
@@ -134,6 +145,10 @@ struct AccountRowView: View {
         self.account.tokenExpired == false
             && self.account.isBanned == false
             && self.showsManualActivationAction
+    }
+
+    private var canLaunchInstance: Bool {
+        self.account.tokenExpired == false && self.account.isBanned == false
     }
 
     private var showsManualActivationAction: Bool {
