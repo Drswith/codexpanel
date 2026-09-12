@@ -1,7 +1,7 @@
 {
   "upstream": "lizhelang/codexbar",
-  "mergedThroughTag": "v1.2.9",
-  "mergedThroughCommit": "fb2cf1fd4276dcfc84dc60707424496abc851996",
-  "updatedAt": "2026-09-12",
-  "notes": "Development-only marker for selective upstream sync checks; v1.2.9 selectively ports profile identity, lightweight menu-open refresh, non-suspending usage-endpoint denials, and duplicate-safe session attribution. The upstream usage-bar renderer and release-feed changes remain excluded because CodexPanel uses its own menu-bar presentation and release/update sources. Not read by the app or packaged into release artifacts."
+  "mergedThroughTag": "v1.2.10",
+  "mergedThroughCommit": "0dad802adb7dfd11ba9841c5ab90d7bf40ecd063",
+  "updatedAt": "2026-09-13",
+  "notes": "Development-only marker for selective upstream sync checks; v1.2.10 ports byte-offset tail scanning for the existing JSON session cache, file identity and content anchors, truncation/replacement fallback, and load diagnostics. The upstream SQLite WAL index, budgeted progress/status UI, service-tier/fork aggregation, and release-feed timestamp changes remain excluded because CodexPanel uses its own JSON ledger, presentation, and release/update sources. Not read by the app or packaged into release artifacts."
 }
