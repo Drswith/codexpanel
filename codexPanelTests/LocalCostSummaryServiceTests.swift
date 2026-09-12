@@ -106,6 +106,53 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
         )
     }
 
+    func testGPT6AstraPricingSupportsAliasesAndLongContextPremium() {
+        let shortUsage = SessionLogStore.Usage(
+            inputTokens: 100,
+            cachedInputTokens: 20,
+            outputTokens: 20
+        )
+        for model in ["gpt-6-astra", "gpt-6", "gpt-6-2026-09-09", "openai/gpt-6-astra-2026-09-09"] {
+            XCTAssertEqual(
+                LocalCostPricing.costUSD(model: model, usage: shortUsage),
+                0.00182,
+                accuracy: 1e-12,
+                model
+            )
+        }
+
+        let thresholdUsage = SessionLogStore.Usage(
+            inputTokens: 272_000,
+            cachedInputTokens: 2_000,
+            outputTokens: 1_000
+        )
+        XCTAssertEqual(
+            LocalCostPricing.costUSD(model: "gpt-6-astra", usage: thresholdUsage),
+            2.752,
+            accuracy: 1e-12
+        )
+
+        let longUsage = SessionLogStore.Usage(
+            inputTokens: 272_001,
+            cachedInputTokens: 2_000,
+            outputTokens: 1_000
+        )
+        XCTAssertEqual(
+            LocalCostPricing.costUSD(
+                model: "gpt-6-astra",
+                usage: longUsage,
+                sessionUsage: longUsage
+            ),
+            5.47902,
+            accuracy: 1e-12
+        )
+        XCTAssertEqual(
+            LocalCostPricing.costUSD(model: "gpt-6-mini", usage: shortUsage),
+            0,
+            accuracy: 1e-12
+        )
+    }
+
     func testGPT54LongContextUsesPremiumButMiniDoesNot() {
         let usage = SessionLogStore.Usage(
             inputTokens: 300_000,

@@ -465,11 +465,14 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
             updateAvailable: UpdateCoordinator.shared.pendingAvailability != nil
         )
 
-        button.image = presentation.makeTemplateImage(
-            accessibilityDescription: MenuBarStatusItemIdentity.accessibilityLabel
-        )
-        button.contentTintColor = nil
+        button.effectiveAppearance.performAsCurrentDrawingAppearance {
+            button.image = presentation.makeTemplateImage(
+                accessibilityDescription: MenuBarStatusItemIdentity.accessibilityLabel
+            )
+            button.contentTintColor = nil
+        }
         button.attributedTitle = presentation.attributedTitle
+        RateLimitResetNotificationService.shared.evaluate(accounts: TokenStore.shared.accounts)
     }
 
     private func applyVisibilityPreference(userDefaults: UserDefaults = .standard) {
