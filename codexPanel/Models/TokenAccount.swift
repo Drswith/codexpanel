@@ -26,6 +26,8 @@ struct TokenAccount: Codable, Identifiable {
     var secondaryResetAt: Date?
     var primaryLimitWindowSeconds: Int?
     var secondaryLimitWindowSeconds: Int?
+    var rateLimitResetAvailableCount: Int
+    var rateLimitResetCredits: [RateLimitResetCredit]
     var lastChecked: Date?
     var isActive: Bool
     var isSuspended: Bool       // 403 = 账号被封禁/停用
@@ -53,6 +55,8 @@ struct TokenAccount: Codable, Identifiable {
         case secondaryResetAt = "secondary_reset_at"
         case primaryLimitWindowSeconds = "primary_limit_window_seconds"
         case secondaryLimitWindowSeconds = "secondary_limit_window_seconds"
+        case rateLimitResetAvailableCount = "rate_limit_reset_available_count"
+        case rateLimitResetCredits = "rate_limit_reset_credits"
         case lastChecked = "last_checked"
         case isActive = "is_active"
         case isSuspended = "is_suspended"
@@ -80,6 +84,8 @@ struct TokenAccount: Codable, Identifiable {
         secondaryResetAt = try c.decodeIfPresent(Date.self, forKey: .secondaryResetAt)
         primaryLimitWindowSeconds = try c.decodeIfPresent(Int.self, forKey: .primaryLimitWindowSeconds)
         secondaryLimitWindowSeconds = try c.decodeIfPresent(Int.self, forKey: .secondaryLimitWindowSeconds)
+        rateLimitResetAvailableCount = try c.decodeIfPresent(Int.self, forKey: .rateLimitResetAvailableCount) ?? 0
+        rateLimitResetCredits = try c.decodeIfPresent([RateLimitResetCredit].self, forKey: .rateLimitResetCredits) ?? []
         lastChecked = try c.decodeIfPresent(Date.self, forKey: .lastChecked)
         isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? false
         isSuspended = try c.decodeIfPresent(Bool.self, forKey: .isSuspended) ?? false
@@ -97,6 +103,8 @@ struct TokenAccount: Codable, Identifiable {
          secondaryUsedPercent: Double = 0,
          primaryResetAt: Date? = nil, secondaryResetAt: Date? = nil,
          primaryLimitWindowSeconds: Int? = nil, secondaryLimitWindowSeconds: Int? = nil,
+         rateLimitResetAvailableCount: Int = 0,
+         rateLimitResetCredits: [RateLimitResetCredit] = [],
          lastChecked: Date? = nil, isActive: Bool = false, isSuspended: Bool = false, tokenExpired: Bool = false,
          tokenLastRefreshAt: Date? = nil,
          organizationName: String? = nil) {
@@ -118,6 +126,8 @@ struct TokenAccount: Codable, Identifiable {
         self.secondaryResetAt = secondaryResetAt
         self.primaryLimitWindowSeconds = primaryLimitWindowSeconds
         self.secondaryLimitWindowSeconds = secondaryLimitWindowSeconds
+        self.rateLimitResetAvailableCount = max(0, rateLimitResetAvailableCount)
+        self.rateLimitResetCredits = rateLimitResetCredits
         self.lastChecked = lastChecked
         self.isActive = isActive
         self.isSuspended = isSuspended
@@ -148,6 +158,9 @@ struct TokenAccount: Codable, Identifiable {
     }
 
     nonisolated var isBanned: Bool { isSuspended }
+    nonisolated func availableRateLimitResetCredits(now: Date = Date()) -> [RateLimitResetCredit] {
+        self.rateLimitResetCredits.filter { $0.isAvailable(now: now) }
+    }
     nonisolated var primaryExhausted: Bool { primaryUsedPercent >= Self.exhaustedRoutingThresholdPercent }
     nonisolated var secondaryExhausted: Bool { secondaryUsedPercent >= Self.exhaustedRoutingThresholdPercent }
     nonisolated var quotaExhausted: Bool { primaryExhausted || secondaryExhausted }

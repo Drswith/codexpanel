@@ -1240,9 +1240,11 @@ final class TokenStore: ObservableObject {
 
         let runningProcessIDs = self.codexRunningProcessIDs()
         let prunedProcessIDs = self.aggregateGatewayLeaseProcessIDs.intersection(runningProcessIDs)
-        let changed = prunedProcessIDs != self.aggregateGatewayLeaseProcessIDs
+        let wasActive = self.aggregateGatewayLeaseProcessIDs.isEmpty == false
+        self.aggregateGatewayLeaseProcessIDs = prunedProcessIDs
+        let isActive = prunedProcessIDs.isEmpty == false
+        let changed = isActive != wasActive
         if changed {
-            self.aggregateGatewayLeaseProcessIDs = prunedProcessIDs
             self.persistAggregateGatewayLeaseState()
         }
         self.configureAggregateGatewayLeaseTimer()
@@ -1753,6 +1755,13 @@ final class TokenStore: ObservableObject {
             return openAIIsSelected || openAIAccountRequest.accountUsageMode == .aggregateGateway
         }
         return false
+    }
+}
+
+extension TokenStore {
+    @discardableResult
+    func refreshAggregateGatewayLeaseStateForTesting() -> Bool {
+        self.refreshAggregateGatewayLeaseState()
     }
 }
 

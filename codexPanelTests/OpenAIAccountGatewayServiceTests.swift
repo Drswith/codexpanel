@@ -168,10 +168,45 @@ final class OpenAIAccountGatewayServiceTests: CodexPanelTestCase {
         XCTAssertTrue(service.usesDedicatedUpstreamSessionForTesting())
 
         let configuration = service.upstreamTransportConfigurationForTesting()
-        XCTAssertEqual(configuration.requestTimeout, 30)
-        XCTAssertEqual(configuration.resourceTimeout, 120)
+        XCTAssertEqual(configuration.requestTimeout, 300)
+        XCTAssertEqual(configuration.resourceTimeout, 3_600)
         XCTAssertEqual(configuration.webSocketReadyBudget, 8)
         XCTAssertFalse(configuration.waitsForConnectivity)
+    }
+
+    func testImageRoutesUseDedicatedShorterTransportAndPreserveRouteDiagnostics() {
+        let service = OpenAIAccountGatewayService()
+
+        XCTAssertTrue(service.usesDedicatedImagesUpstreamSessionForTesting())
+
+        let configuration = service.imagesUpstreamTransportConfigurationForTesting()
+        XCTAssertEqual(configuration.requestTimeout, 60)
+        XCTAssertEqual(configuration.resourceTimeout, 180)
+        XCTAssertEqual(configuration.webSocketReadyBudget, 8)
+        XCTAssertFalse(configuration.waitsForConnectivity)
+
+        XCTAssertEqual(
+            service.upstreamFailureDiagnosticForTesting(
+                routePath: "/v1/images/generations?source=codex",
+                failure: .upstreamStatus(502)
+            )?.route,
+            "images"
+        )
+        XCTAssertEqual(
+            service.upstreamFailureDiagnosticForTesting(
+                routePath: "/backend-api/codex/images/edits/",
+                failure: .transport(URLError(.timedOut))
+            )?.route,
+            "images-edits"
+        )
+
+        let request = service.parseRequestForTesting(
+            from: Data(
+                "POST /v1/images/generations?source=codex HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 2\r\n\r\n{}".utf8
+            )
+        )
+        XCTAssertEqual(request?.path, "/v1/images/generations?source=codex")
+        XCTAssertEqual(request?.body, Data("{}".utf8))
     }
 
     func testLoopbackProxySafePolicyOnlyAppliesToLoopbackProxySnapshots() {

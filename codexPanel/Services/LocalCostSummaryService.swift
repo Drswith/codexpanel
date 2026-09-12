@@ -3,7 +3,7 @@ import Foundation
 enum LocalCostPricing {
     private static let longContextInputThreshold = 272_000
     private static let longContextPremiumBaseModels = [
-        "gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna",
+        "gpt-5.4", "gpt-5.5", "gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-astra",
     ]
 
     private static let defaultPricingByModel: [String: CodexPanelModelPricing] = [
@@ -25,6 +25,8 @@ enum LocalCostPricing {
         "gpt-5.6": CodexPanelModelPricing(inputUSDPerToken: 5e-6, cachedInputUSDPerToken: 5e-7, outputUSDPerToken: 3e-5),
         "gpt-5.6-terra": CodexPanelModelPricing(inputUSDPerToken: 2.5e-6, cachedInputUSDPerToken: 2.5e-7, outputUSDPerToken: 1.5e-5),
         "gpt-5.6-luna": CodexPanelModelPricing(inputUSDPerToken: 1e-6, cachedInputUSDPerToken: 1e-7, outputUSDPerToken: 6e-6),
+        // GPT-6 Astra pricing published with the upstream v1.2.12 release.
+        "gpt-6-astra": CodexPanelModelPricing(inputUSDPerToken: 1e-5, cachedInputUSDPerToken: 1e-6, outputUSDPerToken: 5e-5),
         "qwen35_4b": .zero,
     ]
 
@@ -80,10 +82,30 @@ enum LocalCostPricing {
 
     private static func normalizedModelID(_ model: String) -> String {
         let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let withoutProviderPrefix: String
         if trimmed.hasPrefix("openai/") {
-            return String(trimmed.dropFirst("openai/".count))
+            withoutProviderPrefix = String(trimmed.dropFirst("openai/".count))
+        } else {
+            withoutProviderPrefix = trimmed
         }
-        return trimmed
+
+        if withoutProviderPrefix == "gpt-6" {
+            return "gpt-6-astra"
+        }
+        if let datedSuffix = withoutProviderPrefix.range(
+            of: #"-\d{4}-\d{2}-\d{2}$"#,
+            options: .regularExpression
+        ) {
+            let base = String(withoutProviderPrefix[..<datedSuffix.lowerBound])
+            if base == "gpt-6" {
+                return "gpt-6-astra"
+            }
+            if self.defaultPricingByModel[base] != nil {
+                return base
+            }
+        }
+
+        return withoutProviderPrefix
     }
 
     private static func usesLongContextPremium(

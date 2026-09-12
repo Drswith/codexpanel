@@ -447,6 +447,8 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
     var secondaryResetAt: Date?
     var primaryLimitWindowSeconds: Int?
     var secondaryLimitWindowSeconds: Int?
+    var rateLimitResetAvailableCount: Int?
+    var rateLimitResetCredits: [RateLimitResetCredit]?
     var lastChecked: Date?
     var isSuspended: Bool?
     var tokenExpired: Bool?
@@ -485,6 +487,8 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         secondaryResetAt: Date? = nil,
         primaryLimitWindowSeconds: Int? = nil,
         secondaryLimitWindowSeconds: Int? = nil,
+        rateLimitResetAvailableCount: Int? = nil,
+        rateLimitResetCredits: [RateLimitResetCredit]? = nil,
         lastChecked: Date? = nil,
         isSuspended: Bool? = nil,
         tokenExpired: Bool? = nil,
@@ -522,6 +526,8 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         self.secondaryResetAt = secondaryResetAt
         self.primaryLimitWindowSeconds = primaryLimitWindowSeconds
         self.secondaryLimitWindowSeconds = secondaryLimitWindowSeconds
+        self.rateLimitResetAvailableCount = rateLimitResetAvailableCount
+        self.rateLimitResetCredits = rateLimitResetCredits
         self.lastChecked = lastChecked
         self.isSuspended = isSuspended
         self.tokenExpired = tokenExpired
@@ -558,6 +564,8 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         sanitized.secondaryResetAt = normalized.secondaryResetAt
         sanitized.primaryLimitWindowSeconds = normalized.primaryLimitWindowSeconds
         sanitized.secondaryLimitWindowSeconds = normalized.secondaryLimitWindowSeconds
+        sanitized.rateLimitResetAvailableCount = normalized.rateLimitResetAvailableCount
+        sanitized.rateLimitResetCredits = normalized.rateLimitResetCredits
         sanitized.lastChecked = normalized.lastChecked
         sanitized.isSuspended = normalized.isSuspended
         sanitized.tokenExpired = normalized.tokenExpired
@@ -601,6 +609,8 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
             secondaryResetAt: self.secondaryResetAt,
             primaryLimitWindowSeconds: self.primaryLimitWindowSeconds,
             secondaryLimitWindowSeconds: self.secondaryLimitWindowSeconds,
+            rateLimitResetAvailableCount: self.rateLimitResetAvailableCount ?? 0,
+            rateLimitResetCredits: self.rateLimitResetCredits ?? [],
             lastChecked: self.lastChecked,
             isActive: isActive,
             isSuspended: self.isSuspended ?? false,
@@ -636,6 +646,8 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
             secondaryResetAt: normalizedAccount.secondaryResetAt,
             primaryLimitWindowSeconds: normalizedAccount.primaryLimitWindowSeconds,
             secondaryLimitWindowSeconds: normalizedAccount.secondaryLimitWindowSeconds,
+            rateLimitResetAvailableCount: normalizedAccount.rateLimitResetAvailableCount,
+            rateLimitResetCredits: normalizedAccount.rateLimitResetCredits,
             lastChecked: normalizedAccount.lastChecked,
             isSuspended: normalizedAccount.isSuspended,
             tokenExpired: normalizedAccount.tokenExpired,
@@ -656,6 +668,8 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         self.secondaryResetAt = candidate.secondaryResetAt
         self.primaryLimitWindowSeconds = candidate.primaryLimitWindowSeconds
         self.secondaryLimitWindowSeconds = candidate.secondaryLimitWindowSeconds
+        self.rateLimitResetAvailableCount = candidate.rateLimitResetAvailableCount
+        self.rateLimitResetCredits = candidate.rateLimitResetCredits
         self.lastChecked = candidateLastChecked
         return true
     }

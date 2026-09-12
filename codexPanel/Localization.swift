@@ -664,6 +664,95 @@ enum L {
             : "The usage endpoint returned HTTP \(statusCode); account switching remains available."
     }
 
+    // MARK: - Rate-limit reset credits
+    static var resetCreditsSectionTitle: String { zh ? "重置卡" : "Reset Credits" }
+    static var resetCreditUseSoonest: String { zh ? "使用最快到期" : "Use Soonest" }
+    static var resetCreditShowAllHint: String { zh ? "查看全部重置卡" : "Show all reset credits" }
+    static var resetCreditUse: String { zh ? "使用" : "Use" }
+    static var resetCreditConfirm: String { zh ? "确认使用" : "Confirm" }
+    static var resetCreditCancel: String { zh ? "取消" : "Cancel" }
+    static var resetCreditApproachingTitle: String { zh ? "重置卡即将过期" : "Reset Credit Expiring" }
+    static var resetCreditUrgentTitle: String { zh ? "重置卡将在 24 小时内过期" : "Reset Credit Expires Within 24h" }
+    static var resetCreditExpired: String { zh ? "已过期" : "Expired" }
+    static var resetCreditExpiresSoon: String { zh ? "即将过期" : "Expiring soon" }
+    static var resetCreditEmptyWindowWarning: String {
+        zh
+            ? "这个账号当前窗口几乎没用完。现在使用可能没有效果，或收益很小。"
+            : "This account’s windows are almost unused. Using a reset now may do nothing or help very little."
+    }
+    static var resetCreditNothingToReset: String {
+        zh ? "当前没有可重置的用量，重置卡未被消耗。" : "Nothing to reset right now, so the credit was not consumed."
+    }
+    static var resetCreditNoCredit: String {
+        zh ? "没有可用的重置卡。" : "No reset credit is available."
+    }
+    static var resetCreditConsumeFailed: String {
+        zh ? "使用重置卡失败。" : "Couldn’t use the reset credit."
+    }
+    static var resetCreditAlreadyRedeemed: String {
+        zh ? "这张重置卡已经用过了。" : "This reset credit was already redeemed."
+    }
+    static func resetCreditUsed(_ resetCount: Int?) -> String {
+        let suffix: String
+        if let resetCount, resetCount > 0 {
+            suffix = zh ? "已重置 \(resetCount) 个窗口。" : "\(resetCount) window(s) reset."
+        } else {
+            suffix = zh ? "正在刷新该账号额度。" : "Refreshing this account’s quota."
+        }
+        return (zh ? "已使用重置卡，" : "Reset credit used. ") + suffix
+    }
+    static func resetCreditMissingDetails(_ count: Int) -> String {
+        zh ? "有 \(count) 张可用重置卡，但缺少到期时间等信息，暂不展示。" : "\(count) available reset credit(s) are missing expiry details, so they’re not listed."
+    }
+    static var resetCreditNotificationTitle: String {
+        zh ? "重置卡即将过期" : "Reset Credit Expiring Soon"
+    }
+    static func resetCreditCount(_ count: Int) -> String {
+        zh ? "\(count)张" : "\(count) reset\(count == 1 ? "" : "s")"
+    }
+    static func resetCreditBannerDetail(_ account: String, _ expiry: String) -> String {
+        zh
+            ? "最早一张在「\(account)」，\(expiry)。"
+            : "Soonest credit is on \(account) and \(expiry)."
+    }
+    static func resetCreditInMin(_ m: Int) -> String {
+        zh ? "\(m) 分钟后过期" : "expires in \(m) min"
+    }
+    static func resetCreditInHr(_ h: Int, _ m: Int) -> String {
+        zh ? "\(h) 小时 \(m) 分后过期" : "expires in \(h)h \(m)m"
+    }
+    static func resetCreditInDay(_ d: Int, _ h: Int) -> String {
+        zh ? "\(d) 天 \(h) 小时后过期" : "expires in \(d)d \(h)h"
+    }
+    static func resetCreditConfirmMessage(
+        _ account: String,
+        _ expiry: String,
+        _ primaryLabel: String,
+        _ primaryUsed: Int,
+        _ secondaryLabel: String?,
+        _ secondaryUsed: Int?
+    ) -> String {
+        let primaryPart = "\(primaryLabel) 已用 \(primaryUsed)%"
+        let secondaryPart: String?
+        if let secondaryLabel, let secondaryUsed {
+            secondaryPart = "\(secondaryLabel) 已用 \(secondaryUsed)%"
+        } else {
+            secondaryPart = nil
+        }
+        return zh
+            ? "将使用「\(account)」最快到期的重置卡（\(expiry)）。当前 \(primaryPart)"
+                + (secondaryPart.map { "，\($0)" } ?? "")
+                + "。不会切换当前写代码的账号。"
+            : "This uses the soonest reset on \(account) (\(expiry)). \(primaryLabel) is \(primaryUsed)% used"
+                + (secondaryPart.map { " and \($0)" } ?? "")
+                + ". It won’t switch the account you’re coding on."
+    }
+    static func resetCreditNotificationBody(_ account: String, _ expiry: String) -> String {
+        zh
+            ? "「\(account)」有一张重置卡\(expiry)。"
+            : "\(account) has a reset credit that \(expiry)."
+    }
+
     static func available(_ n: Int, _ total: Int) -> String {
         zh ? "\(n)/\(total) 可用" : "\(n)/\(total) Available"
     }
