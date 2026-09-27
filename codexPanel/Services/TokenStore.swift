@@ -170,8 +170,10 @@ final class TokenStore: ObservableObject {
     @Published private(set) var localCostSummary: LocalCostSummary = .empty
     @Published private(set) var historicalModels: [String]
     @Published private(set) var aggregateRoutedAccountID: String?
+    @Published private(set) var codexServiceTierCatalog: CodexServiceTierCatalog?
 
     private let configStore: CodexPanelConfigStore
+    private let loadServiceTierCatalog: () -> CodexServiceTierCatalog?
     private let syncService: any CodexSynchronizing
     private let switchJournalStore = SwitchJournalStore()
     private let costSummaryService: LocalCostSummaryService
@@ -208,9 +210,13 @@ final class TokenStore: ObservableObject {
         aggregateRouteJournalStore: OpenAIAggregateRouteJournalStoring = OpenAIAggregateRouteJournalStore(),
         codexRunningProcessIDs: @escaping () -> Set<pid_t> = {
             Set(NSRunningApplication.runningApplications(withBundleIdentifier: "com.openai.codex").map(\.processIdentifier))
+        },
+        loadServiceTierCatalog: @escaping () -> CodexServiceTierCatalog? = {
+            CodexServiceTierCatalog.load()
         }
     ) {
         self.configStore = configStore
+        self.loadServiceTierCatalog = loadServiceTierCatalog
         self.syncService = syncService
         self.costSummaryService = costSummaryService
         self.openAIAccountGatewayService = openAIAccountGatewayService
@@ -231,11 +237,17 @@ final class TokenStore: ObservableObject {
             initialConfig = CodexPanelConfig()
         }
         let clearedLegacySuspensions = initialConfig.clearLegacyUsageEndpointSuspensions()
+        let initialCatalog = self.loadServiceTierCatalog()
+        self.codexServiceTierCatalog = initialCatalog
+        let adjustedServiceTier = Self.applyCompatibleServiceTier(
+            to: &initialConfig,
+            catalog: initialCatalog
+        )
         self.config = initialConfig
         self.historicalModels = Self.normalizedHistoricalModels(Array(initialConfig.modelPricing.keys))
         self.lastPublishedOpenRouterSelected = self.config.activeProvider()?.kind == .openRouter
 
-        if clearedLegacySuspensions {
+        if clearedLegacySuspensions || adjustedServiceTier {
             try? self.configStore.save(initialConfig)
         }
 
@@ -296,11 +308,19 @@ final class TokenStore: ObservableObject {
     }
 
     func load() {
+        self.reloadCodexServiceTierCatalog()
         if var loaded = try? self.configStore.loadOrMigrate() {
             let preservedNewerQuota = loaded.preserveNewerOAuthQuotaSnapshots(from: self.config)
+            let adjustedServiceTier = Self.applyCompatibleServiceTier(
+                to: &loaded,
+                catalog: self.codexServiceTierCatalog
+            )
             self.config = loaded
-            if preservedNewerQuota {
+            if preservedNewerQuota || adjustedServiceTier {
                 try? self.configStore.save(loaded)
+            }
+            if adjustedServiceTier {
+                try? self.syncService.synchronize(config: loaded)
             }
             let injectedDebugMockData = self.injectDebugMockDataIfNeeded()
             self.publishState()
@@ -745,6 +765,11 @@ final class TokenStore: ObservableObject {
                 self.config.global.reasoningEffort,
                 for: trimmedModelID
             )
+            let compatibleServiceTier = CodexPanelGlobalSettings.compatibleServiceTier(
+                self.config.global.serviceTier,
+                for: trimmedModelID,
+                catalog: self.codexServiceTierCatalog
+            )
             switch activeProvider.kind {
             case .openRouter:
                 try self.config.setOpenRouterSelectedModel(trimmedModelID)
@@ -762,7 +787,7 @@ final class TokenStore: ObservableObject {
                         defaultModel: trimmedModelID,
                         reviewModel: trimmedModelID,
                         reasoningEffort: compatibleReasoningEffort,
-                        serviceTier: self.config.global.serviceTier
+                        serviceTier: compatibleServiceTier
                     )
                 )
             }
@@ -777,7 +802,11 @@ final class TokenStore: ObservableObject {
                     self.config.global.reasoningEffort,
                     for: trimmedModelID
                 ),
-                serviceTier: self.config.global.serviceTier
+                serviceTier: CodexPanelGlobalSettings.compatibleServiceTier(
+                    self.config.global.serviceTier,
+                    for: trimmedModelID,
+                    catalog: self.codexServiceTierCatalog
+                )
             )
         )
     }
@@ -805,8 +834,12 @@ final class TokenStore: ObservableObject {
     }
 
     func updateServiceTier(_ serviceTier: String) throws {
-        let trimmedServiceTier = serviceTier.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedServiceTier.isEmpty == false else {
+        guard let normalizedServiceTier = CodexPanelGlobalSettings.normalizedServiceTier(serviceTier),
+              CodexPanelGlobalSettings.supportsServiceTier(
+                  normalizedServiceTier,
+                  for: self.activeModel,
+                  catalog: self.codexServiceTierCatalog
+              ) else {
             throw TokenStoreError.invalidInput
         }
 
@@ -815,9 +848,38 @@ final class TokenStore: ObservableObject {
                 defaultModel: self.config.global.defaultModel,
                 reviewModel: self.config.global.reviewModel,
                 reasoningEffort: self.config.global.reasoningEffort,
-                serviceTier: trimmedServiceTier
+                serviceTier: normalizedServiceTier
             )
         )
+    }
+
+    func serviceTierOptions(for modelID: String) -> [String] {
+        CodexPanelGlobalSettings.serviceTierOptions(
+            for: modelID,
+            catalog: self.codexServiceTierCatalog
+        )
+    }
+
+    func reloadCodexServiceTierCatalog() {
+        let catalog = self.loadServiceTierCatalog()
+        if catalog != self.codexServiceTierCatalog {
+            self.codexServiceTierCatalog = catalog
+        }
+    }
+
+    private static func applyCompatibleServiceTier(
+        to config: inout CodexPanelConfig,
+        catalog: CodexServiceTierCatalog?
+    ) -> Bool {
+        guard config.activeProvider()?.kind == .openAIOAuth else { return false }
+        let compatible = CodexPanelGlobalSettings.compatibleServiceTier(
+            config.global.serviceTier,
+            for: config.global.defaultModel,
+            catalog: catalog
+        )
+        guard compatible != config.global.serviceTier else { return false }
+        config.global.serviceTier = compatible
+        return true
     }
 
     func saveSettings(_ requests: SettingsSaveRequests) throws {

@@ -113,13 +113,6 @@ enum SettingsSaveRequestApplier {
     }
 
     private static func normalizedServiceTier(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return nil }
-        switch trimmed {
-        case "standard", "fast":
-            return trimmed
-        default:
-            return nil
-        }
+        CodexPanelGlobalSettings.normalizedServiceTier(value)
     }
 }

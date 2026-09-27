@@ -25,6 +25,41 @@ final class CodexPanelConfigStoreTests: CodexPanelTestCase {
         XCTAssertEqual(restored.email, account.email)
     }
 
+    func testLoadOrMigrateMapsLegacyFlexServiceTierToStandard() throws {
+        try CodexPaths.ensureDirectories()
+        try CodexPaths.writeSecureFile(
+            Data(
+                """
+                model = "gpt-5.6-sol"
+                model_reasoning_effort = "medium"
+                service_tier = "flex"
+                """.utf8
+            ),
+            to: CodexPaths.configTomlURL
+        )
+
+        let loaded = try CodexPanelConfigStore().loadOrMigrate()
+
+        XCTAssertEqual(loaded.global.serviceTier, "standard")
+    }
+
+    func testLoadOrMigrateTreatsMissingServiceTierAsStandard() throws {
+        try CodexPaths.ensureDirectories()
+        try CodexPaths.writeSecureFile(
+            Data(
+                """
+                model = "gpt-5.6-sol"
+                model_reasoning_effort = "medium"
+                """.utf8
+            ),
+            to: CodexPaths.configTomlURL
+        )
+
+        let loaded = try CodexPanelConfigStore().loadOrMigrate()
+
+        XCTAssertEqual(loaded.global.serviceTier, "standard")
+    }
+
     func testClearingLegacyUsageSuspensionsRestoresOAuthAccountAvailability() throws {
         var config = CodexPanelConfig()
         var account = try self.makeOAuthAccount(

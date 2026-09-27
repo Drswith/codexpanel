@@ -114,11 +114,13 @@ public struct CodexConfigurationRenderer: Sendable {
             value: self.quote(request.global.reasoningEffort)
         )
 
-        if request.provider.kind == .openAIOAuth {
+        if request.provider.kind == .openAIOAuth,
+           let serviceTier = request.global.serviceTier,
+           serviceTier.isEmpty == false {
             text = self.upsertSetting(
                 text,
                 key: "service_tier",
-                value: self.quote(request.global.serviceTier)
+                value: self.quote(serviceTier)
             )
         } else {
             text = self.removeSetting(text, key: "service_tier")

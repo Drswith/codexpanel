@@ -49,6 +49,27 @@ final class ConfigurationRendererTests: XCTestCase {
         XCTAssertFalse(toml.contains("model_providers.OpenAI"))
     }
 
+    func testRendersOAuthStandardRoutingWithoutServiceTierKey() throws {
+        var request = self.makeRequest(
+            kind: .openAIOAuth,
+            credentials: CodexAccountCredentials(
+                accessToken: "access-token",
+                refreshToken: "refresh-token",
+                idToken: "id-token",
+                accountID: "account-1"
+            )
+        )
+        request.global.serviceTier = nil
+
+        let rendered = try CodexConfigurationRenderer().render(
+            request: request,
+            existingConfigTOML: "service_tier = \"flex\"\n"
+        )
+
+        let toml = String(decoding: rendered.configTOML, as: UTF8.self)
+        XCTAssertFalse(toml.contains("service_tier"), toml)
+    }
+
     func testRendersChatCompletionsGatewayForCompatibleProvider() throws {
         var request = self.makeRequest(
             kind: .openAICompatible,

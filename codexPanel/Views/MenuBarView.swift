@@ -530,7 +530,6 @@ struct MenuBarView: View {
         "gpt-5.4-mini",
     ]
     static let defaultCodexReasoningEffortOptions = CodexPanelGlobalSettings.baseReasoningEffortOptions
-    private let serviceTierOptions = ["standard", "fast"]
 
     @State private var isRefreshing = false
     @State private var errorBanner: MenuBarErrorBannerState?
@@ -971,6 +970,11 @@ struct MenuBarView: View {
     private func modelSelectionRow(currentModel: String) -> some View {
         let currentModelValue = self.modelSelectionValue(currentModel: currentModel)
         let displayedCurrentModel = self.modelSelectionDisplayValue(currentModel: currentModel)
+        let effectiveServiceTier = CodexPanelGlobalSettings.compatibleServiceTier(
+            self.store.config.global.serviceTier,
+            for: currentModel,
+            catalog: self.store.codexServiceTierCatalog
+        )
 
         return HStack(alignment: .center, spacing: 8) {
             self.compactSelectionMenu(
@@ -994,9 +998,9 @@ struct MenuBarView: View {
             }
 
             self.compactSelectionMenu(
-                title: self.store.config.global.serviceTier,
-                options: self.serviceTierOptions,
-                currentValue: self.store.config.global.serviceTier
+                title: effectiveServiceTier,
+                options: self.store.serviceTierOptions(for: currentModel),
+                currentValue: effectiveServiceTier
             ) { serviceTier in
                 Task { await self.updateSelectedServiceTier(serviceTier) }
             }
