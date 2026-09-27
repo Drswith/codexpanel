@@ -26,6 +26,9 @@ struct TokenAccount: Codable, Identifiable {
     var secondaryResetAt: Date?
     var primaryLimitWindowSeconds: Int?
     var secondaryLimitWindowSeconds: Int?
+    var lunaReserveUsedPercent: Double?
+    var lunaReserveResetAt: Date?
+    var lunaReserveLimitWindowSeconds: Int?
     var rateLimitResetAvailableCount: Int
     var rateLimitResetCredits: [RateLimitResetCredit]
     var lastChecked: Date?
@@ -55,6 +58,9 @@ struct TokenAccount: Codable, Identifiable {
         case secondaryResetAt = "secondary_reset_at"
         case primaryLimitWindowSeconds = "primary_limit_window_seconds"
         case secondaryLimitWindowSeconds = "secondary_limit_window_seconds"
+        case lunaReserveUsedPercent = "luna_reserve_used_percent"
+        case lunaReserveResetAt = "luna_reserve_reset_at"
+        case lunaReserveLimitWindowSeconds = "luna_reserve_limit_window_seconds"
         case rateLimitResetAvailableCount = "rate_limit_reset_available_count"
         case rateLimitResetCredits = "rate_limit_reset_credits"
         case lastChecked = "last_checked"
@@ -84,6 +90,9 @@ struct TokenAccount: Codable, Identifiable {
         secondaryResetAt = try c.decodeIfPresent(Date.self, forKey: .secondaryResetAt)
         primaryLimitWindowSeconds = try c.decodeIfPresent(Int.self, forKey: .primaryLimitWindowSeconds)
         secondaryLimitWindowSeconds = try c.decodeIfPresent(Int.self, forKey: .secondaryLimitWindowSeconds)
+        lunaReserveUsedPercent = try c.decodeIfPresent(Double.self, forKey: .lunaReserveUsedPercent)
+        lunaReserveResetAt = try c.decodeIfPresent(Date.self, forKey: .lunaReserveResetAt)
+        lunaReserveLimitWindowSeconds = try c.decodeIfPresent(Int.self, forKey: .lunaReserveLimitWindowSeconds)
         rateLimitResetAvailableCount = try c.decodeIfPresent(Int.self, forKey: .rateLimitResetAvailableCount) ?? 0
         rateLimitResetCredits = try c.decodeIfPresent([RateLimitResetCredit].self, forKey: .rateLimitResetCredits) ?? []
         lastChecked = try c.decodeIfPresent(Date.self, forKey: .lastChecked)
@@ -103,6 +112,8 @@ struct TokenAccount: Codable, Identifiable {
          secondaryUsedPercent: Double = 0,
          primaryResetAt: Date? = nil, secondaryResetAt: Date? = nil,
          primaryLimitWindowSeconds: Int? = nil, secondaryLimitWindowSeconds: Int? = nil,
+         lunaReserveUsedPercent: Double? = nil, lunaReserveResetAt: Date? = nil,
+         lunaReserveLimitWindowSeconds: Int? = nil,
          rateLimitResetAvailableCount: Int = 0,
          rateLimitResetCredits: [RateLimitResetCredit] = [],
          lastChecked: Date? = nil, isActive: Bool = false, isSuspended: Bool = false, tokenExpired: Bool = false,
@@ -126,6 +137,9 @@ struct TokenAccount: Codable, Identifiable {
         self.secondaryResetAt = secondaryResetAt
         self.primaryLimitWindowSeconds = primaryLimitWindowSeconds
         self.secondaryLimitWindowSeconds = secondaryLimitWindowSeconds
+        self.lunaReserveUsedPercent = lunaReserveUsedPercent
+        self.lunaReserveResetAt = lunaReserveResetAt
+        self.lunaReserveLimitWindowSeconds = lunaReserveLimitWindowSeconds
         self.rateLimitResetAvailableCount = max(0, rateLimitResetAvailableCount)
         self.rateLimitResetCredits = rateLimitResetCredits
         self.lastChecked = lastChecked
@@ -334,6 +348,11 @@ extension TokenAccount {
         self.secondaryRemainingPercent(now: Date())
     }
 
+    nonisolated var lunaReserveRemainingPercent: Double? {
+        guard let usedPercent = self.lunaReserveUsedPercent else { return nil }
+        return max(0, 100 - usedPercent)
+    }
+
     nonisolated func primaryRemainingPercent(now: Date) -> Double {
         guard self.resolvedPrimaryLimitWindowSeconds(now: now) != nil else { return 0 }
         return max(0, 100 - primaryUsedPercent)
@@ -468,7 +487,7 @@ extension TokenAccount {
     }
 
     nonisolated func usageWindowDisplays(mode: CodexPanelUsageDisplayMode) -> [UsageWindowDisplay] {
-        self.rateLimitWindows(now: Date()).map {
+        var windows = self.rateLimitWindows(now: Date()).map {
             UsageWindowDisplay(
                 label: self.windowLabel(for: $0.limitWindowSeconds),
                 usedPercent: $0.usedPercent,
@@ -476,6 +495,17 @@ extension TokenAccount {
                 limitWindowSeconds: $0.limitWindowSeconds
             )
         }
+        if let usedPercent = self.lunaReserveUsedPercent {
+            windows.append(
+                UsageWindowDisplay(
+                    label: L.lunaReserve,
+                    usedPercent: usedPercent,
+                    displayPercent: mode == .remaining ? max(0, 100 - usedPercent) : usedPercent,
+                    limitWindowSeconds: self.lunaReserveLimitWindowSeconds
+                )
+            )
+        }
+        return windows
     }
 
     nonisolated func isBelowVisualWarningThreshold() -> Bool {

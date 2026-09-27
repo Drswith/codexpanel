@@ -27,6 +27,7 @@ enum L {
     // MARK: - Status Bar
     static var weeklyLimit: String { zh ? "周限额" : "Weekly Limit" }
     static var hourLimit: String   { zh ? "5h限额" : "5h Limit" }
+    nonisolated static var lunaReserve: String { "GPT Reserve" }
 
     // MARK: - MenuBarView
     static var noAccounts: String      { zh ? "还没有账号"          : "No Accounts" }
