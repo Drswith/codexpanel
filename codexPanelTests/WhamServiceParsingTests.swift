@@ -113,4 +113,31 @@ final class WhamServiceParsingTests: XCTestCase {
         XCTAssertEqual(result.primaryResetAt, Date(timeIntervalSince1970: 1_775_372_003.0))
         XCTAssertEqual(result.secondaryResetAt, Date(timeIntervalSince1970: 1_775_690_771.0))
     }
+
+    func testParsesLunaReserveFromAdditionalRateLimits() {
+        let result = WhamService.shared.parseUsage([
+            "plan_type": "pro",
+            "rate_limit": [
+                "primary_window": [
+                    "used_percent": 100.0,
+                    "limit_window_seconds": 18_000,
+                ],
+            ],
+            "additional_rate_limits": [[
+                "limit_name": "gpt-reserve",
+                "normal_model_slug": "gpt-5.6-luna",
+                "rate_limit": [
+                    "primary_window": [
+                        "used_percent": 3.0,
+                        "limit_window_seconds": 604_800,
+                        "reset_at": 1_790_646_284.0,
+                    ],
+                ],
+            ]],
+        ])
+
+        XCTAssertEqual(result.lunaReserveUsedPercent, 3)
+        XCTAssertEqual(result.lunaReserveLimitWindowSeconds, 604_800)
+        XCTAssertEqual(result.lunaReserveResetAt, Date(timeIntervalSince1970: 1_790_646_284.0))
+    }
 }

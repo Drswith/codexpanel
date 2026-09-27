@@ -447,6 +447,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
     var secondaryResetAt: Date?
     var primaryLimitWindowSeconds: Int?
     var secondaryLimitWindowSeconds: Int?
+    var lunaReserveUsedPercent: Double?
+    var lunaReserveResetAt: Date?
+    var lunaReserveLimitWindowSeconds: Int?
     var rateLimitResetAvailableCount: Int?
     var rateLimitResetCredits: [RateLimitResetCredit]?
     var lastChecked: Date?
@@ -487,6 +490,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         secondaryResetAt: Date? = nil,
         primaryLimitWindowSeconds: Int? = nil,
         secondaryLimitWindowSeconds: Int? = nil,
+        lunaReserveUsedPercent: Double? = nil,
+        lunaReserveResetAt: Date? = nil,
+        lunaReserveLimitWindowSeconds: Int? = nil,
         rateLimitResetAvailableCount: Int? = nil,
         rateLimitResetCredits: [RateLimitResetCredit]? = nil,
         lastChecked: Date? = nil,
@@ -526,6 +532,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         self.secondaryResetAt = secondaryResetAt
         self.primaryLimitWindowSeconds = primaryLimitWindowSeconds
         self.secondaryLimitWindowSeconds = secondaryLimitWindowSeconds
+        self.lunaReserveUsedPercent = lunaReserveUsedPercent
+        self.lunaReserveResetAt = lunaReserveResetAt
+        self.lunaReserveLimitWindowSeconds = lunaReserveLimitWindowSeconds
         self.rateLimitResetAvailableCount = rateLimitResetAvailableCount
         self.rateLimitResetCredits = rateLimitResetCredits
         self.lastChecked = lastChecked
@@ -564,6 +573,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         sanitized.secondaryResetAt = normalized.secondaryResetAt
         sanitized.primaryLimitWindowSeconds = normalized.primaryLimitWindowSeconds
         sanitized.secondaryLimitWindowSeconds = normalized.secondaryLimitWindowSeconds
+        sanitized.lunaReserveUsedPercent = normalized.lunaReserveUsedPercent
+        sanitized.lunaReserveResetAt = normalized.lunaReserveResetAt
+        sanitized.lunaReserveLimitWindowSeconds = normalized.lunaReserveLimitWindowSeconds
         sanitized.rateLimitResetAvailableCount = normalized.rateLimitResetAvailableCount
         sanitized.rateLimitResetCredits = normalized.rateLimitResetCredits
         sanitized.lastChecked = normalized.lastChecked
@@ -609,6 +621,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
             secondaryResetAt: self.secondaryResetAt,
             primaryLimitWindowSeconds: self.primaryLimitWindowSeconds,
             secondaryLimitWindowSeconds: self.secondaryLimitWindowSeconds,
+            lunaReserveUsedPercent: self.lunaReserveUsedPercent,
+            lunaReserveResetAt: self.lunaReserveResetAt,
+            lunaReserveLimitWindowSeconds: self.lunaReserveLimitWindowSeconds,
             rateLimitResetAvailableCount: self.rateLimitResetAvailableCount ?? 0,
             rateLimitResetCredits: self.rateLimitResetCredits ?? [],
             lastChecked: self.lastChecked,
@@ -646,6 +661,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
             secondaryResetAt: normalizedAccount.secondaryResetAt,
             primaryLimitWindowSeconds: normalizedAccount.primaryLimitWindowSeconds,
             secondaryLimitWindowSeconds: normalizedAccount.secondaryLimitWindowSeconds,
+            lunaReserveUsedPercent: normalizedAccount.lunaReserveUsedPercent,
+            lunaReserveResetAt: normalizedAccount.lunaReserveResetAt,
+            lunaReserveLimitWindowSeconds: normalizedAccount.lunaReserveLimitWindowSeconds,
             rateLimitResetAvailableCount: normalizedAccount.rateLimitResetAvailableCount,
             rateLimitResetCredits: normalizedAccount.rateLimitResetCredits,
             lastChecked: normalizedAccount.lastChecked,
@@ -668,6 +686,9 @@ struct CodexPanelProviderAccount: Codable, Identifiable, Equatable {
         self.secondaryResetAt = candidate.secondaryResetAt
         self.primaryLimitWindowSeconds = candidate.primaryLimitWindowSeconds
         self.secondaryLimitWindowSeconds = candidate.secondaryLimitWindowSeconds
+        self.lunaReserveUsedPercent = candidate.lunaReserveUsedPercent
+        self.lunaReserveResetAt = candidate.lunaReserveResetAt
+        self.lunaReserveLimitWindowSeconds = candidate.lunaReserveLimitWindowSeconds
         self.rateLimitResetAvailableCount = candidate.rateLimitResetAvailableCount
         self.rateLimitResetCredits = candidate.rateLimitResetCredits
         self.lastChecked = candidateLastChecked
