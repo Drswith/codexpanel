@@ -401,7 +401,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertTrue(tomlText.contains(#"model = "gpt-5.5-mini""#))
         XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-mini""#))
         XCTAssertTrue(tomlText.contains(#"model_reasoning_effort = "high""#))
-        XCTAssertTrue(tomlText.contains(#"service_tier = "standard""#))
+        XCTAssertFalse(tomlText.contains("service_tier"), tomlText)
     }
 
     func testSwitchingFromUltraToLunaFallsBackToMax() throws {
@@ -496,6 +496,80 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-mini""#))
         XCTAssertTrue(tomlText.contains(#"model_reasoning_effort = "high""#))
         XCTAssertTrue(tomlText.contains(#"service_tier = "fast""#))
+    }
+
+    func testServiceTierOptionsFollowCodexModelsCache() throws {
+        try CodexServiceTierCatalogTests.writeFixture(models: [
+            CodexServiceTierCatalogTests.model("gpt-5.6-sol", tiers: [("priority", "Fast")]),
+            CodexServiceTierCatalogTests.model("gpt-6-astra", tiers: [("priority", "Fast"), ("ultrafast", "Ultrafast")]),
+            CodexServiceTierCatalogTests.model("gpt-5.5", tiers: []),
+        ])
+        try self.writeOAuthConfig(model: "gpt-6-astra", serviceTier: "standard")
+
+        let store = self.makeTokenStore(
+            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
+                result: .failure(URLError(.notConnectedToInternet))
+            )
+        )
+
+        XCTAssertEqual(store.serviceTierOptions(for: "gpt-6-astra"), ["standard", "fast", "ultrafast"])
+        XCTAssertEqual(store.serviceTierOptions(for: "gpt-5.6-sol"), ["standard", "fast"])
+        XCTAssertEqual(store.serviceTierOptions(for: "gpt-5.5"), ["standard"])
+        XCTAssertEqual(store.serviceTierOptions(for: "gpt-unlisted"), ["standard", "fast"])
+
+        try store.updateServiceTier("ultrafast")
+        XCTAssertEqual(store.config.global.serviceTier, "ultrafast")
+
+        XCTAssertThrowsError(try store.updateServiceTier("turbo"))
+        XCTAssertEqual(store.config.global.serviceTier, "ultrafast")
+        try store.updateServiceTier("flex")
+        XCTAssertEqual(store.config.global.serviceTier, "standard")
+        try store.updateServiceTier("ultrafast")
+
+        try store.updateRouteModel("gpt-5.6-sol")
+        XCTAssertEqual(store.config.global.serviceTier, "standard")
+        try store.updateServiceTier("fast")
+        try store.updateRouteModel("gpt-5.5")
+        XCTAssertEqual(store.config.global.serviceTier, "standard")
+    }
+
+    func testLoadAutoAdjustsStoredServiceTierWhenCodexCatalogChanges() throws {
+        try CodexServiceTierCatalogTests.writeFixture(models: [
+            CodexServiceTierCatalogTests.model("gpt-5.6-sol", tiers: [("priority", "Fast")]),
+        ])
+        try self.writeOAuthConfig(model: "gpt-5.6-sol", serviceTier: "fast")
+
+        let store = self.makeTokenStore(
+            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
+                result: .failure(URLError(.notConnectedToInternet))
+            )
+        )
+        XCTAssertEqual(store.config.global.serviceTier, "fast")
+        XCTAssertEqual(store.codexServiceTierCatalog?.models.map(\.slug), ["gpt-5.6-sol"])
+
+        try CodexServiceTierCatalogTests.writeFixture(models: [
+            CodexServiceTierCatalogTests.model("gpt-5.6-sol", tiers: []),
+        ])
+        store.load()
+
+        XCTAssertEqual(store.config.global.serviceTier, "standard")
+        XCTAssertEqual(store.serviceTierOptions(for: "gpt-5.6-sol"), ["standard"])
+        let reloaded = try CodexPanelConfigStore().loadOrMigrate()
+        XCTAssertEqual(reloaded.global.serviceTier, "standard")
+    }
+
+    func testInitializationAutoAdjustsLegacyFlexServiceTier() throws {
+        try self.writeOAuthConfig(model: "gpt-5.6-sol", serviceTier: "flex")
+
+        let store = self.makeTokenStore(
+            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
+                result: .failure(URLError(.notConnectedToInternet))
+            )
+        )
+
+        XCTAssertEqual(store.config.global.serviceTier, "standard")
+        XCTAssertNil(store.codexServiceTierCatalog)
+        XCTAssertEqual(store.serviceTierOptions(for: "gpt-5.6-sol"), ["standard", "fast"])
     }
 
     func testInitializationRebuildsLocalCostSummaryWhenCachedSummaryIsZeroButLedgerExists() throws {
@@ -898,6 +972,31 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         return CodexPanelConfig(
             active: CodexPanelActiveSelection(providerId: provider.id, accountId: account.id),
             providers: [provider]
+        )
+    }
+
+    private func writeOAuthConfig(model: String, serviceTier: String) throws {
+        let accountID = "acct_service_tier"
+        let account = try self.makeOAuthAccount(accountID: accountID, email: "tier@example.com")
+        let stored = CodexPanelProviderAccount.fromTokenAccount(account, existingID: accountID)
+        let provider = CodexPanelProvider(
+            id: "openai-oauth",
+            kind: .openAIOAuth,
+            label: "OpenAI",
+            activeAccountId: accountID,
+            accounts: [stored]
+        )
+        try self.writeConfig(
+            CodexPanelConfig(
+                global: CodexPanelGlobalSettings(
+                    defaultModel: model,
+                    reviewModel: model,
+                    reasoningEffort: "medium",
+                    serviceTier: serviceTier
+                ),
+                active: CodexPanelActiveSelection(providerId: provider.id, accountId: accountID),
+                providers: [provider]
+            )
         )
     }
 

@@ -23,6 +23,7 @@ enum CodexPaths {
     static var authURL: URL { self.codexRoot.appendingPathComponent("auth.json") }
     static var tokenPoolURL: URL { self.codexRoot.appendingPathComponent("token_pool.json") }
     static var configTomlURL: URL { self.codexRoot.appendingPathComponent("config.toml") }
+    static var modelsCacheURL: URL { self.codexRoot.appendingPathComponent("models_cache.json") }
     static var providerSecretsURL: URL { self.codexRoot.appendingPathComponent("provider-secrets.env") }
     static var stateSQLiteURL: URL {
         self.versionedSQLiteURL(

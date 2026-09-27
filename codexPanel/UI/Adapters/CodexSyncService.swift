@@ -11,6 +11,7 @@ typealias CodexSyncError = CodexConfigurationSyncError
 struct CodexSyncService: CodexSynchronizing {
     private let synchronizer: CodexConfigurationSynchronizer
     private let networkConfiguration: CodexPanelRuntimeNetworkConfiguration
+    private let loadServiceTierCatalog: () -> CodexServiceTierCatalog?
 
     init(
         networkConfiguration: CodexPanelRuntimeNetworkConfiguration = CodexPanelRuntimeProfile.current.network,
@@ -33,6 +34,9 @@ struct CodexSyncService: CodexSynchronizing {
         removeFileIfPresent: @escaping (URL) throws -> Void = { url in
             guard FileManager.default.fileExists(atPath: url.path) else { return }
             try FileManager.default.removeItem(at: url)
+        },
+        loadServiceTierCatalog: @escaping () -> CodexServiceTierCatalog? = {
+            CodexServiceTierCatalog.load()
         }
     ) {
         let paths = CodexConfigurationPaths(
@@ -55,6 +59,7 @@ struct CodexSyncService: CodexSynchronizing {
             fileSystem: fileSystem
         )
         self.networkConfiguration = networkConfiguration
+        self.loadServiceTierCatalog = loadServiceTierCatalog
     }
 
     func synchronize(config: CodexPanelConfig) throws {
@@ -71,16 +76,23 @@ struct CodexSyncService: CodexSynchronizing {
 
         let providerKind: CodexProviderKind
         let modelID: String?
+        let serviceTier: String?
         switch provider.kind {
         case .openAIOAuth:
             providerKind = .openAIOAuth
             modelID = nil
+            serviceTier = config.global.codexConfigServiceTier(
+                for: config.global.defaultModel,
+                catalog: self.loadServiceTierCatalog()
+            )
         case .openAICompatible:
             providerKind = .openAICompatible
             modelID = provider.compatibleEffectiveModelID
+            serviceTier = nil
         case .openRouter:
             providerKind = .openRouter
             modelID = provider.openRouterEffectiveModelID
+            serviceTier = nil
         }
 
         return CodexConfigurationSyncRequest(
@@ -88,7 +100,7 @@ struct CodexSyncService: CodexSynchronizing {
                 defaultModel: config.global.defaultModel,
                 reviewModel: config.global.reviewModel,
                 reasoningEffort: config.global.reasoningEffort,
-                serviceTier: config.global.serviceTier
+                serviceTier: serviceTier
             ),
             provider: CodexProviderConfiguration(
                 kind: providerKind,

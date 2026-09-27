@@ -103,6 +103,65 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         XCTAssertFalse(tomlText.contains("preferred_auth_method"))
     }
 
+    func testSynchronizeRemovesLegacyFlexServiceTierForStandardRouting() throws {
+        try CodexPaths.ensureDirectories()
+        try CodexPaths.writeSecureFile(
+            Data(
+                """
+                service_tier = "flex"
+                model = "gpt-5.5-mini"
+                """.utf8
+            ),
+            to: CodexPaths.configTomlURL
+        )
+
+        let config = Self.oauthConfig(model: "gpt-5.6-sol", serviceTier: "standard")
+        try CodexSyncService().synchronize(config: config)
+
+        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertFalse(tomlText.contains("service_tier"), tomlText)
+        XCTAssertFalse(tomlText.contains("flex"), tomlText)
+        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.6-sol""#))
+    }
+
+    func testSynchronizeDropsServiceTierTheCodexCatalogNoLongerOffersForCurrentModel() throws {
+        try CodexPaths.ensureDirectories()
+        try CodexPaths.writeSecureFile(Data(#"service_tier = "fast""#.utf8), to: CodexPaths.configTomlURL)
+        try CodexServiceTierCatalogTests.writeFixture(models: [
+            CodexServiceTierCatalogTests.model("gpt-5.6-sol", tiers: []),
+            CodexServiceTierCatalogTests.model("gpt-6-astra", tiers: [("priority", "Fast"), ("ultrafast", "Ultrafast")]),
+        ])
+
+        try CodexSyncService().synchronize(config: Self.oauthConfig(model: "gpt-5.6-sol", serviceTier: "fast"))
+
+        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertFalse(tomlText.contains("service_tier"), tomlText)
+    }
+
+    func testSynchronizeWritesCatalogAdvertisedTierEvenWhenNotBuiltIn() throws {
+        try CodexPaths.ensureDirectories()
+        try CodexServiceTierCatalogTests.writeFixture(models: [
+            CodexServiceTierCatalogTests.model("gpt-6-astra", tiers: [("priority", "Fast"), ("ultrafast", "Ultrafast")]),
+        ])
+
+        try CodexSyncService().synchronize(config: Self.oauthConfig(model: "gpt-6-astra", serviceTier: "ultrafast"))
+
+        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertTrue(tomlText.contains(#"service_tier = "ultrafast""#))
+    }
+
+    func testSynchronizeWritesDefaultSentinelWhenCatalogDeclaresDefaultTier() throws {
+        try CodexPaths.ensureDirectories()
+        try CodexServiceTierCatalogTests.writeFixture(models: [
+            CodexServiceTierCatalogTests.model("gpt-6-astra", tiers: [("priority", "Fast")], defaultTier: "priority"),
+        ])
+
+        try CodexSyncService().synchronize(config: Self.oauthConfig(model: "gpt-6-astra", serviceTier: "standard"))
+
+        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+        XCTAssertTrue(tomlText.contains(#"service_tier = "default""#))
+    }
+
     func testSynchronizeWritesOAuthLifecycleMetadataToAuthJSON() throws {
         let tokenLastRefreshAt = Date(timeIntervalSince1970: 1_790_000_000)
         let account = CodexPanelProviderAccount(
@@ -300,6 +359,36 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
 
     private enum SyncFailure: Error, Equatable {
         case configWriteFailed
+    }
+
+    private static func oauthConfig(model: String, serviceTier: String) -> CodexPanelConfig {
+        let account = CodexPanelProviderAccount(
+            id: "acct_tier",
+            kind: .oauthTokens,
+            label: "tier@example.com",
+            email: "tier@example.com",
+            openAIAccountId: "acct_tier",
+            accessToken: "access-tier",
+            refreshToken: "refresh-tier",
+            idToken: "id-tier"
+        )
+        let provider = CodexPanelProvider(
+            id: "openai-oauth",
+            kind: .openAIOAuth,
+            label: "OpenAI",
+            activeAccountId: account.id,
+            accounts: [account]
+        )
+        return CodexPanelConfig(
+            global: CodexPanelGlobalSettings(
+                defaultModel: model,
+                reviewModel: model,
+                reasoningEffort: "medium",
+                serviceTier: serviceTier
+            ),
+            active: CodexPanelActiveSelection(providerId: provider.id, accountId: account.id),
+            providers: [provider]
+        )
     }
 
     private func debugNetworkConfiguration() -> CodexPanelRuntimeNetworkConfiguration {

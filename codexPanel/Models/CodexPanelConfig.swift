@@ -86,6 +86,14 @@ struct CodexPanelGlobalSettings: Codable {
         "gpt-5.6-luna": baseReasoningEffortOptions + ["max"],
     ]
 
+    /// 标准路由。标准档位在 Codex 配置中通常不需要写入 service_tier。
+    static let standardServiceTier = "standard"
+    /// 快速路由；Codex 模型目录中的 priority 与此值等价。
+    static let fastServiceTier = "fast"
+    static let priorityCatalogTierID = "priority"
+    static let codexDefaultServiceTierSentinel = "default"
+    static let fallbackServiceTierOptions = [standardServiceTier, fastServiceTier]
+
     var defaultModel: String
     var reviewModel: String
     var reasoningEffort: String
@@ -102,7 +110,7 @@ struct CodexPanelGlobalSettings: Codable {
         defaultModel: String = "gpt-5.5",
         reviewModel: String = "gpt-5.5",
         reasoningEffort: String = "medium",
-        serviceTier: String = "standard"
+        serviceTier: String = Self.standardServiceTier
     ) {
         self.defaultModel = defaultModel
         self.reviewModel = reviewModel
@@ -116,8 +124,53 @@ struct CodexPanelGlobalSettings: Codable {
             defaultModel: try container.decodeIfPresent(String.self, forKey: .defaultModel) ?? "gpt-5.5",
             reviewModel: try container.decodeIfPresent(String.self, forKey: .reviewModel) ?? "gpt-5.5",
             reasoningEffort: try container.decodeIfPresent(String.self, forKey: .reasoningEffort) ?? "medium",
-            serviceTier: try container.decodeIfPresent(String.self, forKey: .serviceTier) ?? "standard"
+            serviceTier: try container.decodeIfPresent(String.self, forKey: .serviceTier) ?? Self.standardServiceTier
         )
+    }
+
+    static func serviceTierValue(forCatalogTierID tierID: String) -> String {
+        let normalized = tierID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == Self.priorityCatalogTierID ? Self.fastServiceTier : normalized
+    }
+
+    static func serviceTierOptions(
+        for modelID: String,
+        catalog: CodexServiceTierCatalog?
+    ) -> [String] {
+        catalog?.serviceTierOptions(for: modelID) ?? Self.fallbackServiceTierOptions
+    }
+
+    static func supportsServiceTier(
+        _ serviceTier: String,
+        for modelID: String,
+        catalog: CodexServiceTierCatalog?
+    ) -> Bool {
+        guard let normalized = Self.normalizedServiceTier(serviceTier) else { return false }
+        return Self.serviceTierOptions(for: modelID, catalog: catalog).contains(normalized)
+    }
+
+    static func compatibleServiceTier(
+        _ serviceTier: String,
+        for modelID: String,
+        catalog: CodexServiceTierCatalog?
+    ) -> String {
+        let normalized = Self.normalizedServiceTier(serviceTier) ?? Self.standardServiceTier
+        return Self.supportsServiceTier(normalized, for: modelID, catalog: catalog)
+            ? normalized
+            : Self.standardServiceTier
+    }
+
+    /// 返回写入 Codex config.toml 的值；nil 表示删除 service_tier 键。
+    func codexConfigServiceTier(
+        for modelID: String,
+        catalog: CodexServiceTierCatalog?
+    ) -> String? {
+        let compatible = Self.compatibleServiceTier(self.serviceTier, for: modelID, catalog: catalog)
+        guard compatible == Self.standardServiceTier else { return compatible }
+        if catalog?.model(for: modelID)?.defaultServiceTier != nil {
+            return Self.codexDefaultServiceTierSentinel
+        }
+        return nil
     }
 
     static func reasoningEffortOptions(
@@ -154,15 +207,28 @@ struct CodexPanelGlobalSettings: Codable {
         return options.contains(effort)
     }
 
-    private static func normalizedServiceTier(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    static func normalizedServiceTier(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard trimmed.isEmpty == false else { return nil }
         switch trimmed {
-        case "standard", "fast":
-            return trimmed
+        case Self.standardServiceTier, "flex", Self.codexDefaultServiceTierSentinel:
+            return Self.standardServiceTier
+        case Self.fastServiceTier, Self.priorityCatalogTierID:
+            return Self.fastServiceTier
         default:
-            return nil
+            return Self.isCatalogTierIdentifier(trimmed) ? trimmed : nil
         }
+    }
+
+    private static func isCatalogTierIdentifier(_ value: String) -> Bool {
+        guard let first = value.unicodeScalars.first,
+              CharacterSet.lowercaseLetters.contains(first) || CharacterSet.decimalDigits.contains(first) else {
+            return false
+        }
+        let allowed = CharacterSet.lowercaseLetters
+            .union(.decimalDigits)
+            .union(CharacterSet(charactersIn: "_-"))
+        return value.unicodeScalars.allSatisfy(allowed.contains)
     }
 }
 

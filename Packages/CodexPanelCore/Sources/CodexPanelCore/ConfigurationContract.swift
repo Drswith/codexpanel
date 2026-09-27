@@ -33,13 +33,13 @@ public struct CodexGlobalConfiguration: Codable, Equatable, Sendable {
     public var defaultModel: String
     public var reviewModel: String
     public var reasoningEffort: String
-    public var serviceTier: String
+    public var serviceTier: String?
 
     public init(
         defaultModel: String,
         reviewModel: String,
         reasoningEffort: String,
-        serviceTier: String
+        serviceTier: String?
     ) {
         self.defaultModel = defaultModel
         self.reviewModel = reviewModel

@@ -141,7 +141,7 @@ final class CodexPanelConfigStore {
             defaultModel: toml.model ?? "gpt-5.5",
             reviewModel: toml.reviewModel ?? toml.model ?? "gpt-5.5",
             reasoningEffort: toml.reasoningEffort ?? "medium",
-            serviceTier: toml.serviceTier ?? "standard"
+            serviceTier: toml.serviceTier ?? CodexPanelGlobalSettings.standardServiceTier
         )
 
         let active = self.resolveActiveSelection(
