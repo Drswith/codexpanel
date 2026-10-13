@@ -79,7 +79,7 @@ enum CodexPanelAccountKind: String, Codable {
 
 struct CodexPanelGlobalSettings: Codable {
     static let baseReasoningEffortOptions = ["low", "medium", "high", "xhigh"]
-    static let reasoningEffortOptionsByModel = [
+    static let reasoningEffortOptionsByModel: [String: [String]] = [
         "gpt-6.1-sol": baseReasoningEffortOptions + ["max", "ultra"],
         "gpt-6-astra": baseReasoningEffortOptions + ["max", "ultra"],
         "gpt-6-sol": baseReasoningEffortOptions + ["max", "ultra"],
