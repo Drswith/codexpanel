@@ -1479,7 +1479,8 @@ final class TokenStore: ObservableObject {
         let fallbackHistoricalModels = Array(self.config.modelPricing.keys)
 
         DispatchQueue.global(qos: .utility).async {
-            let fetchedHistoricalModels = service.historicalModels()
+            // 独立刷新会话缓存，避免依赖并行用量汇总任务的执行顺序。
+            let fetchedHistoricalModels = service.historicalModels(refreshSessionCache: true)
             let mergedHistoricalModels = Self.mergedHistoricalModels(
                 preferredHistoricalModels: fetchedHistoricalModels,
                 fallbackHistoricalModels: fallbackHistoricalModels

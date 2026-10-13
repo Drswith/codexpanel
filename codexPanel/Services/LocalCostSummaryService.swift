@@ -165,8 +165,8 @@ struct LocalCostSummaryService {
         self.calendar = calendar
     }
 
-    func historicalModels() -> [String] {
-        self.sessionLogStore.historicalModels()
+    func historicalModels(refreshSessionCache: Bool = false) -> [String] {
+        self.sessionLogStore.historicalModels(refreshSessionCache: refreshSessionCache)
     }
 
     func load(
