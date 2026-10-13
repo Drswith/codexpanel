@@ -6,22 +6,20 @@ struct SettingsWindowView: View {
     @ObservedObject private var store: TokenStore
     @ObservedObject private var updateCoordinator: UpdateCoordinator
     private let codexAppPathPanelService: CodexAppPathPanelService
-    private let onClose: () -> Void
 
     @StateObject private var coordinator: SettingsWindowCoordinator
     @StateObject private var recordsModel: SettingsRecordsModel
+    @State private var autoSaveTask: Task<Void, Never>?
 
     @MainActor
     init(
         store: TokenStore,
         updateCoordinator: UpdateCoordinator? = nil,
-        codexAppPathPanelService: CodexAppPathPanelService,
-        onClose: @escaping () -> Void
+        codexAppPathPanelService: CodexAppPathPanelService
     ) {
         self._store = ObservedObject(wrappedValue: store)
         self._updateCoordinator = ObservedObject(wrappedValue: updateCoordinator ?? .shared)
         self.codexAppPathPanelService = codexAppPathPanelService
-        self.onClose = onClose
         self._coordinator = StateObject(
             wrappedValue: SettingsWindowCoordinator(
                 config: store.config,
@@ -43,33 +41,27 @@ struct SettingsWindowView: View {
             self.detail
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button {
-                    self.coordinator.cancelAndClose(onClose: self.onClose)
-                } label: {
-                    SettingsToolbarActionButtonLabel(title: L.cancel)
+        .onChange(of: self.coordinator.draft) { _ in
+            self.autoSaveTask?.cancel()
+            self.autoSaveTask = Task { @MainActor in
+                do {
+                    try await Task.sleep(for: .milliseconds(350))
+                } catch {
+                    return
                 }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.cancelAction)
+                guard Task.isCancelled == false else { return }
+                self.coordinator.saveAutomatically(using: self.store)
             }
-
-            ToolbarItem(placement: .confirmationAction) {
-                Button {
-                    self.coordinator.saveAndClose(
-                        using: self.store,
-                        onClose: self.onClose
-                    )
-                } label: {
-                    SettingsToolbarActionButtonLabel(
-                        title: L.save,
-                        isEnabled: self.coordinator.hasChanges
-                    )
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.defaultAction)
-                .disabled(self.coordinator.hasChanges == false)
-            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            guard let window = notification.object as? NSWindow,
+                  window.identifier?.rawValue == CodexPanelUICommandRouter.settingsWindowID else { return }
+            self.autoSaveTask?.cancel()
+            self.coordinator.saveAutomatically(using: self.store)
+        }
+        .onDisappear {
+            self.autoSaveTask?.cancel()
+            self.coordinator.saveAutomatically(using: self.store)
         }
         .onReceive(self.store.$config.dropFirst()) { config in
             self.coordinator.reconcileExternalState(
@@ -95,90 +87,65 @@ struct SettingsWindowView: View {
     }
 
     private var sidebar: some View {
-        ZStack {
-            SettingsSidebarBackground()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    ForEach(SettingsSidebarGroup.allCases) { group in
-                        VStack(alignment: .leading, spacing: 5) {
-                            if let title = group.title {
-                                Text(title)
-                                    .font(.system(size: 10.5, weight: .semibold))
-                                    .foregroundColor(.secondary)
-                                    .padding(.horizontal, 8)
-                            }
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                ForEach(group.pages) { page in
-                                    Button {
-                                        SettingsSidebarSelectionAdapter.apply(page, to: self.coordinator)
-                                    } label: {
-                                        SettingsSidebarRow(
-                                            page: page,
-                                            isSelected: self.coordinator.selectedPage == page
-                                        )
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .buttonStyle(.plain)
-                                }
-                            }
+        List(selection: SettingsSidebarSelectionAdapter.binding(for: self.coordinator)) {
+            ForEach(SettingsSidebarGroup.allCases) { group in
+                Section {
+                    ForEach(group.pages) { page in
+                        Label {
+                            Text(page.title)
+                        } icon: {
+                            Image(systemName: page.iconName)
+                                .foregroundStyle(self.coordinator.selectedPage == page ? AnyShapeStyle(.primary) : AnyShapeStyle(.tint))
                         }
+                        .tag(page)
+                    }
+                } header: {
+                    if let title = group.title {
+                        Text(title)
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 14)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 230)
+        .listStyle(.sidebar)
+        .navigationTitle(L.settings)
+        .navigationSplitViewColumnWidth(min: 190, ideal: 200, max: 230)
     }
 
     private var detail: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: self.coordinator.selectedPage == .about ? 0 : 6) {
-                    Text("Codex Panel \(L.settings)")
-                        .font(.system(size: 20, weight: .semibold))
-                    if self.coordinator.selectedPage != .about {
-                        Text(L.settingsWindowHint)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+        VStack(spacing: 0) {
+            if let validationMessage = self.coordinator.validationMessage {
+                Text(validationMessage)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+            }
 
-                if let validationMessage = self.coordinator.validationMessage {
-                    Text(validationMessage)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.red)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-
+            Group {
                 switch self.coordinator.selectedPage {
                 case .accounts:
                     SettingsAccountsPage(
                         coordinator: self.coordinator,
                         codexAppPathPanelService: self.codexAppPathPanelService
                     )
-                case .records:
-                    SettingsRecordsPage(recordsModel: self.recordsModel) {
-                        SettingsSidebarSelectionAdapter.apply(SettingsPage.usage, to: self.coordinator)
-                    }
                 case .usage:
                     SettingsUsagePage(coordinator: self.coordinator)
+                case .records:
+                    SettingsRecordsPage(recordsModel: self.recordsModel) {
+                        SettingsSidebarSelectionAdapter.apply(.usage, to: self.coordinator)
+                    }
                 case .diagnostics:
                     SettingsDiagnosticsPage()
                 case .about:
                     SettingsAboutPage(updateCoordinator: self.updateCoordinator)
                 }
             }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .formStyle(.grouped)
+        .navigationTitle(self.coordinator.selectedPage.title)
     }
+
 }
 
 @MainActor
@@ -217,73 +184,12 @@ private struct SettingsSidebarGroup: Identifiable {
     ]
 }
 
-private struct SettingsSidebarRow: View {
-    let page: SettingsPage
-    let isSelected: Bool
-
-    var body: some View {
-        HStack(spacing: 9) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(self.page.iconTint.gradient)
-                    .frame(width: 20, height: 20)
-                Image(systemName: self.page.iconName)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-
-            Text(self.page.title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(self.isSelected ? .white : .primary)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(minHeight: 34)
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(self.isSelected ? Color.accentColor.opacity(0.92) : .clear)
-        )
-    }
-}
-
-private struct SettingsSidebarBackground: View {
-    var body: some View {
-        SettingsSidebarMaterialView()
-            .overlay(Color.white.opacity(0.015))
-    }
-}
-
-private struct SettingsSidebarMaterialView: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .sidebar
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.isEmphasized = false
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = .sidebar
-        nsView.blendingMode = .behindWindow
-        nsView.state = .active
-        nsView.isEmphasized = false
-    }
-}
-
 private struct SettingsAccountsPage: View {
     @ObservedObject var coordinator: SettingsWindowCoordinator
     let codexAppPathPanelService: CodexAppPathPanelService
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(SettingsPage.accounts.title)
-                .font(.system(size: 16, weight: .semibold))
-
+        Form {
             SettingsAccountUsageModeSection(
                 mode: Binding(
                     get: { self.coordinator.draft.accountUsageMode },
@@ -332,10 +238,7 @@ private struct SettingsUsagePage: View {
     @ObservedObject var coordinator: SettingsWindowCoordinator
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(SettingsPage.usage.title)
-                .font(.system(size: 16, weight: .semibold))
-
+        Form {
             SettingsUsageDisplayModeSection(
                 usageDisplayMode: Binding(
                     get: { self.coordinator.draft.usageDisplayMode },
@@ -389,6 +292,17 @@ private struct SettingsAboutPage: View {
         }
     }
 
+    private var shortStatusText: String {
+        switch self.updateCoordinator.state {
+        case .idle: return L.settingsUpdatesUnknownVersion
+        case .checking: return L.settingsAboutUpdateChecking
+        case .upToDate: return L.settingsAboutUpdateCurrent
+        case .updateAvailable: return L.settingsAboutUpdateAvailable
+        case .executing: return L.settingsAboutUpdateExecuting
+        case .failed: return L.settingsAboutUpdateFailed
+        }
+    }
+
     private var statusText: String {
         switch self.updateCoordinator.state {
         case .idle:
@@ -410,178 +324,66 @@ private struct SettingsAboutPage: View {
     }
 
     var body: some View {
-        VStack {
-            Spacer(minLength: 12)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable().scaledToFit().frame(width: 48, height: 48)
+                    .accessibilityHidden(true)
+                Text("Codex Panel").font(.title3.weight(.semibold))
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
 
-            VStack(spacing: 22) {
-                SettingsAboutAppIcon()
-
-                VStack(spacing: 6) {
-                    Text("Codex Panel")
-                        .font(.system(size: 28, weight: .bold))
-                    Text("\(L.settingsAboutVersionPrefix) \(self.currentVersion)")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-
-                VStack(spacing: 4) {
-                    Text(L.settingsAboutDescriptionLine1)
-                    Text(L.settingsAboutDescriptionLine2)
-                }
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-
-                HStack(spacing: 12) {
-                    SettingsAboutActionButton(
-                        title: L.settingsAboutGitHubAction,
-                        icon: "chevron.left.forwardslash.chevron.right"
-                    ) {
-                        self.open(self.repositoryURL)
-                    }
-                    SettingsAboutActionButton(
-                        title: L.settingsAboutIssuesAction,
-                        icon: "ladybug"
-                    ) {
-                        self.open(self.issuesURL)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 14) {
-                    SettingsAboutInfoRow(
-                        title: L.settingsUpdatesCurrentVersionTitle,
-                        value: self.currentVersion
-                    )
-                    SettingsAboutInfoRow(
-                        title: L.settingsUpdatesLatestVersionTitle,
-                        value: self.latestVersion
-                    )
-                    SettingsAboutInfoRow(
-                        title: L.settingsAboutUpdateStatusTitle,
-                        value: self.statusText
-                    )
-
-                    HStack(spacing: 10) {
-                        SettingsAboutActionButton(
-                            title: L.settingsUpdatesCheckAction,
-                            icon: "arrow.triangle.2.circlepath"
-                        ) {
-                            Task { await self.updateCoordinator.checkForUpdates(trigger: .manual) }
-                        }
-                        .disabled(self.updateCoordinator.isChecking)
-
-                        if self.updateCoordinator.pendingAvailability != nil {
-                            SettingsAboutActionButton(
-                                title: L.settingsUpdatesInstallAction,
-                                icon: "arrow.down.to.line"
-                            ) {
-                                Task { await self.updateCoordinator.handleToolbarAction() }
+            Form {
+                Section(L.settingsAboutVersionPrefix) {
+                    LabeledContent(L.settingsUpdatesCurrentVersionTitle) {
+                        HStack {
+                            Text(self.currentVersion).textSelection(.enabled)
+                            if self.updateCoordinator.isChecking {
+                                ProgressView().controlSize(.small)
+                            }
+                            Button(L.checkForUpdates) {
+                                Task { await self.updateCoordinator.checkForUpdates(trigger: .manual) }
                             }
                             .disabled(self.updateCoordinator.isChecking)
                         }
                     }
+                    LabeledContent(L.settingsAboutUpdateStatusTitle) {
+                        Text(self.shortStatusText).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .help(self.statusText)
+                    }
+                    if self.updateCoordinator.pendingAvailability != nil {
+                        LabeledContent(L.settingsUpdatesLatestVersionTitle, value: self.latestVersion)
+                        Button(L.settingsUpdatesInstallAction) {
+                            Task { await self.updateCoordinator.handleToolbarAction() }
+                        }
+                        .disabled(self.updateCoordinator.isChecking)
+                    }
                 }
-                .frame(maxWidth: 560)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 18)
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.04))
-                )
 
+                Section(L.settingsAboutBuildInfoTitle) {
+                    LabeledContent(L.settingsAboutBuildNumberTitle,
+                                   value: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—")
+                    LabeledContent(L.settingsAboutSystemVersionTitle,
+                                   value: ProcessInfo.processInfo.operatingSystemVersionString)
+                }
+                .textSelection(.enabled)
+
+                Section(L.settingsAboutProjectTitle) {
+                    if let repositoryURL = self.repositoryURL {
+                        LabeledContent(L.settingsAboutGitHubAction) {
+                            Link("Drswith/codexpanel", destination: repositoryURL)
+                        }
+                    }
+                    if let issuesURL = self.issuesURL {
+                        LabeledContent(L.settingsAboutIssuesAction) {
+                            Link("GitHub Issues", destination: issuesURL)
+                        }
+                    }
+                }
             }
-            .frame(maxWidth: .infinity)
-
-            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 420)
-    }
-
-    private func open(_ url: URL?) {
-        guard let url else { return }
-        NSWorkspace.shared.open(url)
-    }
-}
-
-private struct SettingsAboutAppIcon: View {
-    var body: some View {
-        Image(nsImage: NSApplication.shared.applicationIconImage)
-            .resizable()
-            .interpolation(.high)
-            .frame(width: 92, height: 92)
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: .black.opacity(0.18), radius: 20, y: 12)
-    }
-}
-
-private struct SettingsAboutInfoRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(self.title)
-                .font(.system(size: 11, weight: .semibold))
-                .frame(width: 92, alignment: .leading)
-
-            Text(self.value)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Spacer(minLength: 0)
-        }
-    }
-}
-
-private struct SettingsAboutActionButton: View {
-    let title: String
-    let icon: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: self.action) {
-            SettingsCapsuleButtonLabel(title: self.title, icon: self.icon)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct SettingsToolbarActionButtonLabel: View {
-    let title: String
-    var isEnabled: Bool = true
-
-    var body: some View {
-        SettingsCapsuleButtonLabel(
-            title: self.title,
-            isEnabled: self.isEnabled
-        )
-    }
-}
-
-private struct SettingsCapsuleButtonLabel: View {
-    let title: String
-    var icon: String? = nil
-    var isEnabled: Bool = true
-
-    var body: some View {
-        HStack(spacing: self.icon == nil ? 0 : 6) {
-            if let icon = self.icon {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-            }
-
-            Text(self.title)
-                .font(.system(size: 12, weight: .semibold))
-        }
-        .foregroundColor(self.isEnabled ? .primary : Color.secondary.opacity(0.9))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 9)
-        .background(
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(Color.white.opacity(self.isEnabled ? 0.06 : 0.03))
-        )
-        .opacity(self.isEnabled ? 1.0 : 0.78)
     }
 }
 
@@ -589,48 +391,20 @@ private struct SettingsAccountUsageModeSection: View {
     @Binding var mode: CodexPanelOpenAIAccountUsageMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L.accountUsageModeTitle)
-                .font(.system(size: 12, weight: .medium))
-
-            Text(L.accountUsageModeHint)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 8) {
+        Section {
+            Picker(L.accountUsageModeTitle, selection: self.$mode) {
                 ForEach(CodexPanelOpenAIAccountUsageMode.allCases) { option in
-                    Button {
-                        self.mode = option
-                    } label: {
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: self.mode == option ? "largecircle.fill.circle" : "circle")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(self.mode == option ? .accentColor : .secondary)
-                                .padding(.top, 2)
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(option.title)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.primary)
-                                Text(option.detail)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(self.mode == option ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.06))
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    Text(option.title).tag(option).help(option.detail)
                 }
             }
+            .pickerStyle(.menu)
+            Text(self.mode.detail)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        } header: {
+            Text(L.accountUsageModeTitle)
+        } footer: {
+            Text(L.accountUsageModeHint)
         }
     }
 }
@@ -639,24 +413,23 @@ private struct SettingsAggregateGatewayProxySection: View {
     @Binding var aggregateGatewayProxyURL: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L.aggregateGatewayProxyTitle)
-                .font(.system(size: 12, weight: .medium))
-
-            Text(L.aggregateGatewayProxyHint)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
+        Section {
             TextField(
-                L.aggregateGatewayProxyInputExample,
+                L.aggregateGatewayProxyTitle,
                 text: Binding(
                     get: { self.aggregateGatewayProxyURL ?? "" },
                     set: { self.aggregateGatewayProxyURL = $0 }
-                )
+                ),
+                prompt: Text(L.aggregateGatewayProxyInputExample)
             )
+            .labelsHidden()
+            .accessibilityLabel(L.aggregateGatewayProxyTitle)
             .textFieldStyle(.roundedBorder)
             .font(.system(size: 11, design: .monospaced))
+        } header: {
+            Text(L.aggregateGatewayProxyTitle)
+        } footer: {
+            Text(L.aggregateGatewayProxyHint)
         }
     }
 }
@@ -670,48 +443,16 @@ private struct SettingsManualActivationBehaviorSection: View {
     let showsCodexAppPathSection: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L.manualActivationBehaviorTitle)
-                .font(.system(size: 12, weight: .medium))
-
-            Text(L.manualActivationBehaviorHint)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 8) {
+        Section {
+            Picker(L.manualActivationBehaviorTitle, selection: self.$behavior) {
                 ForEach(CodexPanelOpenAIManualActivationBehavior.allCases) { option in
-                    Button {
-                        self.behavior = option
-                    } label: {
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: self.behavior == option ? "largecircle.fill.circle" : "circle")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(self.behavior == option ? .accentColor : .secondary)
-                                .padding(.top, 2)
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(option.title)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.primary)
-                                Text(option.detail)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(self.behavior == option ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.06))
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    Text(option.title).tag(option).help(option.detail)
                 }
             }
+            .pickerStyle(.menu)
+            Text(self.behavior.detail)
+                .font(.callout)
+                .foregroundStyle(.secondary)
 
             if self.showsCodexAppPathSection {
                 SettingsCodexAppPathSection(
@@ -720,6 +461,10 @@ private struct SettingsManualActivationBehaviorSection: View {
                     codexAppPathPanelService: self.codexAppPathPanelService
                 )
             }
+        } header: {
+            Text(L.manualActivationBehaviorTitle)
+        } footer: {
+            Text(L.manualActivationBehaviorHint)
         }
     }
 }
@@ -728,48 +473,20 @@ private struct SettingsAccountOrderingModeSection: View {
     @Binding var mode: CodexPanelOpenAIAccountOrderingMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L.accountOrderingModeTitle)
-                .font(.system(size: 12, weight: .medium))
-
-            Text(L.accountOrderingModeHint)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: 8) {
+        Section {
+            Picker(L.accountOrderingModeTitle, selection: self.$mode) {
                 ForEach(CodexPanelOpenAIAccountOrderingMode.allCases) { option in
-                    Button {
-                        self.mode = option
-                    } label: {
-                        HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: self.mode == option ? "largecircle.fill.circle" : "circle")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(self.mode == option ? .accentColor : .secondary)
-                                .padding(.top, 2)
-
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(option.title)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.primary)
-                                Text(option.detail)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(self.mode == option ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.06))
-                        )
-                    }
-                    .buttonStyle(.plain)
+                    Text(option.title).tag(option).help(option.detail)
                 }
             }
+            .pickerStyle(.menu)
+            Text(self.mode.detail)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        } header: {
+            Text(L.accountOrderingModeTitle)
+        } footer: {
+            Text(L.accountOrderingModeHint)
         }
     }
 }
@@ -778,15 +495,7 @@ private struct SettingsAccountOrderSection: View {
     @ObservedObject var coordinator: SettingsWindowCoordinator
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L.accountOrderTitle)
-                .font(.system(size: 12, weight: .medium))
-
-            Text(L.accountOrderHint)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
+        Section {
             if self.coordinator.orderedAccounts.isEmpty {
                 Text(L.noOpenAIAccountsForOrdering)
                     .font(.system(size: 11))
@@ -820,15 +529,13 @@ private struct SettingsAccountOrderSection: View {
                             }
                             .controlSize(.small)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.secondary.opacity(0.06))
-                        )
                     }
                 }
             }
+        } header: {
+            Text(L.accountOrderTitle)
+        } footer: {
+            Text(L.accountOrderHint)
         }
     }
 }
@@ -886,12 +593,6 @@ private struct SettingsCodexAppPathSection: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(0.06))
-        )
     }
 
     private var statusColor: Color {
@@ -928,16 +629,12 @@ private struct SettingsUsageDisplayModeSection: View {
     @Binding var usageDisplayMode: CodexPanelUsageDisplayMode
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L.usageDisplayModeTitle)
-                .font(.system(size: 12, weight: .medium))
-
+        Section {
             Picker(L.usageDisplayModeTitle, selection: self.$usageDisplayMode) {
                 ForEach(CodexPanelUsageDisplayMode.allCases) { mode in
                     Text(mode.title).tag(mode)
                 }
             }
-            .pickerStyle(.segmented)
         }
     }
 }
@@ -956,15 +653,7 @@ private struct SettingsQuotaSortSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L.quotaSortSettingsTitle)
-                .font(.system(size: 12, weight: .medium))
-
-            Text(L.quotaSortSettingsHint)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
+        Section {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text(L.quotaSortPlusWeightTitle)
@@ -1028,6 +717,10 @@ private struct SettingsQuotaSortSection: View {
                     step: 0.1
                 )
             }
+        } header: {
+            Text(L.quotaSortSettingsTitle)
+        } footer: {
+            Text(L.quotaSortSettingsHint)
         }
     }
 }
@@ -1036,15 +729,7 @@ private struct SettingsModelPricingSection: View {
     @ObservedObject var coordinator: SettingsWindowCoordinator
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L.modelPricingSectionTitle)
-                .font(.system(size: 12, weight: .medium))
-
-            Text(L.modelPricingSectionHint)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
+        Section {
             if self.coordinator.historicalModels.isEmpty {
                 Text(L.modelPricingSectionEmpty)
                     .font(.system(size: 11))
@@ -1062,6 +747,10 @@ private struct SettingsModelPricingSection: View {
                     }
                 }
             }
+        } header: {
+            Text(L.modelPricingSectionTitle)
+        } footer: {
+            Text(L.modelPricingSectionHint)
         }
     }
 }
@@ -1122,12 +811,6 @@ private struct SettingsModelPricingRow: View {
                 )
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(0.06))
-        )
     }
 
     private func priceField(title: String, binding: Binding<Double>) -> some View {
@@ -1137,6 +820,8 @@ private struct SettingsModelPricingRow: View {
                 .foregroundColor(.secondary)
 
             TextField(title, value: binding, format: self.numberFormat)
+                .labelsHidden()
+                .accessibilityLabel(title)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: self.fieldWidth)
         }
@@ -1174,20 +859,7 @@ private extension SettingsPage {
         }
     }
 
-    var iconTint: Color {
-        switch self {
-        case .accounts:
-            return Color(red: 0.40, green: 0.63, blue: 1.00)
-        case .records:
-            return Color(red: 0.99, green: 0.65, blue: 0.16)
-        case .usage:
-            return Color(red: 0.20, green: 0.76, blue: 0.86)
-        case .diagnostics:
-            return Color(red: 0.90, green: 0.36, blue: 0.32)
-        case .about:
-            return Color(red: 0.45, green: 0.76, blue: 0.97)
-        }
-    }
+
 }
 
 private extension CodexPanelOpenAIManualActivationBehavior {

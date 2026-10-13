@@ -16,7 +16,7 @@ struct DetachedWindowConfiguration {
 
     static let openAISettings = Self(
         isResizable: true,
-        contentMinSize: CGSize(width: 760, height: 560),
+        contentMinSize: CGSize(width: 740, height: 520),
         resetsContentSizeOnReuse: false,
         windowLevel: .normal
     )

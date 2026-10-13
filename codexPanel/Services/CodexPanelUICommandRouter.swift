@@ -7,7 +7,7 @@ final class CodexPanelUICommandRouter {
     static let shared = CodexPanelUICommandRouter()
 
     static let settingsWindowID = "openai-settings"
-    static let settingsWindowSize = CGSize(width: 760, height: 560)
+    static let settingsWindowSize = CGSize(width: 740, height: 520)
 
     private let store: TokenStore
     private let updateCoordinator: UpdateCoordinator
@@ -35,9 +35,7 @@ final class CodexPanelUICommandRouter {
                 store: self.store,
                 updateCoordinator: self.updateCoordinator,
                 codexAppPathPanelService: self.codexAppPathPanelService
-            ) {
-                DetachedWindowPresenter.shared.close(id: Self.settingsWindowID)
-            }
+            )
         }
     }
 

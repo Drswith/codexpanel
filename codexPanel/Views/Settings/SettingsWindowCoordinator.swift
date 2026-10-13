@@ -315,6 +315,21 @@ final class SettingsWindowCoordinator: ObservableObject {
         self.dirtyFields.insert(.modelPricing)
     }
 
+    func saveAutomatically(using sink: SettingsSaveRequestApplying) {
+        let proxyURL = self.draft.aggregateGatewayProxyURL?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard proxyURL.isEmpty || CodexPanelOpenAISettings.normalizedAggregateGatewayProxyURL(proxyURL) != nil else {
+            self.validationMessage = L.aggregateGatewayProxyInvalidMessage
+            return
+        }
+        do {
+            _ = try self.save(using: sink)
+            self.validationMessage = nil
+        } catch {
+            self.validationMessage = error.localizedDescription
+        }
+    }
+
     func saveAndClose(
         using sink: SettingsSaveRequestApplying,
         onClose: () -> Void

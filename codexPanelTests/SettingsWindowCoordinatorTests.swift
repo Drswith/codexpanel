@@ -5,6 +5,57 @@ import XCTest
 
 @MainActor
 final class SettingsWindowCoordinatorTests: XCTestCase {
+    func testAutomaticSavePersistsEditsAndDoesNotRepeatUnchangedWrites() {
+        let config = self.makeConfig()
+        let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: [])
+        let sink = TestSettingsSaveSink(config: config)
+        coordinator.update(\.plusRelativeWeight, to: 12, field: .plusRelativeWeight)
+
+        coordinator.saveAutomatically(using: sink)
+
+        XCTAssertEqual(sink.config.openAI.quotaSort.plusRelativeWeight, 12)
+        XCTAssertFalse(coordinator.hasChanges)
+        XCTAssertNil(coordinator.validationMessage)
+        coordinator.saveAutomatically(using: sink)
+        XCTAssertEqual(sink.appliedRequests.count, 1)
+    }
+
+    func testAutomaticSaveRetainsUnsavedEditAfterFailureAndCanRetry() {
+        let config = self.makeConfig()
+        let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: [])
+        coordinator.update(\.plusRelativeWeight, to: 12, field: .plusRelativeWeight)
+
+        coordinator.saveAutomatically(using: FailingSettingsSaveSink())
+
+        XCTAssertTrue(coordinator.hasChanges)
+        XCTAssertEqual(coordinator.draft.plusRelativeWeight, 12)
+        XCTAssertEqual(coordinator.validationMessage, "save failed")
+        let sink = TestSettingsSaveSink(config: config)
+        coordinator.saveAutomatically(using: sink)
+        XCTAssertEqual(sink.config.openAI.quotaSort.plusRelativeWeight, 12)
+        XCTAssertFalse(coordinator.hasChanges)
+        XCTAssertNil(coordinator.validationMessage)
+    }
+
+    func testAutomaticSavePreservesLastValidProxyUntilInputIsCorrected() {
+        var config = self.makeConfig()
+        config.openAI.aggregateGatewayProxyURL = "http://127.0.0.1:7890"
+        let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: [])
+        let sink = TestSettingsSaveSink(config: config)
+        coordinator.update(\.aggregateGatewayProxyURL, to: "http://", field: .aggregateGatewayProxyURL)
+
+        coordinator.saveAutomatically(using: sink)
+
+        XCTAssertEqual(sink.config.openAI.aggregateGatewayProxyURL, "http://127.0.0.1:7890")
+        XCTAssertTrue(sink.appliedRequests.isEmpty)
+        XCTAssertNotNil(coordinator.validationMessage)
+        coordinator.update(\.aggregateGatewayProxyURL, to: "http://127.0.0.1:7891", field: .aggregateGatewayProxyURL)
+        coordinator.saveAutomatically(using: sink)
+        XCTAssertEqual(sink.config.openAI.aggregateGatewayProxyURL, "http://127.0.0.1:7891")
+        XCTAssertNil(coordinator.validationMessage)
+        XCTAssertFalse(coordinator.hasChanges)
+    }
+
     func testSwitchingPagesKeepsDraftAcrossEdits() {
         let accounts = [
             self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
@@ -837,13 +888,13 @@ final class DetachedWindowPresenterTests: XCTestCase {
         self.awaitDetachedWindow(
             presenter: presenter,
             id: id,
-            requiredContentMinSize: CGSize(width: 760, height: 560),
+            requiredContentMinSize: CGSize(width: 740, height: 520),
             contentSizeAtLeast: CGSize(width: 820, height: 620)
         )
 
         let window = try self.window(withID: id, presenter: presenter)
         XCTAssertTrue(window.styleMask.contains(.resizable))
-        XCTAssertEqual(window.contentMinSize, CGSize(width: 760, height: 560))
+        XCTAssertEqual(window.contentMinSize, CGSize(width: 740, height: 520))
         XCTAssertEqual(self.contentSize(of: window), CGSize(width: 820, height: 620))
         XCTAssertEqual(window.level.rawValue, NSWindow.Level.normal.rawValue)
     }
@@ -864,7 +915,7 @@ final class DetachedWindowPresenterTests: XCTestCase {
         self.awaitDetachedWindow(
             presenter: presenter,
             id: id,
-            requiredContentMinSize: CGSize(width: 760, height: 560),
+            requiredContentMinSize: CGSize(width: 740, height: 520),
             contentSizeAtLeast: CGSize(width: 820, height: 620)
         )
 
@@ -881,7 +932,7 @@ final class DetachedWindowPresenterTests: XCTestCase {
         }
 
         XCTAssertTrue(existingWindow.styleMask.contains(.resizable))
-        XCTAssertEqual(existingWindow.contentMinSize, CGSize(width: 760, height: 560))
+        XCTAssertEqual(existingWindow.contentMinSize, CGSize(width: 740, height: 520))
         XCTAssertEqual(self.contentSize(of: existingWindow), CGSize(width: 940, height: 700))
         XCTAssertEqual(existingWindow.level.rawValue, NSWindow.Level.normal.rawValue)
     }
