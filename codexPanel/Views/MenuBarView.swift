@@ -2007,43 +2007,16 @@ struct MenuBarView: View {
 
     private func showCostPanel() {
         guard let anchorView = costSummaryAnchorView,
-              let window = anchorView.window else { return }
+              anchorView.window != nil else { return }
 
-        let frameInWindow = anchorView.convert(anchorView.bounds, to: nil)
-        let anchorFrame = window.convertToScreen(frameInWindow)
         let panelSize = CGSize(
             width: CostDetailsPanelView.panelWidth,
             height: CostDetailsPanelView.panelHeight(hasHistory: !store.localCostSummary.dailyEntries.isEmpty)
         )
-        let screen = NSScreen.screens.first { $0.frame.intersects(anchorFrame) } ?? NSScreen.main
-        let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-        let spacing: CGFloat = 12
-        let margin: CGFloat = 8
-
-        var originX = anchorFrame.maxX + spacing
-        if originX + panelSize.width > visibleFrame.maxX - margin {
-            originX = anchorFrame.minX - spacing - panelSize.width
-        }
-        originX = min(max(originX, visibleFrame.minX + margin), visibleFrame.maxX - panelSize.width - margin)
-
-        var originY = anchorFrame.maxY - panelSize.height
-        originY = min(max(originY, visibleFrame.minY + margin), visibleFrame.maxY - panelSize.height - margin)
-
-        self.recordMenuDiagnostic(
-            type: "cost_panel_presented",
-            fields: [
-                "originX": originX,
-                "originY": originY,
-                "width": panelSize.width,
-                "height": panelSize.height,
-                "hasHistory": !store.localCostSummary.dailyEntries.isEmpty,
-            ]
-        )
-
-        DetachedWindowPresenter.shared.showHoverPanel(
+        DetachedWindowPresenter.shared.showHoverPopover(
             id: costPanelID,
             size: panelSize,
-            origin: CGPoint(x: originX, y: originY)
+            anchorView: anchorView
         ) {
             CostDetailsPanelView(
                 summary: store.localCostSummary,
@@ -2148,33 +2121,17 @@ struct MenuBarView: View {
         guard self.isResetCreditsPanelPresented,
               RateLimitResetCreditPresentation.canExpand(self.resetCreditItems),
               let anchorView = self.resetCreditsAnchorView,
-              let window = anchorView.window else { return }
+              anchorView.window != nil else { return }
 
         let items = self.resetCreditItems
-        let frameInWindow = anchorView.convert(anchorView.bounds, to: nil)
-        let anchorFrame = window.convertToScreen(frameInWindow)
         let panelSize = CGSize(
             width: ResetCreditsPanelView.panelWidth,
             height: ResetCreditsPanelView.panelHeight(itemCount: items.count)
         )
-        let screen = NSScreen.screens.first { $0.frame.intersects(anchorFrame) } ?? NSScreen.main
-        let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-        let spacing: CGFloat = 12
-        let margin: CGFloat = 8
-
-        var originX = anchorFrame.maxX + spacing
-        if originX + panelSize.width > visibleFrame.maxX - margin {
-            originX = anchorFrame.minX - spacing - panelSize.width
-        }
-        originX = min(max(originX, visibleFrame.minX + margin), visibleFrame.maxX - panelSize.width - margin)
-
-        var originY = anchorFrame.maxY - panelSize.height
-        originY = min(max(originY, visibleFrame.minY + margin), visibleFrame.maxY - panelSize.height - margin)
-
-        DetachedWindowPresenter.shared.showHoverPanel(
+        DetachedWindowPresenter.shared.showHoverPopover(
             id: self.resetCreditsPanelID,
             size: panelSize,
-            origin: CGPoint(x: originX, y: originY)
+            anchorView: anchorView
         ) {
             ResetCreditsPanelView(
                 items: items,
