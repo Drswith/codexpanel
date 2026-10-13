@@ -195,7 +195,16 @@ enum L {
     static var settingsAboutGitHubAction: String { zh ? "GitHub" : "GitHub" }
     static var settingsAboutIssuesAction: String { zh ? "Issues" : "Issues" }
     static var settingsAboutVersionPrefix: String { zh ? "版本" : "Version" }
+    static var settingsAboutBuildInfoTitle: String { zh ? "构建信息" : "Build Information" }
+    static var settingsAboutBuildNumberTitle: String { zh ? "构建号" : "Build" }
+    static var settingsAboutSystemVersionTitle: String { zh ? "系统" : "OS" }
+    static var settingsAboutProjectTitle: String { zh ? "项目" : "Project" }
     static var settingsAboutUpdateStatusTitle: String { zh ? "更新状态" : "Update Status" }
+    static var settingsAboutUpdateChecking: String { zh ? "正在检查…" : "Checking…" }
+    static var settingsAboutUpdateCurrent: String { zh ? "已是最新版本" : "Up to date" }
+    static var settingsAboutUpdateAvailable: String { zh ? "有新版本" : "Update available" }
+    static var settingsAboutUpdateExecuting: String { zh ? "正在更新…" : "Updating…" }
+    static var settingsAboutUpdateFailed: String { zh ? "更新失败" : "Failed" }
     static var settingsUpdatesPageHint: String {
         zh
             ? "从这里检查最新稳定版本，并继续下载或安装当前可用更新。"
@@ -316,6 +325,7 @@ enum L {
     static var settingsRecordsSearchPlaceholder: String { zh ? "按 session ID 或 model 搜索" : "Search by session ID or model" }
     static var settingsRecordsRefreshAction: String { zh ? "全量刷新记录" : "Refresh All Records" }
     static var settingsRecordsGoToUsageAction: String { zh ? "去 Usage 编辑价格" : "Open Usage to Edit Pricing" }
+    static var settingsDetails: String { zh ? "详细说明" : "Details" }
     static var settingsRecordsLoading: String { zh ? "正在加载 records…" : "Loading records..." }
     static var settingsRecordsRefreshingIncremental: String { zh ? "正在增量刷新 records…" : "Refreshing records incrementally..." }
     static var settingsRecordsSlowLoading: String {
@@ -431,6 +441,10 @@ enum L {
             : "Keep the current behavior: switching only happens when you explicitly choose an account, and Codex uses that account's synced auth/config directly."
     }
     static var aggregateGatewayProxyTitle: String { zh ? "聚合网关默认代理" : "Aggregate Gateway Default Proxy" }
+    static var aggregateGatewayProxyInvalidMessage: String {
+        zh ? "代理地址无效。请输入不含用户名和密码的 HTTP(S) 或 SOCKS/SOCKS5 地址，以及 1–65535 的端口；上一次有效配置已保留。"
+            : "Invalid proxy address. Use an HTTP(S) or SOCKS/SOCKS5 endpoint with no credentials and a port from 1 to 65535. The last valid configuration is preserved."
+    }
     static var aggregateGatewayProxyHint: String {
         zh
             ? "可选。仅支持无认证的 HTTP(S) 或 SOCKS/SOCKS5 代理地址；必须填写主机和 1 到 65535 的端口，不能包含用户名或密码。"

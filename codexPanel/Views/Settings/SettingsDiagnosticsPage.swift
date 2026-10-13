@@ -77,19 +77,15 @@ struct SettingsDiagnosticsPage: View {
     @StateObject private var model = SettingsDiagnosticsViewModel()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(L.settingsDiagnosticsPageTitle)
-                .font(.system(size: 16, weight: .semibold))
-
-            Text(L.settingsDiagnosticsPageHint)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            SettingsDiagnosticsToolbar(model: self.model)
+        Form {
+            Section {
+                SettingsDiagnosticsToolbar(model: self.model)
+            } footer: {
+                Text(self.model.statusText)
+            }
 
             if let errorMessage = self.model.errorMessage {
-                SettingsDiagnosticsMessageCard(
+                SettingsDiagnosticsMessageSection(
                     title: L.settingsDiagnosticsErrorTitle,
                     message: errorMessage,
                     tone: .error
@@ -97,7 +93,7 @@ struct SettingsDiagnosticsPage: View {
             }
 
             if let exportMessage = self.model.exportMessage {
-                SettingsDiagnosticsMessageCard(
+                SettingsDiagnosticsMessageSection(
                     title: L.settingsDiagnosticsExportedTitle,
                     message: exportMessage,
                     tone: .success
@@ -108,24 +104,29 @@ struct SettingsDiagnosticsPage: View {
                 SettingsDiagnosticsArtifactsSection(scanResult: scanResult)
 
                 if scanResult.hasCrashReport == false {
-                    SettingsDiagnosticsMessageCard(
+                    SettingsDiagnosticsMessageSection(
                         title: L.settingsDiagnosticsCrashMissingTitle,
                         message: L.settingsDiagnosticsCrashMissingHint,
                         tone: .warning
                     )
                 }
 
-                SettingsDiagnosticsMessageCard(
+                SettingsDiagnosticsMessageSection(
                     title: L.settingsDiagnosticsPrivacyTitle,
                     message: L.settingsDiagnosticsPrivacyHint,
                     tone: .info
                 )
             } else {
-                SettingsDiagnosticsMessageCard(
+                SettingsDiagnosticsMessageSection(
                     title: L.settingsDiagnosticsStatusTitle,
                     message: self.model.statusText,
                     tone: .info
                 )
+            }
+            Section {
+                DisclosureGroup(L.settingsDetails) {
+                    Text(L.settingsDiagnosticsPageHint).font(.callout).foregroundStyle(.secondary)
+                }
             }
         }
         .onAppear {
@@ -151,9 +152,6 @@ private struct SettingsDiagnosticsToolbar: View {
                 .disabled(self.model.isRefreshing || self.model.isExporting)
             }
 
-            Text(self.model.statusText)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
         }
     }
 }
@@ -183,7 +181,7 @@ private struct SettingsDiagnosticsArtifactsSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        Section {
             SettingsDiagnosticsInfoRow(
                 title: L.settingsDiagnosticsCrashReportsTitle,
                 value: self.primaryCrashText
@@ -192,11 +190,11 @@ private struct SettingsDiagnosticsArtifactsSection: View {
             if self.scanResult.crashReports.count > 1 {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(L.settingsDiagnosticsAdditionalCrashReportsTitle)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.headline)
 
                     ForEach(Array(self.scanResult.crashReports.dropFirst())) { crashReport in
                         Text(self.fileSummary(for: crashReport))
-                            .font(.system(size: 11))
+                            .font(.callout)
                             .foregroundColor(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -233,19 +231,15 @@ private struct SettingsDiagnosticsInfoRow: View {
     let value: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(self.title)
-                .font(.system(size: 12, weight: .medium))
-
-            Text(self.value)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+        LabeledContent(self.title) {
+            Text(self.value).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
         }
     }
 }
 
-private struct SettingsDiagnosticsMessageCard: View {
+private struct SettingsDiagnosticsMessageSection: View {
     enum Tone {
         case info
         case success
@@ -265,16 +259,12 @@ private struct SettingsDiagnosticsMessageCard: View {
             }
         }
 
-        var backgroundColor: Color {
+        var symbol: String {
             switch self {
-            case .info:
-                return Color.secondary.opacity(0.08)
-            case .success:
-                return Color.green.opacity(0.10)
-            case .warning:
-                return Color.orange.opacity(0.12)
-            case .error:
-                return Color.red.opacity(0.10)
+            case .info: "info.circle"
+            case .success: "checkmark.circle"
+            case .warning: "exclamationmark.triangle"
+            case .error: "exclamationmark.circle"
             }
         }
     }
@@ -284,22 +274,15 @@ private struct SettingsDiagnosticsMessageCard: View {
     let tone: Tone
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(self.title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(self.tone.foregroundColor)
-
-            Text(self.message)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        Section {
+            DisclosureGroup {
+                Text(self.message).font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            } label: {
+                Label(self.title, systemImage: self.tone.symbol)
+                    .foregroundStyle(self.tone.foregroundColor)
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(self.tone.backgroundColor)
-        )
     }
 }

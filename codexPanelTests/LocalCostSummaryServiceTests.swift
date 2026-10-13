@@ -886,6 +886,25 @@ final class LocalCostSummaryServiceTests: CodexPanelTestCase {
         XCTAssertEqual(summary.dailyEntries[0].costUSD, 0, accuracy: 1e-12)
     }
 
+    func testHistoricalModelsRefreshDiscoversSessionsBeforeCostSummaryLoads() throws {
+        let home = try self.makeCodexHome()
+        let service = self.makeService(home: home)
+        try self.writeFastSession(
+            directory: home.appendingPathComponent(".codex/sessions", isDirectory: true),
+            fileName: "cold-start.jsonl",
+            id: "cold-start",
+            timestamp: "2026-04-05T08:00:00Z",
+            model: "gpt-5.5",
+            inputTokens: 10,
+            cachedInputTokens: 0,
+            outputTokens: 5
+        )
+
+        XCTAssertTrue(service.historicalModels().isEmpty)
+        XCTAssertEqual(service.historicalModels(refreshSessionCache: true), ["gpt-5.5"])
+        XCTAssertEqual(service.historicalModels(), ["gpt-5.5"])
+    }
+
     func testHistoricalModelsAreStableAndDeduplicated() throws {
         let home = try self.makeCodexHome()
         let codexRoot = home.appendingPathComponent(".codex", isDirectory: true)

@@ -232,45 +232,45 @@ struct SettingsRecordsPage: View {
     let onOpenUsage: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text(L.settingsRecordsPageTitle)
-                .font(.system(size: 16, weight: .semibold))
-
-            Text(L.settingsRecordsPageHint)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            SettingsRecordsToolbar(
-                recordsModel: self.recordsModel,
-                onOpenUsage: self.onOpenUsage
-            )
-
-            if let errorMessage = self.recordsModel.errorMessage {
-                SettingsRecordsInlineMessage(
-                    message: errorMessage,
-                    showsRetry: self.recordsModel.hasSnapshot == false,
-                    onRetry: self.recordsModel.retryLoad
-                )
+        Form {
+            Section {
+                SettingsRecordsToolbar(recordsModel: self.recordsModel, onOpenUsage: self.onOpenUsage)
+            } footer: {
+                Text(self.recordsModel.statusText)
             }
-
+            if let errorMessage = self.recordsModel.errorMessage {
+                Section {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                    if self.recordsModel.hasSnapshot == false {
+                        Button(L.settingsRecordsRetryAction, action: self.recordsModel.retryLoad)
+                    }
+                }
+            }
             if self.recordsModel.shouldShowSkeleton {
-                SettingsRecordsLoadingSection()
+                Section {
+                    ProgressView(L.settingsRecordsLoading)
+                }
             } else if self.recordsModel.hasSnapshot {
                 SettingsRecordsOverview(recordsModel: self.recordsModel)
                 SettingsRecordsSessionsSection(recordsModel: self.recordsModel)
                 SettingsRecordsModelsSection(recordsModel: self.recordsModel)
-
                 if self.recordsModel.snapshot?.warnings.isEmpty == false {
                     SettingsRecordsWarningsSection(recordsModel: self.recordsModel)
                 }
             } else {
-                SettingsRecordsEmptyState(onRetry: self.recordsModel.retryLoad)
+                Section {
+                    Text(L.settingsRecordsEmptyState).foregroundStyle(.secondary)
+                    Button(L.settingsRecordsRetryAction, action: self.recordsModel.retryLoad)
+                }
+            }
+            Section {
+                DisclosureGroup(L.settingsDetails) {
+                    Text(L.settingsRecordsPageHint).font(.callout).foregroundStyle(.secondary)
+                }
             }
         }
-        .onAppear {
-            self.recordsModel.pageDidAppear()
-        }
+        .onAppear { self.recordsModel.pageDidAppear() }
     }
 }
 
@@ -279,24 +279,14 @@ private struct SettingsRecordsToolbar: View {
     let onOpenUsage: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 10) {
-                TextField(L.settingsRecordsSearchPlaceholder, text: self.$recordsModel.searchText)
-                    .textFieldStyle(.roundedBorder)
-
-                Button(L.settingsRecordsRefreshAction) {
-                    self.recordsModel.refreshAll()
-                }
+        TextField(L.settingsRecordsSearchPlaceholder, text: self.$recordsModel.searchText,
+                  prompt: Text(L.settingsRecordsSearchPlaceholder))
+            .labelsHidden()
+            .accessibilityLabel(L.settingsRecordsSearchPlaceholder)
+        HStack {
+            Button(L.settingsRecordsRefreshAction) { self.recordsModel.refreshAll() }
                 .disabled(self.recordsModel.isRefreshingAll)
-
-                Button(L.settingsRecordsGoToUsageAction) {
-                    self.onOpenUsage()
-                }
-            }
-
-            Text(self.recordsModel.statusText)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
+            Button(L.settingsRecordsGoToUsageAction, action: self.onOpenUsage)
         }
     }
 }
@@ -304,66 +294,27 @@ private struct SettingsRecordsToolbar: View {
 private struct SettingsRecordsOverview: View {
     @ObservedObject var recordsModel: SettingsRecordsViewModel
 
-    private var filteredSessionCount: Int {
-        self.recordsModel.filteredSessions.count
-    }
-
-    private var totalSessionCount: Int {
-        self.recordsModel.snapshot?.sessions.count ?? 0
-    }
-
-    private var modelCount: Int {
-        self.recordsModel.filteredModels.count
-    }
-
     var body: some View {
-        HStack(spacing: 10) {
-            SettingsRecordsMetricCard(
-                title: L.settingsRecordsSessionsMetric,
-                value: "\(self.filteredSessionCount)",
-                footnote: self.totalSessionCount == self.filteredSessionCount
-                    ? L.settingsRecordsAllResults
-                    : L.settingsRecordsFilteredResults(self.filteredSessionCount, total: self.totalSessionCount)
-            )
-            SettingsRecordsMetricCard(
-                title: L.settingsRecordsModelsMetric,
-                value: "\(self.modelCount)",
-                footnote: L.settingsRecordsActiveModelsFootnote
-            )
-            SettingsRecordsMetricCard(
-                title: L.settingsRecordsArchivedMetric,
-                value: "\(self.recordsModel.archivedSessionCount)",
-                footnote: L.settingsRecordsActiveArchivedFootnote(self.recordsModel.activeSessionCount)
-            )
+        Section {
+            metric(L.settingsRecordsSessionsMetric, value: self.recordsModel.filteredSessions.count,
+                   detail: self.recordsModel.filteredSessions.count == self.recordsModel.snapshot?.sessions.count
+                   ? L.settingsRecordsAllResults
+                   : L.settingsRecordsFilteredResults(self.recordsModel.filteredSessions.count,
+                                                     total: self.recordsModel.snapshot?.sessions.count ?? 0))
+            metric(L.settingsRecordsModelsMetric, value: self.recordsModel.filteredModels.count,
+                   detail: L.settingsRecordsActiveModelsFootnote)
+            metric(L.settingsRecordsArchivedMetric, value: self.recordsModel.archivedSessionCount,
+                   detail: L.settingsRecordsActiveArchivedFootnote(self.recordsModel.activeSessionCount))
         }
     }
-}
 
-private struct SettingsRecordsMetricCard: View {
-    let title: String
-    let value: String
-    let footnote: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(self.title)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary)
-            Text(self.value)
-                .font(.system(size: 18, weight: .semibold))
-                .monospacedDigit()
-            Text(self.footnote)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private func metric(_ title: String, value: Int, detail: String) -> some View {
+        LabeledContent {
+            Text("\(value)").monospacedDigit()
+        } label: {
+            Text(title)
+            Text(detail).font(.caption).foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(0.06))
-        )
     }
 }
 
@@ -371,28 +322,20 @@ private struct SettingsRecordsSessionsSection: View {
     @ObservedObject var recordsModel: SettingsRecordsViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L.settingsRecordsSessionsTitle)
-                .font(.system(size: 12, weight: .medium))
-
-            Text(L.settingsRecordsSessionsHint)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
+        Section {
             if self.recordsModel.filteredSessions.isEmpty {
                 Text(self.recordsModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                     ? L.settingsRecordsSessionsEmpty
-                     : L.settingsRecordsNoSearchResults)
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                     ? L.settingsRecordsSessionsEmpty : L.settingsRecordsNoSearchResults)
+                    .foregroundStyle(.secondary)
             } else {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(self.recordsModel.filteredSessions) { session in
-                        SettingsRecordsSessionRow(session: session)
-                    }
+                ForEach(self.recordsModel.filteredSessions) { session in
+                    SettingsRecordsSessionRow(session: session)
                 }
             }
+        } header: {
+            Text(L.settingsRecordsSessionsTitle)
+        } footer: {
+            Text(L.settingsRecordsSessionsHint)
         }
     }
 }
@@ -401,69 +344,21 @@ private struct SettingsRecordsSessionRow: View {
     let session: HistoricalSessionRecord
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(self.session.sessionID)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .textSelection(.enabled)
-                    Text(self.session.modelID)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                        .textSelection(.enabled)
-                }
-
-                Spacer(minLength: 0)
-
+        DisclosureGroup {
+            LabeledContent(L.settingsRecordsStartedAtTitle,
+                           value: self.session.startedAt.formatted(date: .abbreviated, time: .shortened))
+            LabeledContent(L.settingsRecordsLastActivityTitle,
+                           value: self.session.lastActivityAt.formatted(date: .abbreviated, time: .shortened))
+            LabeledContent(L.settingsRecordsTotalTokensTitle, value: "\(self.session.totalTokens)")
+        } label: {
+            LabeledContent {
                 Text(self.session.isArchived ? L.settingsRecordsArchivedBadge : L.settingsRecordsCurrentBadge)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(self.session.isArchived ? .orange : .accentColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill((self.session.isArchived ? Color.orange : Color.accentColor).opacity(0.12))
-                    )
-            }
-
-            HStack(alignment: .top, spacing: 18) {
-                SettingsRecordsInfoColumn(
-                    title: L.settingsRecordsStartedAtTitle,
-                    value: self.session.startedAt.formatted(date: .abbreviated, time: .shortened)
-                )
-                SettingsRecordsInfoColumn(
-                    title: L.settingsRecordsLastActivityTitle,
-                    value: self.session.lastActivityAt.formatted(date: .abbreviated, time: .shortened)
-                )
-                SettingsRecordsInfoColumn(
-                    title: L.settingsRecordsTotalTokensTitle,
-                    value: "\(self.session.totalTokens)"
-                )
+                    .foregroundStyle(.secondary)
+            } label: {
+                Text(self.session.sessionID).font(.body.monospaced()).textSelection(.enabled)
+                Text(self.session.modelID).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(0.06))
-        )
-    }
-}
-
-private struct SettingsRecordsInfoColumn: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(self.title)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.secondary)
-            Text(self.value)
-                .font(.system(size: 11))
-                .monospacedDigit()
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -471,59 +366,26 @@ private struct SettingsRecordsModelsSection: View {
     @ObservedObject var recordsModel: SettingsRecordsViewModel
 
     var body: some View {
-        DisclosureGroup(isExpanded: self.$recordsModel.isModelsSummaryExpanded) {
-            VStack(alignment: .leading, spacing: 8) {
+        Section {
+            DisclosureGroup(L.settingsRecordsModelsTitle, isExpanded: self.$recordsModel.isModelsSummaryExpanded) {
                 if self.recordsModel.filteredModels.isEmpty {
-                    Text(L.settingsRecordsModelsEmpty)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                    Text(L.settingsRecordsModelsEmpty).foregroundStyle(.secondary)
                 } else {
                     ForEach(self.recordsModel.filteredModels) { model in
-                        SettingsRecordsModelRow(model: model)
+                        LabeledContent {
+                            Text(model.lastSeenAt.formatted(date: .abbreviated, time: .shortened))
+                                .foregroundStyle(.secondary)
+                        } label: {
+                            Text(model.modelID).textSelection(.enabled)
+                            Text(L.settingsRecordsModelSummary(model.sessionCount))
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
-            .padding(.top, 8)
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L.settingsRecordsModelsTitle)
-                    .font(.system(size: 12, weight: .medium))
-                Text(L.settingsRecordsModelsHint)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        } footer: {
+            Text(L.settingsRecordsModelsHint)
         }
-    }
-}
-
-private struct SettingsRecordsModelRow: View {
-    let model: HistoricalModelRecord
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(self.model.modelID)
-                    .font(.system(size: 11, weight: .medium))
-                    .textSelection(.enabled)
-                Text(L.settingsRecordsModelSummary(self.model.sessionCount))
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer(minLength: 0)
-
-            Text(self.model.lastSeenAt.formatted(date: .abbreviated, time: .shortened))
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-                .monospacedDigit()
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(0.06))
-        )
     }
 }
 
@@ -532,117 +394,20 @@ private struct SettingsRecordsWarningsSection: View {
 
     var body: some View {
         if let warnings = self.recordsModel.snapshot?.warnings {
-            DisclosureGroup(isExpanded: self.$recordsModel.isWarningsExpanded) {
-                VStack(alignment: .leading, spacing: 8) {
+            Section {
+                DisclosureGroup(L.settingsRecordsWarningsTitle(warnings.count), isExpanded: self.$recordsModel.isWarningsExpanded) {
                     ForEach(warnings) { warning in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(warning.message)
-                                .font(.system(size: 11, weight: .medium))
-                            Text(warning.sessionFilePath)
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(.secondary)
-                                .textSelection(.enabled)
+                        VStack(alignment: .leading) {
+                            Label(warning.message, systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                            Text(warning.sessionFilePath).font(.callout.monospaced())
+                                .foregroundStyle(.secondary).textSelection(.enabled)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.orange.opacity(0.08))
-                        )
                     }
                 }
-                .padding(.top, 8)
-            } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(L.settingsRecordsWarningsTitle(warnings.count))
-                        .font(.system(size: 12, weight: .medium))
-                    Text(L.settingsRecordsWarningsHint)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+            } footer: {
+                Text(L.settingsRecordsWarningsHint)
             }
         }
-    }
-}
-
-private struct SettingsRecordsLoadingSection: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(0..<4, id: \.self) { _ in
-                VStack(alignment: .leading, spacing: 8) {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.12))
-                        .frame(width: 240, height: 12)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.10))
-                        .frame(height: 10)
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.10))
-                        .frame(height: 10)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 10)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.secondary.opacity(0.06))
-                )
-                .redacted(reason: .placeholder)
-            }
-        }
-    }
-}
-
-private struct SettingsRecordsInlineMessage: View {
-    let message: String
-    let showsRetry: Bool
-    let onRetry: () -> Void
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.orange)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(self.message)
-                    .font(.system(size: 11))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if self.showsRetry {
-                    Button(L.settingsRecordsRetryAction) {
-                        self.onRetry()
-                    }
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.orange.opacity(0.08))
-        )
-    }
-}
-
-private struct SettingsRecordsEmptyState: View {
-    let onRetry: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L.settingsRecordsEmptyState)
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-            Button(L.settingsRecordsRetryAction) {
-                self.onRetry()
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color.secondary.opacity(0.06))
-        )
     }
 }
