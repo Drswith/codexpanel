@@ -242,6 +242,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     private var sessionLifecycleCache: [URL: CachedSessionLifecycleRecord] = [:]
     private var seedSessionCache: [URL: CachedSessionRecord]?
     private var usageLedger = PersistedUsageLedger.empty(version: 2)
+    private var didLoadPersistedState = false
 
     init(
         fileManager: FileManager = .default,
@@ -262,15 +263,28 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
             ?? persistedCacheURL.deletingLastPathComponent().appendingPathComponent("cost-event-ledger.json")
         self.recordsDiagnosticsRecorder = recordsDiagnosticsRecorder
         self.billableCostCalculator = billableCostCalculator
+    }
 
+    // 构造服务时只保存依赖。首次后台查询在串行队列上恢复缓存，避免阻塞菜单栏启动。
+    private func loadPersistedStateIfNeededLocked() {
+        dispatchPrecondition(condition: .onQueue(self.queue))
+        guard self.didLoadPersistedState == false else { return }
+        self.didLoadPersistedState = true
+        let startedAt = ProcessInfo.processInfo.systemUptime
         let loadedSessionCache = self.loadPersistedCache()
         self.sessionCache = loadedSessionCache
         self.seedSessionCache = loadedSessionCache
         self.usageLedger = self.loadPersistedUsageLedger()
 
-        if self.ensureUsageLedgerSeededLocked() {
+        if self.usageLedger.didSeedFromSessionCache {
             self.seedSessionCache = nil
         }
+        self.recordsDiagnosticsRecorder("session_cache_restored", [
+            "durationMs": Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1_000),
+            "sessionCount": self.sessionCache.count,
+            "ledgerSessionCount": self.usageLedger.sessions.count,
+            "onMainThread": Thread.isMainThread,
+        ])
     }
 
     func reduceSessions<Result>(
@@ -278,6 +292,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         _ update: (inout Result, SessionRecord) -> Void
     ) -> Result {
         self.queue.sync {
+            self.loadPersistedStateIfNeededLocked()
             var result = initialResult
             self.reduceSessionsLocked(into: &result, update)
             return result
@@ -310,6 +325,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
 
     func historicalModels(refreshSessionCache: Bool = false) -> [String] {
         self.queue.sync {
+            self.loadPersistedStateIfNeededLocked()
             let cachedSessions = refreshSessionCache ? self.refreshCachedSessionsLocked() : Array(self.sessionCache.values)
             return Array(
                 Set(
@@ -327,6 +343,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     ) async throws -> RecordsSourceSnapshot {
         try await withCheckedThrowingContinuation { continuation in
             self.queue.async {
+                self.loadPersistedStateIfNeededLocked()
                 let startedAt = Date()
                 self.recordsDiagnosticsRecorder(
                     "records_snapshot_load_started",
@@ -371,6 +388,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         _ update: (inout Result, SessionRecord, UsageEvent) -> Void
     ) -> Result {
         self.queue.sync {
+            self.loadPersistedStateIfNeededLocked()
             var result = initialResult
             self.reduceCachedSessionsLocked(into: &result) { partialResult, cached in
                 guard let record = cached.record else { return }
@@ -389,6 +407,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         _ update: (inout Result, BillableUsageEvent) -> Void
     ) -> Result {
         self.queue.sync {
+            self.loadPersistedStateIfNeededLocked()
             var result = initialResult
             let resolvedCostCalculator: (String, Usage, Usage) -> Double = { model, usage, sessionUsage in
                 costCalculator?(model, usage, sessionUsage)
@@ -1690,7 +1709,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            guard let date = ISO8601Parsing.parse(value) else {
+            guard let date = Self.parsePersistedDate(value) else {
                 throw DecodingError.dataCorruptedError(
                     in: container,
                     debugDescription: "Invalid ISO-8601 date: \(value)"
@@ -1699,6 +1718,14 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
             return date
         }
         return decoder
+    }
+
+    static func parsePersistedDate(_ value: String) -> Date? {
+        // FormatStyle 的值类型解析器避免每个日期进入 ICU 的重型 formatter 路径。
+        // 保留旧解析器兜底，兼容已保存的日期变体，持久化格式保持原样。
+        (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value))
+            ?? (try? Date.ISO8601FormatStyle().parse(value))
+            ?? ISO8601Parsing.parse(value)
     }
 
     private func makePersistedJSONEncoder() -> JSONEncoder {

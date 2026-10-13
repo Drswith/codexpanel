@@ -105,6 +105,7 @@ final class AppLifecycleDiagnostics {
         }
         payload["type"] = type
         payload["recordedAt"] = ISO8601DateFormatter().string(from: Date())
+        payload["systemUptime"] = ProcessInfo.processInfo.systemUptime
 
         guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
               let line = String(data: data, encoding: .utf8) else { return }
