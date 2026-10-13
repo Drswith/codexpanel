@@ -2,6 +2,27 @@ import Foundation
 import XCTest
 
 final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
+    func testConstructingStoreDefersCacheRestorationUntilFirstQuery() throws {
+        let home = try self.makeCodexHome()
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(home: home) { type, fields in
+            sink.record(type: type, fields: fields)
+        }
+        XCTAssertFalse(sink.events().contains { $0.type == "session_cache_restored" })
+        _ = store.historicalModels()
+        _ = store.historicalModels()
+        XCTAssertEqual(sink.events().filter { $0.type == "session_cache_restored" }.count, 1)
+    }
+
+    func testPersistedDatesPreserveLegacySecondsFractionsAndOffsets() throws {
+        for value in ["2026-10-13T05:56:53Z", "2026-10-13T05:56:53.123Z", "2026-10-13T13:56:53.123+08:00"] {
+            let expected = try XCTUnwrap(ISO8601Parsing.parse(value))
+            let actual = try XCTUnwrap(SessionLogStore.parsePersistedDate(value))
+            XCTAssertEqual(actual.timeIntervalSince1970, expected.timeIntervalSince1970, accuracy: 0.000_001)
+        }
+        XCTAssertNil(SessionLogStore.parsePersistedDate("invalid"))
+    }
+
     private final class DiagnosticsSink {
         private let lock = NSLock()
         private var values: [(type: String, fields: [String: Any])] = []
