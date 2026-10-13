@@ -27,7 +27,7 @@ struct CostSummaryRowView: View {
                 .lineLimit(1)
         }
         .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color.secondary.opacity(0.06))
@@ -169,15 +169,6 @@ struct CostDetailsPanelView: View {
             width: Self.panelWidth,
             height: Self.panelHeight(hasHistory: !points.isEmpty),
             alignment: .topLeading
-        )
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.windowBackgroundColor))
-                .shadow(color: Color.black.opacity(0.12), radius: 10, y: 4)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
         )
     }
 

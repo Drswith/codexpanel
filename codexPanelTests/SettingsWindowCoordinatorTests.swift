@@ -987,22 +987,31 @@ final class DetachedWindowPresenterTests: XCTestCase {
         XCTAssertFalse(NSApp.windows.contains { $0.identifier?.rawValue == id })
     }
 
-    func testHoverPanelPresentationIsSynchronousForPopoverCloseProtection() throws {
+    func testHoverPopoverIsAnchoredAboveMenuWindowAndClosesSynchronously() throws {
         let presenter = DetachedWindowPresenter()
-        let id = "hover-panel-\(UUID().uuidString)"
-        defer { presenter.close(id: id) }
+        let id = "hover-popover-\(UUID().uuidString)"
+        let anchor = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 400))
+        let parent = NSWindow(contentRect: anchor.bounds, styleMask: .borderless, backing: .buffered, defer: false)
+        parent.contentView = anchor
+        parent.level = .popUpMenu
+        parent.orderFront(nil)
+        defer {
+            presenter.close(id: id)
+            parent.orderOut(nil)
+        }
 
-        presenter.showHoverPanel(
-            id: id,
-            size: CGSize(width: 272, height: 196),
-            origin: CGPoint(x: 400, y: 220)
-        ) {
-            EmptyView()
+        presenter.showHoverPopover(id: id, size: CGSize(width: 272, height: 196), anchorView: anchor) {
+            Color.clear.frame(width: 272, height: 196)
         }
 
         let window = try XCTUnwrap(presenter.windowSnapshotForTesting(id: id))
-        XCTAssertTrue(window is NSPanel)
-        XCTAssertEqual(window.frame.origin, CGPoint(x: 400, y: 220))
+        XCTAssertTrue(window.isVisible)
+        XCTAssertTrue(window.parent === parent)
+        XCTAssertEqual(window.level, parent.level)
+        XCTAssertTrue(presenter.hoverPanelFrames().contains(window.frame))
+        presenter.close(id: id)
+        XCTAssertNil(presenter.windowSnapshotForTesting(id: id))
+        XCTAssertTrue(presenter.hoverPanelFrames().isEmpty)
     }
 
     private func window(withID id: String, presenter: DetachedWindowPresenter) throws -> NSWindow {

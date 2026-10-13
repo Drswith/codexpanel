@@ -1,11 +1,6 @@
 import AppKit
 import SwiftUI
 
-private final class HoverPanelWindow: NSPanel {
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-}
-
 struct DetachedWindowConfiguration {
     var isResizable = false
     var contentMinSize: CGSize?
@@ -25,17 +20,18 @@ struct DetachedWindowConfiguration {
 /// 菜单栏动作里若同步 `NSHostingController` + `AnyView` 建窗，在 macOS 14 上可能触发 SwiftUI / AttributeGraph
 /// 在 utility QoS 上解析类型元数据时崩溃；推迟到下一轮 main runloop 再构建视图可避免与 NSStatusItem 菜单拆解竞态。
 @MainActor
-final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
+final class DetachedWindowPresenter: NSObject, NSWindowDelegate, NSPopoverDelegate {
     static let shared = DetachedWindowPresenter()
 
+    private var hoverPopovers: [String: NSPopover] = [:]
     private var windows: [String: NSWindow] = [:]
     private var pendingDetachedWindowPresentations: [String: DispatchWorkItem] = [:]
     private var pendingDetachedWindowPresentationTokens: [String: UUID] = [:]
 
     func hoverPanelFrames() -> [CGRect] {
-        self.windows.values.compactMap { window in
-            guard window is HoverPanelWindow else { return nil }
-            return window.frame
+        self.hoverPopovers.values.compactMap { popover in
+            guard popover.isShown else { return nil }
+            return popover.contentViewController?.view.window?.frame
         }
     }
 
@@ -79,14 +75,41 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
         DispatchQueue.main.async(execute: workItem)
     }
 
-    func showHoverPanel<Content: View>(
+    func showHoverPopover<Content: View>(
         id: String,
         size: CGSize,
-        origin: CGPoint,
+        anchorView: NSView,
         @ViewBuilder content: () -> Content
     ) {
-        let anyView = AnyView(content())
-        self.presentHoverPanelWindow(id: id, size: size, origin: origin, rootView: anyView)
+        guard let parent = anchorView.window, let parentContent = parent.contentView else { return }
+        let popover = self.hoverPopovers[id] ?? NSPopover()
+        popover.behavior = .applicationDefined
+        popover.animates = false
+        popover.delegate = self
+        let rootView = AnyView(content())
+        if let controller = popover.contentViewController as? NSHostingController<AnyView> {
+            controller.rootView = rootView
+        } else {
+            popover.contentViewController = NSHostingController(rootView: rootView)
+        }
+        popover.contentSize = size
+        self.hoverPopovers[id] = popover
+        // 将定位区域延伸到主面板两侧，让 AppKit 自动选边且不覆盖主面板内容。
+        let parentBounds = anchorView.convert(parentContent.bounds, from: parentContent)
+        var positioningRect = anchorView.bounds
+        positioningRect.origin.x = parentBounds.minX
+        positioningRect.size.width = parentBounds.width
+        if !popover.isShown {
+            popover.show(relativeTo: positioningRect, of: anchorView, preferredEdge: .maxX)
+        }
+        // 菜单栏宿主可能处于 popUpMenu 层级；详情必须随父窗显示并位于其上方。
+        if let window = popover.contentViewController?.view.window {
+            window.level = parent.level
+            if window.parent !== parent {
+                parent.addChildWindow(window, ordered: .above)
+            }
+            window.orderFront(nil)
+        }
     }
 
     private func presentDetachedWindow(
@@ -138,49 +161,11 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
         }
     }
 
-    private func presentHoverPanelWindow(id: String, size: CGSize, origin: CGPoint, rootView: AnyView) {
-        if let existing = self.windows[id] {
-            if existing.frame.size != size {
-                existing.setContentSize(size)
-            }
-            if existing.frame.origin != origin {
-                existing.setFrameOrigin(origin)
-            }
-            if let controller = existing.contentViewController as? NSHostingController<AnyView> {
-                controller.rootView = rootView
-            } else {
-                existing.contentViewController = NSHostingController(rootView: rootView)
-            }
-            existing.orderFront(nil)
-            return
-        }
-
-        let controller = NSHostingController(rootView: rootView)
-        let window = HoverPanelWindow(
-            contentRect: NSRect(origin: origin, size: size),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        window.identifier = NSUserInterfaceItemIdentifier(id)
-        window.contentViewController = controller
-        window.level = .statusBar
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = false
-        window.hidesOnDeactivate = false
-        window.isReleasedWhenClosed = false
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        window.delegate = self
-
-        self.windows[id] = window
-        window.orderFront(nil)
-    }
-
     func close(id: String) {
         self.pendingDetachedWindowPresentations[id]?.cancel()
         self.pendingDetachedWindowPresentations.removeValue(forKey: id)
         self.pendingDetachedWindowPresentationTokens.removeValue(forKey: id)
+        self.hoverPopovers.removeValue(forKey: id)?.close()
         guard let window = self.windows[id] else { return }
         window.close()
         self.windows.removeValue(forKey: id)
@@ -188,7 +173,13 @@ final class DetachedWindowPresenter: NSObject, NSWindowDelegate {
 
     /// 仅用于单元测试：从 presenter 内部字典取窗，避免依赖 `NSApp.windows` 在 XCTest 环境下的差异。
     internal func windowSnapshotForTesting(id: String) -> NSWindow? {
-        self.windows[id]
+        self.windows[id] ?? self.hoverPopovers[id]?.contentViewController?.view.window
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        guard let popover = notification.object as? NSPopover,
+              let id = self.hoverPopovers.first(where: { $0.value === popover })?.key else { return }
+        self.hoverPopovers.removeValue(forKey: id)
     }
 
     func windowWillClose(_ notification: Notification) {

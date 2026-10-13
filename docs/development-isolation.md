@@ -29,6 +29,8 @@ Debug 开发态默认隔离：
 
 ## Xcode Debug Run
 
+菜单栏面板使用 `MenuBarExtra(.window)` 的系统窗口，不再使用带尖角的 `NSPopover`。面板仍直接承载原有 `MenuBarView`，宽度、内部控件和按系统版本设定的外层 6/8 点边距保持不变，不额外绘制背景或叠加留白。原有开关快捷键继续连接到这个系统窗口；macOS 27 使用展开会话，较旧系统使用按钮动作。快捷键注册规则不因这次宿主替换而改变。
+
 本地开发默认用 Xcode 打开 `codexpanel.xcodeproj`，运行 `codexpanel` scheme 的 Debug 配置即可。不要为了“模拟真实环境”手动把 Debug app 指向真实 `~/.codex`。
 
 Debug app 首次运行会使用：

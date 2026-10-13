@@ -75,15 +75,6 @@ struct ResetCreditsPanelView: View {
             height: Self.panelHeight(itemCount: self.items.count),
             alignment: .topLeading
         )
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.windowBackgroundColor))
-                .shadow(color: Color.black.opacity(0.12), radius: 10, y: 4)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
-        )
     }
 
     private var itemList: some View {

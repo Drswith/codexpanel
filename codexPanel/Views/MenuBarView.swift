@@ -820,9 +820,9 @@ struct MenuBarView: View {
             self.menuFooter
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, MenuBarPopoverSizing.horizontalContentInset)
-        .padding(.top, MenuBarPopoverSizing.topContentInset)
-        .padding(.bottom, MenuBarPopoverSizing.bottomContentInset)
+        .padding(.horizontal, 4)
+        .padding(.top, 4)
+        .padding(.bottom, 4)
     }
 
     private var menuHeader: some View {
@@ -864,7 +864,8 @@ struct MenuBarView: View {
             .disabled(isRefreshing)
         }
         .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-        .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
     }
 
     @ViewBuilder
@@ -888,7 +889,7 @@ struct MenuBarView: View {
                     self.modelSelectionRow(currentModel: store.activeModel)
                 }
                 .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-                .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
+                .padding(.vertical, 8)
             }
 
             if let pendingAvailability = self.updateCoordinator.pendingAvailability {
@@ -914,7 +915,7 @@ struct MenuBarView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
             } else {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 8) {
                     VStack(alignment: .leading, spacing: 0) {
                         CostSummaryRowView(
                             summary: store.localCostSummary,
@@ -936,7 +937,7 @@ struct MenuBarView: View {
                     providersSection
                 }
                 .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-                .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
+                .padding(.vertical, 8)
             }
 
             if let banner = self.errorBanner {
@@ -958,7 +959,7 @@ struct MenuBarView: View {
                     .buttonStyle(.borderless)
                 }
                 .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-                .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
+                .padding(.vertical, 8)
             }
         }
     }
@@ -1207,7 +1208,7 @@ struct MenuBarView: View {
             .buttonStyle(.borderless)
         }
         .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-        .padding(.vertical, MenuBarPopoverSizing.sectionVerticalInset)
+        .padding(.vertical, 8)
     }
 
     private func updateAvailableBanner(availability: AppUpdateAvailability) -> some View {
@@ -1250,7 +1251,7 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private var openAIAccountsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text("OpenAI")
                     .font(.system(size: 11, weight: .medium))
@@ -1290,7 +1291,6 @@ struct MenuBarView: View {
                 .accessibilityIdentifier("codexpanel.openai-mode-picker")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
 
             if let manualSwitchBanner {
                 self.openAIStatusBanner(
@@ -1422,7 +1422,6 @@ struct MenuBarView: View {
                             .animation(.easeInOut(duration: 0.12), value: isProvidersExpanded)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -1585,9 +1584,9 @@ struct MenuBarView: View {
 
     @ViewBuilder
     private func openAIAccountGroupsView(_ groups: [OpenAIAccountGroup]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(groups) { group in
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     if let copyableEmail = OpenAIAccountPresentation.copyableAccountGroupEmail(group.email) {
                         Button {
                             self.copyOpenAIAccountGroupEmail(copyableEmail)
@@ -1662,7 +1661,6 @@ struct MenuBarView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
     }
 
     private func resetCreditsSection(_ items: [RateLimitResetCreditItem]) -> some View {
@@ -2007,43 +2005,16 @@ struct MenuBarView: View {
 
     private func showCostPanel() {
         guard let anchorView = costSummaryAnchorView,
-              let window = anchorView.window else { return }
+              anchorView.window != nil else { return }
 
-        let frameInWindow = anchorView.convert(anchorView.bounds, to: nil)
-        let anchorFrame = window.convertToScreen(frameInWindow)
         let panelSize = CGSize(
             width: CostDetailsPanelView.panelWidth,
             height: CostDetailsPanelView.panelHeight(hasHistory: !store.localCostSummary.dailyEntries.isEmpty)
         )
-        let screen = NSScreen.screens.first { $0.frame.intersects(anchorFrame) } ?? NSScreen.main
-        let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-        let spacing: CGFloat = 12
-        let margin: CGFloat = 8
-
-        var originX = anchorFrame.maxX + spacing
-        if originX + panelSize.width > visibleFrame.maxX - margin {
-            originX = anchorFrame.minX - spacing - panelSize.width
-        }
-        originX = min(max(originX, visibleFrame.minX + margin), visibleFrame.maxX - panelSize.width - margin)
-
-        var originY = anchorFrame.maxY - panelSize.height
-        originY = min(max(originY, visibleFrame.minY + margin), visibleFrame.maxY - panelSize.height - margin)
-
-        self.recordMenuDiagnostic(
-            type: "cost_panel_presented",
-            fields: [
-                "originX": originX,
-                "originY": originY,
-                "width": panelSize.width,
-                "height": panelSize.height,
-                "hasHistory": !store.localCostSummary.dailyEntries.isEmpty,
-            ]
-        )
-
-        DetachedWindowPresenter.shared.showHoverPanel(
+        DetachedWindowPresenter.shared.showHoverPopover(
             id: costPanelID,
             size: panelSize,
-            origin: CGPoint(x: originX, y: originY)
+            anchorView: anchorView
         ) {
             CostDetailsPanelView(
                 summary: store.localCostSummary,
@@ -2148,33 +2119,17 @@ struct MenuBarView: View {
         guard self.isResetCreditsPanelPresented,
               RateLimitResetCreditPresentation.canExpand(self.resetCreditItems),
               let anchorView = self.resetCreditsAnchorView,
-              let window = anchorView.window else { return }
+              anchorView.window != nil else { return }
 
         let items = self.resetCreditItems
-        let frameInWindow = anchorView.convert(anchorView.bounds, to: nil)
-        let anchorFrame = window.convertToScreen(frameInWindow)
         let panelSize = CGSize(
             width: ResetCreditsPanelView.panelWidth,
             height: ResetCreditsPanelView.panelHeight(itemCount: items.count)
         )
-        let screen = NSScreen.screens.first { $0.frame.intersects(anchorFrame) } ?? NSScreen.main
-        let visibleFrame = screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900)
-        let spacing: CGFloat = 12
-        let margin: CGFloat = 8
-
-        var originX = anchorFrame.maxX + spacing
-        if originX + panelSize.width > visibleFrame.maxX - margin {
-            originX = anchorFrame.minX - spacing - panelSize.width
-        }
-        originX = min(max(originX, visibleFrame.minX + margin), visibleFrame.maxX - panelSize.width - margin)
-
-        var originY = anchorFrame.maxY - panelSize.height
-        originY = min(max(originY, visibleFrame.minY + margin), visibleFrame.maxY - panelSize.height - margin)
-
-        DetachedWindowPresenter.shared.showHoverPanel(
+        DetachedWindowPresenter.shared.showHoverPopover(
             id: self.resetCreditsPanelID,
             size: panelSize,
-            origin: CGPoint(x: originX, y: originY)
+            anchorView: anchorView
         ) {
             ResetCreditsPanelView(
                 items: items,
