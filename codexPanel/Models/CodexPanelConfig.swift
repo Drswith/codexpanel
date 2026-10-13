@@ -79,7 +79,11 @@ enum CodexPanelAccountKind: String, Codable {
 
 struct CodexPanelGlobalSettings: Codable {
     static let baseReasoningEffortOptions = ["low", "medium", "high", "xhigh"]
-    static let reasoningEffortOptionsByModel = [
+    static let reasoningEffortOptionsByModel: [String: [String]] = [
+        "gpt-6.1-sol": baseReasoningEffortOptions + ["max", "ultra"],
+        "gpt-6-astra": baseReasoningEffortOptions + ["max", "ultra"],
+        "gpt-6-sol": baseReasoningEffortOptions + ["max", "ultra"],
+        "gpt-6-luna": baseReasoningEffortOptions + ["max"],
         "gpt-5.6": baseReasoningEffortOptions + ["max", "ultra"],
         "gpt-5.6-sol": baseReasoningEffortOptions + ["max", "ultra"],
         "gpt-5.6-terra": baseReasoningEffortOptions + ["max", "ultra"],
@@ -165,7 +169,7 @@ struct CodexPanelGlobalSettings: Codable {
         for modelID: String,
         catalog: CodexServiceTierCatalog?
     ) -> String? {
-        let compatible = Self.compatibleServiceTier(self.serviceTier, for: modelID, catalog: catalog)
+        let compatible = Self.normalizedServiceTier(self.serviceTier) ?? Self.standardServiceTier
         guard compatible == Self.standardServiceTier else { return compatible }
         if catalog?.model(for: modelID)?.defaultServiceTier != nil {
             return Self.codexDefaultServiceTierSentinel
@@ -175,35 +179,33 @@ struct CodexPanelGlobalSettings: Codable {
 
     static func reasoningEffortOptions(
         for modelID: String,
-        currentValue: String? = nil
+        currentValue: String? = nil,
+        catalog: CodexModelCatalog? = nil
     ) -> [String] {
         let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if let options = Self.reasoningEffortOptionsByModel[normalizedModelID] {
-            return options
-        }
-
-        let trimmedCurrentValue = currentValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard trimmedCurrentValue.isEmpty == false,
-              Self.baseReasoningEffortOptions.contains(trimmedCurrentValue) == false else {
-            return Self.baseReasoningEffortOptions
-        }
-        return Self.baseReasoningEffortOptions + [trimmedCurrentValue]
+        let options = catalog?.reasoningEffortOptions(for: modelID)
+            ?? Self.reasoningEffortOptionsByModel[normalizedModelID]
+            ?? Self.baseReasoningEffortOptions
+        return CodexModelCatalog.uniqueStrings(options + [currentValue ?? ""])
     }
 
-    static func compatibleReasoningEffort(_ effort: String, for modelID: String) -> String {
+    static func compatibleReasoningEffort(
+        _ effort: String, for modelID: String, catalog: CodexModelCatalog? = nil
+    ) -> String {
         let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let options = Self.reasoningEffortOptionsByModel[normalizedModelID],
-              options.contains(effort) == false else {
-            return effort
-        }
+        let options = catalog?.reasoningEffortOptions(for: modelID) ?? Self.reasoningEffortOptionsByModel[normalizedModelID]
+        guard let options, !options.contains(effort) else { return effort }
+        let preferred = catalog?.model(for: modelID)?.defaultReasoningEffort
+        if let preferred, options.contains(preferred) { return preferred }
         return options.last ?? effort
     }
 
-    static func supportsReasoningEffort(_ effort: String, for modelID: String) -> Bool {
+    static func supportsReasoningEffort(
+        _ effort: String, for modelID: String, catalog: CodexModelCatalog? = nil
+    ) -> Bool {
         let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let options = Self.reasoningEffortOptionsByModel[normalizedModelID] else {
-            return true
-        }
+        guard let options = catalog?.reasoningEffortOptions(for: modelID)
+            ?? Self.reasoningEffortOptionsByModel[normalizedModelID] else { return true }
         return options.contains(effort)
     }
 

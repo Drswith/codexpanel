@@ -3,24 +3,25 @@ import Foundation
 enum SettingsSaveRequestApplier {
     static func apply(
         _ requests: SettingsSaveRequests,
-        to config: inout CodexPanelConfig
+        to config: inout CodexPanelConfig,
+        modelCatalog: CodexModelCatalog? = nil
     ) throws {
-        self.apply(requests.global, to: &config)
+        self.apply(requests.global, to: &config, modelCatalog: modelCatalog)
         self.apply(requests.openAIAccount, to: &config)
         self.apply(requests.openAIUsage, to: &config)
         self.apply(requests.modelPricing, to: &config)
         try self.apply(requests.desktop, to: &config)
     }
 
-    static func apply(_ request: GlobalSettingsUpdate?, to config: inout CodexPanelConfig) {
+    static func apply(_ request: GlobalSettingsUpdate?, to config: inout CodexPanelConfig, modelCatalog: CodexModelCatalog? = nil) {
         guard let request else { return }
         let defaultModel = self.normalizedModel(request.defaultModel) ?? config.global.defaultModel
         let reviewModel = self.normalizedModel(request.reviewModel) ?? defaultModel
         let requestedReasoningEffort = self.normalizedReasoningEffort(request.reasoningEffort) ?? config.global.reasoningEffort
         let reasoningModel = self.reasoningModel(for: config, defaultModel: defaultModel)
-        let reasoningEffort = CodexPanelGlobalSettings.compatibleReasoningEffort(
-            requestedReasoningEffort,
-            for: reasoningModel
+        let preservesCurrent = defaultModel == config.global.defaultModel && requestedReasoningEffort == config.global.reasoningEffort
+        let reasoningEffort = preservesCurrent ? requestedReasoningEffort : CodexPanelGlobalSettings.compatibleReasoningEffort(
+            requestedReasoningEffort, for: reasoningModel, catalog: modelCatalog
         )
         let serviceTier = self.normalizedServiceTier(request.serviceTier) ?? config.global.serviceTier
         config.global = CodexPanelGlobalSettings(

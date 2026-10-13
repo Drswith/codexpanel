@@ -124,7 +124,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         XCTAssertTrue(tomlText.contains(#"model = "gpt-5.6-sol""#))
     }
 
-    func testSynchronizeDropsServiceTierTheCodexCatalogNoLongerOffersForCurrentModel() throws {
+    func testSynchronizePreservesConfiguredServiceTierWhenCatalogChanges() throws {
         try CodexPaths.ensureDirectories()
         try CodexPaths.writeSecureFile(Data(#"service_tier = "fast""#.utf8), to: CodexPaths.configTomlURL)
         try CodexServiceTierCatalogTests.writeFixture(models: [
@@ -135,7 +135,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         try CodexSyncService().synchronize(config: Self.oauthConfig(model: "gpt-5.6-sol", serviceTier: "fast"))
 
         let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
-        XCTAssertFalse(tomlText.contains("service_tier"), tomlText)
+        XCTAssertTrue(tomlText.contains(#"service_tier = "fast""#), tomlText)
     }
 
     func testSynchronizeWritesCatalogAdvertisedTierEvenWhenNotBuiltIn() throws {

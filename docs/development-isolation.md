@@ -73,3 +73,15 @@ xcodebuild test \
 - Debug 和 Release 使用不同的本地端口，避免回调与 gateway 互相占用。
 
 新增 sidecar 或本地 listener 时，优先把路径和端口挂到 runtime profile，再补一条 Debug/Release 差异测试。
+
+## 原生菜单交互验证入口
+
+Debug 构建支持全局快捷键 `Control + Option + Shift + Command + 9`，用于展开实际菜单面板。面板已展开时再次触发不会关闭；Release 不注册此组合，也不包含对应处理入口。
+
+测试时先启动隔离的 Debug app，在任意可操作的桌面应用中发送该组合，再绑定开发版已展开的面板执行 UI 验证。此入口与 CLI、URL scheme 无关。快捷键独立注册，某一组合被正式版或其他实例占用时不会撤销其余入口。`app-lifecycle.jsonl` 中的 `status_item_shortcut_registered`（identifier 3）和 `status_item_menu_opened`（trigger `debug_keyboard_shortcut`）可分别证明注册与面板展示；它们不能代替最终 UI 内容和点击结果的验证。
+
+### 原生辅助功能树的入口
+
+菜单栏面板展开后，`AXWindows` 仍可能返回空列表；实际内容位于应用的状态栏 `AXMenuBar` → `AXMenuExtra` → `AXPopover` 子树。只按普通窗口查找的 UI 工具可能因此超时，这不代表应用主线程或辅助功能接口失去响应。验证时先限定验证进程，再沿状态栏子树读取、展开菜单，并在每次操作后重新读取元素路径。原生菜单项支持 `AXPick`，选择后还应核对界面显示与隔离配置文件。
+
+若当前 UI 工具不支持这条路径，使用其他原生 AX/CGEvent 工具前需遵守当前工具的授权约束。网络成功、失败和新增模型场景可以通过隔离目录里的供应商 fixture 重放；真实账号的 `model/list` 可另行只读验证，不能把 fixture 响应说成真实账号权限。

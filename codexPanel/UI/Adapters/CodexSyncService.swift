@@ -3,6 +3,13 @@ import Foundation
 
 protocol CodexSynchronizing {
     func synchronize(config: CodexPanelConfig) throws
+    func synchronize(config: CodexPanelConfig, modelCatalog: CodexModelCatalog?) throws
+}
+
+extension CodexSynchronizing {
+    func synchronize(config: CodexPanelConfig, modelCatalog: CodexModelCatalog?) throws {
+        try self.synchronize(config: config)
+    }
 }
 
 typealias CodexSyncError = CodexConfigurationSyncError
@@ -63,10 +70,14 @@ struct CodexSyncService: CodexSynchronizing {
     }
 
     func synchronize(config: CodexPanelConfig) throws {
-        try self.synchronizer.synchronize(self.makeRequest(config: config))
+        try self.synchronizer.synchronize(self.makeRequest(config: config, modelCatalog: self.loadServiceTierCatalog()))
     }
 
-    private func makeRequest(config: CodexPanelConfig) throws -> CodexConfigurationSyncRequest {
+    func synchronize(config: CodexPanelConfig, modelCatalog: CodexModelCatalog?) throws {
+        try self.synchronizer.synchronize(self.makeRequest(config: config, modelCatalog: modelCatalog))
+    }
+
+    private func makeRequest(config: CodexPanelConfig, modelCatalog: CodexModelCatalog?) throws -> CodexConfigurationSyncRequest {
         guard let provider = config.activeProvider() else {
             throw CodexSyncError.missingActiveProvider
         }
@@ -83,7 +94,7 @@ struct CodexSyncService: CodexSynchronizing {
             modelID = nil
             serviceTier = config.global.codexConfigServiceTier(
                 for: config.global.defaultModel,
-                catalog: self.loadServiceTierCatalog()
+                catalog: modelCatalog
             )
         case .openAICompatible:
             providerKind = .openAICompatible

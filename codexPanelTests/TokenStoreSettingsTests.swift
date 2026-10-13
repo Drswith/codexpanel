@@ -533,7 +533,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertEqual(store.config.global.serviceTier, "standard")
     }
 
-    func testLoadAutoAdjustsStoredServiceTierWhenCodexCatalogChanges() throws {
+    func testLoadPreservesStoredServiceTierWhenCodexCatalogChanges() throws {
         try CodexServiceTierCatalogTests.writeFixture(models: [
             CodexServiceTierCatalogTests.model("gpt-5.6-sol", tiers: [("priority", "Fast")]),
         ])
@@ -552,10 +552,10 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         ])
         store.load()
 
-        XCTAssertEqual(store.config.global.serviceTier, "standard")
+        XCTAssertEqual(store.config.global.serviceTier, "fast")
         XCTAssertEqual(store.serviceTierOptions(for: "gpt-5.6-sol"), ["standard"])
         let reloaded = try CodexPanelConfigStore().loadOrMigrate()
-        XCTAssertEqual(reloaded.global.serviceTier, "standard")
+        XCTAssertEqual(reloaded.global.serviceTier, "fast")
     }
 
     func testInitializationAutoAdjustsLegacyFlexServiceTier() throws {
