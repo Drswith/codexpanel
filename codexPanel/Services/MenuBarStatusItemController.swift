@@ -158,7 +158,7 @@ enum MenuBarPopoverSizing {
         guard version.majorVersion >= 15 else {
             return (self.legacyTopContentInset, self.legacyBottomContentInset)
         }
-        // macOS 15 popover chrome leaves less visible breathing room near the top and bottom.
+        // Preserve the existing content insets when changing the system presentation host.
         return (self.macOS15TopContentInset, self.macOS15BottomContentInset)
     }
 
@@ -298,206 +298,175 @@ private final class StatusItemHotKeyController {
     }
 }
 
+/// SwiftUI owns the status item and its native, arrowless MenuBarExtra window.
+/// This bridge retains the existing refresh, shortcut and presentation notifications.
 @MainActor
-final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
+final class MenuBarStatusItemController: NSObject, ObservableObject {
     static let shared = MenuBarStatusItemController()
 
-    private let popover = NSPopover()
-    private var statusItem: NSStatusItem?
-    private var initialMeasurementWindow: NSWindow?
-    private var pendingInitialPopoverTrigger: String?
-    private var pendingInitialPopoverAvailableHeight: CGFloat?
-    private var initialMeasurementFallbackWorkItem: DispatchWorkItem?
-    private var pendingPresentationWorkItem: DispatchWorkItem?
-    private var latestMeasuredContentHeight: CGFloat?
-    private var didPostMenuWillOpenForCurrentPresentation = false
-    private var isPreparingInitialMeasurementOpenState = false
-    private var allowsProgrammaticPopoverClose = false
+    @Published var isInserted = true
+    @Published private(set) var presentation = MenuBarStatusItemPresentation(
+        iconName: "terminal", title: "", emphasis: .primary
+    )
+    private weak var nativeStatusItem: NSStatusItem?
+    private weak var menuWindow: NSWindow?
+    private var isPresented = false
     private var cancellables: Set<AnyCancellable> = []
     private lazy var hotKeyController = StatusItemHotKeyController { [weak self] identifier in
         #if DEBUG
         if identifier == MenuBarGlobalShortcut.debugMenuOpen.identifier {
-            self?.openPopoverFromDebugShortcut()
+            guard self?.isPresented == false else { return }
+            self?.toggleFromKeyboardShortcut()
             return
         }
         #endif
-        self?.togglePopoverFromKeyboardShortcut()
-    }
-
-    private override init() {
-        super.init()
-        self.popover.behavior = .transient
-        self.popover.delegate = self
+        self?.toggleFromKeyboardShortcut()
     }
 
     func start() {
-        guard self.statusItem == nil else {
-            self.applyVisibilityPreference()
-            self.updateAppearance()
-            return
-        }
-
-        let userDefaults = UserDefaults.standard
-        MenuBarStatusItemIdentity.repairVisibilityIfNeeded(userDefaults: userDefaults)
-
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.autosaveName = MenuBarStatusItemIdentity.statusItemAutosaveName
-        item.behavior = MenuBarStatusItemIdentity.statusItemBehavior
-
-        guard let button = item.button else {
-            NSStatusBar.system.removeStatusItem(item)
-            return
-        }
-
-        button.target = self
-        button.action = #selector(self.togglePopover(_:))
-        button.imagePosition = .imageLeading
-        button.setAccessibilityLabel(MenuBarStatusItemIdentity.accessibilityLabel)
-        button.setAccessibilityIdentifier(MenuBarStatusItemIdentity.accessibilityIdentifier)
-
-        self.statusItem = item
-        self.applyVisibilityPreference(userDefaults: userDefaults)
+        guard self.cancellables.isEmpty else { return }
+        MenuBarStatusItemIdentity.repairVisibilityIfNeeded(userDefaults: .standard)
+        self.isInserted = Self.resolvedVisibilityPreference()
         self.updateAppearance()
-        self.bindState()
         self.hotKeyController.start()
-        AppLifecycleDiagnostics.shared.recordEvent(
-            type: "status_item_host_started",
-            fields: ["pid": getpid()]
-        )
+        DispatchQueue.main.async { [weak self] in _ = self?.resolveStatusItem() }
+
+        for publisher in [TokenStore.shared.objectWillChange.eraseToAnyPublisher(),
+                          UpdateCoordinator.shared.objectWillChange.eraseToAnyPublisher()] {
+            publisher.receive(on: RunLoop.main).sink { [weak self] _ in
+                DispatchQueue.main.async { self?.updateAppearance() }
+            }.store(in: &self.cancellables)
+        }
+        NotificationCenter.default.publisher(for: .codexpanelRequestCloseStatusItemMenu)
+            .receive(on: RunLoop.main).sink { [weak self] _ in self?.closeMenu() }
+            .store(in: &self.cancellables)
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: RunLoop.main).sink { [weak self] _ in
+                let visible = Self.resolvedVisibilityPreference()
+                if self?.isInserted != visible { self?.isInserted = visible }
+            }.store(in: &self.cancellables)
+        AppLifecycleDiagnostics.shared.recordEvent(type: "status_item_host_started", fields: ["pid": getpid()])
     }
 
     func stop() {
-        self.pendingPresentationWorkItem?.cancel()
-        self.pendingPresentationWorkItem = nil
-        self.cancelInitialMeasurement()
+        self.closeMenu()
         self.hotKeyController.stop()
-        self.popover.performClose(nil)
-        if let statusItem {
-            NSStatusBar.system.removeStatusItem(statusItem)
-        }
-        self.statusItem = nil
         self.cancellables.removeAll()
+        self.isInserted = false
     }
 
-    private func bindState() {
-        guard self.cancellables.isEmpty else { return }
-
-        TokenStore.shared.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.scheduleAppearanceRefresh()
-            }
-            .store(in: &self.cancellables)
-
-        UpdateCoordinator.shared.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.scheduleAppearanceRefresh()
-            }
-            .store(in: &self.cancellables)
-
-        NotificationCenter.default.publisher(for: .codexpanelRequestCloseStatusItemMenu)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.closePopover()
-            }
-            .store(in: &self.cancellables)
-
-        NotificationCenter.default.publisher(for: .codexpanelStatusItemMeasuredHeightDidChange)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] notification in
-                guard let self else { return }
-                if self.pendingInitialPopoverTrigger != nil,
-                   self.isPreparingInitialMeasurementOpenState {
-                    self.recordPopoverSizingDiagnostic(
-                        "status_item_menu_height_measurement_rejected_before_open_state",
-                        fields: [
-                            "height": notification.userInfo?["height"] as Any,
-                            "width": notification.userInfo?["width"] as Any,
-                            "popoverShown": self.popover.isShown,
-                        ]
-                    )
-                    return
-                }
-                guard let height = notification.userInfo?["height"] as? CGFloat,
-                      let width = notification.userInfo?["width"] as? CGFloat,
-                      MenuBarPopoverSizing.acceptsMeasuredContentWidth(width) else {
-                    self.recordPopoverSizingDiagnostic(
-                        "status_item_menu_height_measurement_rejected",
-                        fields: [
-                            "height": notification.userInfo?["height"] as Any,
-                            "width": notification.userInfo?["width"] as Any,
-                            "pendingInitialOpen": self.pendingInitialPopoverTrigger != nil,
-                            "popoverShown": self.popover.isShown,
-                        ]
-                    )
-                    return
-                }
-
-                self.recordPopoverSizingDiagnostic(
-                    "status_item_menu_height_measurement_accepted",
-                    fields: [
-                        "height": height,
-                        "width": width,
-                        "pendingInitialOpen": self.pendingInitialPopoverTrigger != nil,
-                        "popoverShown": self.popover.isShown,
-                    ]
-                )
-                self.latestMeasuredContentHeight = height
-                if self.pendingInitialPopoverTrigger != nil {
-                    self.completeInitialMeasurementAndShowPopover()
-                    return
-                }
-                guard self.popover.isShown else { return }
-                self.refreshPopoverSize(
-                    desiredContentHeight: self.latestMeasuredContentHeight,
-                    availableHeight: self.availablePopoverHeightBelowStatusItem()
-                )
-            }
-            .store(in: &self.cancellables)
-
-        NotificationCenter.default.publisher(for: .codexpanelRequestStatusItemLayoutRefresh)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                guard let self, self.popover.isShown else { return }
-                self.schedulePopoverSizeRefresh(
-                    desiredContentHeight: nil,
-                    availableHeight: self.availablePopoverHeightBelowStatusItem(),
-                    remainingAttempts: 6
-                )
-            }
-            .store(in: &self.cancellables)
-
-        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.applyVisibilityPreference()
-            }
-            .store(in: &self.cancellables)
+    nonisolated static func resolvedVisibilityPreference(userDefaults: UserDefaults = .standard) -> Bool {
+        MenuBarStatusItemIdentity.resolvedVisibility(domain: userDefaults.dictionaryRepresentation())
     }
 
-    private func scheduleAppearanceRefresh() {
+    func attachMenuWindow(_ window: NSWindow) {
+        self.menuWindow = window
+        self.synchronizePresentation()
+        #if DEBUG
+        AppLifecycleDiagnostics.shared.recordEvent(type: "native_menu_geometry", fields: [
+            "windowWidth": window.frame.width,
+            "contentWidth": window.contentView?.bounds.width as Any,
+            "contentHeight": window.contentView?.bounds.height as Any,
+            "outerInset": MenuBarPopoverSizing.horizontalContentInset,
+        ])
+        #endif
+    }
+
+    func synchronizePresentation() {
+        guard let window = self.menuWindow else { return }
+        // Occlusion notifications also fire when the native menu is ordered out.
+        let visible = window.isVisible
+        guard visible != self.isPresented else { return }
+        if visible { self.menuWillOpen() } else { self.menuDidClose() }
+    }
+
+    func menuWillOpen() {
+        guard !self.isPresented else { return }
+        self.isPresented = true
+        self.publishAvailableContentHeight(self.menuWindow?.screen.map {
+            max(1, $0.visibleFrame.height - MenuBarPopoverSizing.verticalMargin)
+        })
+        NotificationCenter.default.post(name: .codexpanelStatusItemMenuWillOpen, object: self)
+        AppLifecycleDiagnostics.shared.recordEvent(type: "status_item_menu_opened", fields: ["pid": getpid()])
+    }
+
+    func menuDidClose() {
+        guard self.isPresented else { return }
+        self.isPresented = false
+        self.publishAvailableContentHeight(nil)
+        NotificationCenter.default.post(name: .codexpanelStatusItemMenuDidClose, object: self)
+        AppLifecycleDiagnostics.shared.recordEvent(type: "status_item_menu_closed", fields: ["pid": getpid()])
+    }
+
+    private func closeMenu() {
+        guard self.isPresented else { return }
+        if let item = self.resolveStatusItem(), let session = self.expandedSession(for: item) {
+            session.perform(NSSelectorFromString("cancel"))
+        } else if let button = self.resolveStatusItem()?.button {
+            button.performClick(nil)
+        } else {
+            self.menuWindow?.orderOut(nil)
+        }
+        self.synchronizePresentation()
+    }
+
+    private func toggleFromKeyboardShortcut() {
+        if self.isInserted == false { self.isInserted = true }
         DispatchQueue.main.async { [weak self] in
-            // 菜单打开期间保持按钮宽度，避免配额刷新把弹窗锚点推走。
-            guard let self, self.popover.isShown == false,
-                  self.pendingInitialPopoverTrigger == nil,
-                  self.pendingPresentationWorkItem == nil else { return }
-            self.updateAppearance()
+            guard let self, let item = self.resolveStatusItem() else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            let delegateSelector = NSSelectorFromString("expandedInterfaceDelegate")
+            if #available(macOS 27.0, *), item.responds(to: delegateSelector),
+               item.perform(delegateSelector)?.takeUnretainedValue() != nil {
+                if let session = self.expandedSession(for: item) {
+                    session.perform(NSSelectorFromString("cancel"))
+                } else {
+                    // macOS 27 no longer assigns a button action to window-style extras.
+                    // AppKit exposes session cancellation, but not a public begin method.
+                    // Keep this compatibility bridge guarded; SwiftUI still owns the window.
+                    let selector = NSSelectorFromString("_beginExpandedInterfaceSession:")
+                    guard item.responds(to: selector), let implementation = item.method(for: selector) else { return }
+                    typealias BeginSession = @convention(c) (NSStatusItem, Selector, TimeInterval) -> Void
+                    unsafeBitCast(implementation, to: BeginSession.self)(item, selector, .greatestFiniteMagnitude)
+                }
+            } else {
+                item.button?.performClick(nil)
+            }
         }
     }
 
-    private func makeMenuBarRootView() -> AnyView {
-        AnyView(
-            MenuBarView()
-                .environmentObject(TokenStore.shared)
-                .environmentObject(OAuthManager.shared)
-                .environmentObject(UpdateCoordinator.shared)
-        )
+    // Resolve new AppKit session APIs dynamically so older Xcode SDKs still compile.
+    private func expandedSession(for item: NSStatusItem) -> NSObject? {
+        guard #available(macOS 27.0, *) else { return nil }
+        let selector = NSSelectorFromString("expandedInterfaceSession")
+        guard item.responds(to: selector),
+              let session = item.perform(selector)?.takeUnretainedValue() as? NSObject,
+              session.responds(to: NSSelectorFromString("cancel")) else { return nil }
+        return session
+    }
+
+    private func resolveStatusItem() -> NSStatusItem? {
+        if let nativeStatusItem { return nativeStatusItem }
+        // MenuBarExtra has no public status-item accessor. Restrict introspection to
+        // its status-bar windows and exclude inactive-display replicas.
+        let selector = NSSelectorFromString("statusItem")
+        self.nativeStatusItem = NSApp.windows.lazy.compactMap { window -> NSStatusItem? in
+            guard String(describing: type(of: window)).contains("NSStatusBarWindow"),
+                  window.responds(to: selector),
+                  let item = window.perform(selector)?.takeUnretainedValue() as? NSStatusItem,
+                  !String(describing: type(of: item)).contains("Replicant") else { return nil }
+            return item
+        }.first
+        if let item = self.nativeStatusItem {
+            item.autosaveName = MenuBarStatusItemIdentity.statusItemAutosaveName
+            item.behavior = MenuBarStatusItemIdentity.statusItemBehavior
+            item.button?.setAccessibilityLabel(MenuBarStatusItemIdentity.accessibilityLabel)
+            item.button?.setAccessibilityIdentifier(MenuBarStatusItemIdentity.accessibilityIdentifier)
+        }
+        return self.nativeStatusItem
     }
 
     private func updateAppearance() {
-        guard let button = self.statusItem?.button else { return }
-
         let presentation = MenuBarStatusItemPresentation.make(
             accounts: TokenStore.shared.accounts,
             activeProvider: TokenStore.shared.activeProvider,
@@ -506,400 +475,75 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
             accountUsageMode: TokenStore.shared.config.openAI.accountUsageMode,
             updateAvailable: UpdateCoordinator.shared.pendingAvailability != nil
         )
-
-        button.effectiveAppearance.performAsCurrentDrawingAppearance {
-            button.image = presentation.makeTemplateImage(
-                accessibilityDescription: MenuBarStatusItemIdentity.accessibilityLabel
-            )
-            button.contentTintColor = nil
-        }
-        button.attributedTitle = presentation.attributedTitle
+        if self.presentation != presentation { self.presentation = presentation }
         RateLimitResetNotificationService.shared.evaluate(accounts: TokenStore.shared.accounts)
     }
 
-    private func applyVisibilityPreference(userDefaults: UserDefaults = .standard) {
-        guard let statusItem = self.statusItem else { return }
-
-        let visible = Self.resolvedVisibilityPreference(userDefaults: userDefaults)
-        if visible == false {
-            self.closePopover()
-        }
-        statusItem.isVisible = visible
-    }
-
-    nonisolated static func resolvedVisibilityPreference(userDefaults: UserDefaults = .standard) -> Bool {
-        MenuBarStatusItemIdentity.resolvedVisibility(domain: userDefaults.dictionaryRepresentation())
-    }
-
-    @objc
-    private func togglePopover(_ sender: AnyObject?) {
-        if self.popover.isShown || self.pendingInitialPopoverTrigger != nil || self.pendingPresentationWorkItem != nil {
-            self.closePopover(sender)
-            return
-        }
-        self.showPopover(trigger: "button")
-    }
-
-    private func togglePopoverFromKeyboardShortcut() {
-        if self.statusItem == nil {
-            self.start()
-        }
-        if self.popover.isShown || self.pendingInitialPopoverTrigger != nil || self.pendingPresentationWorkItem != nil {
-            self.closePopover()
-            return
-        }
-        self.showPopover(trigger: "keyboard_shortcut")
-    }
-
-    #if DEBUG
-    private func openPopoverFromDebugShortcut() {
-        if self.statusItem == nil { self.start() }
-        guard !self.popover.isShown else { return }
-        self.showPopover(trigger: "debug_keyboard_shortcut")
-    }
-    #endif
-
-    private func showPopover(trigger: String) {
-        guard self.pendingInitialPopoverTrigger == nil,
-              self.pendingPresentationWorkItem == nil else { return }
-        if self.popover.contentViewController == nil {
-            self.popover.contentViewController = NSHostingController(rootView: self.makeMenuBarRootView())
-        }
-        let availableHeight = self.availablePopoverHeightBelowStatusItem()
-        guard self.latestMeasuredContentHeight != nil else {
-            self.beginInitialMeasurement(trigger: trigger, availableHeight: availableHeight)
-            return
-        }
-        self.schedulePopoverPresentation(trigger: trigger)
-    }
-
-    private func schedulePopoverPresentation(trigger: String, previousFrame: CGRect? = nil, attempts: Int = 12) {
-        guard self.statusItem?.isVisible == true,
-              let button = self.statusItem?.button, let window = button.window else {
-            self.closePopover()
-            return
-        }
-        let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
-        let screen = NSScreen.screens.first { MenuBarPopoverAnchorPolicy.isUsable(frame, on: $0.frame) }
-        if screen != nil, MenuBarPopoverAnchorPolicy.isStable(frame, previous: previousFrame) {
-            self.pendingPresentationWorkItem = nil
-            self.presentPopover(trigger: trigger, availableHeight: self.availablePopoverHeightBelowStatusItem())
-            return
-        }
-        guard attempts > 0 else {
-            self.closePopover()
-            return
-        }
-        let work = DispatchWorkItem { [weak self] in
-            self?.schedulePopoverPresentation(trigger: trigger, previousFrame: frame, attempts: attempts - 1)
-        }
-        self.pendingPresentationWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(16), execute: work)
-    }
-
-    private func presentPopover(trigger: String, availableHeight: CGFloat?) {
-        guard let button = self.statusItem?.button else { return }
-
-        self.prepareMenuPresentationForCurrentOpen()
-        let contentHeight = self.latestMeasuredContentHeight ?? MenuBarPopoverSizing.defaultHeight
-        let popoverHeight = MenuBarPopoverSizing.clampedHeight(
-            desiredHeight: contentHeight,
-            availableHeight: availableHeight
-        )
-        self.popover.contentSize = NSSize(
-            width: MenuBarStatusItemIdentity.popoverContentWidth,
-            height: popoverHeight
-        )
-        self.publishAvailableContentHeight(availableHeight)
-        self.recordPopoverSizingDiagnostic(
-            "status_item_menu_present_popover",
-            fields: [
-                "trigger": trigger,
-                "contentHeight": contentHeight,
-                "popoverHeight": popoverHeight,
-                "availableHeight": availableHeight as Any,
-                "hasMeasuredHeight": self.latestMeasuredContentHeight != nil,
-            ]
-        )
-        // 点击菜单栏时保留前台应用；强制激活会令折叠菜单栏重新布局并移动按钮。
-        self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        button.highlight(true)
-        self.popover.contentViewController?.view.window?.makeKey()
-        self.schedulePopoverSizeRefresh(availableHeight: availableHeight)
-        AppLifecycleDiagnostics.shared.recordEvent(
-            type: "status_item_menu_opened",
-            fields: [
-                "pid": getpid(),
-                "trigger": trigger,
-            ]
-        )
-    }
-
-    private func closePopover(_ sender: AnyObject? = nil) {
-        let wasPreparing = self.pendingPresentationWorkItem != nil || self.pendingInitialPopoverTrigger != nil
-        self.pendingPresentationWorkItem?.cancel()
-        self.pendingPresentationWorkItem = nil
-        self.cancelInitialMeasurement()
-        if wasPreparing && self.popover.isShown == false {
-            self.didPostMenuWillOpenForCurrentPresentation = false
-            self.publishAvailableContentHeight(nil)
-            NotificationCenter.default.post(name: .codexpanelStatusItemMenuDidClose, object: self)
-            self.scheduleAppearanceRefresh()
-        }
-        guard self.popover.isShown else { return }
-        self.allowsProgrammaticPopoverClose = true
-        defer { self.allowsProgrammaticPopoverClose = false }
-        self.popover.performClose(sender)
-    }
-
-    private func schedulePopoverSizeRefresh(
-        desiredContentHeight: CGFloat? = nil,
-        availableHeight: CGFloat?,
-        remainingAttempts: Int = 3
-    ) {
-        guard remainingAttempts > 0 else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.popover.isShown else { return }
-            self.refreshPopoverSize(
-                desiredContentHeight: desiredContentHeight,
-                availableHeight: availableHeight ?? self.availablePopoverHeightBelowStatusItem()
-            )
-            self.schedulePopoverSizeRefresh(
-                desiredContentHeight: desiredContentHeight,
-                availableHeight: availableHeight,
-                remainingAttempts: remainingAttempts - 1
-            )
-        }
-    }
-
-    private func beginInitialMeasurement(trigger: String, availableHeight: CGFloat?) {
-        guard self.pendingInitialPopoverTrigger == nil else { return }
-        guard let contentViewController = self.popover.contentViewController else {
-            self.schedulePopoverPresentation(trigger: trigger)
-            return
-        }
-
-        self.pendingInitialPopoverTrigger = trigger
-        self.pendingInitialPopoverAvailableHeight = availableHeight
-
-        let measurementHeight = MenuBarPopoverSizing.minimumHeight
-        let window = NSWindow(
-            contentRect: NSRect(
-                x: -10_000,
-                y: -10_000,
-                width: MenuBarStatusItemIdentity.popoverContentWidth,
-                height: measurementHeight
-            ),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        self.popover.contentViewController = nil
-        window.contentViewController = contentViewController
-        window.isReleasedWhenClosed = false
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = false
-        window.ignoresMouseEvents = true
-        window.alphaValue = 0
-        window.orderFront(nil)
-        self.initialMeasurementWindow = window
-        self.isPreparingInitialMeasurementOpenState = true
-        self.recordPopoverSizingDiagnostic(
-            "status_item_menu_initial_measurement_started",
-            fields: [
-                "trigger": trigger,
-                "availableHeight": availableHeight as Any,
-                "measurementWindowWidth": window.frame.width,
-                "measurementWindowHeight": window.frame.height,
-            ]
-        )
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.pendingInitialPopoverTrigger != nil else { return }
-            self.prepareMenuPresentationForCurrentOpen()
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.pendingInitialPopoverTrigger != nil else { return }
-                self.isPreparingInitialMeasurementOpenState = false
-                self.initialMeasurementWindow?.contentViewController?.view.needsLayout = true
-                self.initialMeasurementWindow?.contentViewController?.view.layoutSubtreeIfNeeded()
-                self.recordPopoverSizingDiagnostic(
-                    "status_item_menu_initial_measurement_open_state_ready",
-                    fields: [
-                        "latestMeasuredContentHeight": self.latestMeasuredContentHeight as Any,
-                    ]
-                )
-            }
-        }
-
-        let fallbackWorkItem = DispatchWorkItem { [weak self] in
-            guard let self, self.pendingInitialPopoverTrigger != nil else { return }
-            if self.latestMeasuredContentHeight == nil,
-               let fallbackHeight = self.measureCurrentInitialMeasurementViewHeight() {
-                self.latestMeasuredContentHeight = fallbackHeight
-            }
-            self.recordPopoverSizingDiagnostic(
-                "status_item_menu_initial_measurement_fallback",
-                fields: [
-                    "latestMeasuredContentHeight": self.latestMeasuredContentHeight as Any,
-                    "pendingInitialOpen": self.pendingInitialPopoverTrigger != nil,
-                ]
-            )
-            self.completeInitialMeasurementAndShowPopover()
-        }
-        self.initialMeasurementFallbackWorkItem = fallbackWorkItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: fallbackWorkItem)
-    }
-
-    private func completeInitialMeasurementAndShowPopover() {
-        guard let trigger = self.pendingInitialPopoverTrigger else { return }
-        let availableHeight = self.pendingInitialPopoverAvailableHeight
-        self.recordPopoverSizingDiagnostic(
-            "status_item_menu_initial_measurement_completed",
-            fields: [
-                "trigger": trigger,
-                "latestMeasuredContentHeight": self.latestMeasuredContentHeight as Any,
-                "availableHeight": availableHeight as Any,
-            ]
-        )
-        self.cancelInitialMeasurement()
-        self.schedulePopoverPresentation(trigger: trigger)
-    }
-
-    private func cancelInitialMeasurement() {
-        self.initialMeasurementFallbackWorkItem?.cancel()
-        self.initialMeasurementFallbackWorkItem = nil
-        self.pendingInitialPopoverTrigger = nil
-        self.pendingInitialPopoverAvailableHeight = nil
-        self.isPreparingInitialMeasurementOpenState = false
-        if let contentViewController = self.initialMeasurementWindow?.contentViewController {
-            self.initialMeasurementWindow?.contentViewController = nil
-            self.popover.contentViewController = contentViewController
-        }
-        self.initialMeasurementWindow?.orderOut(nil)
-        self.initialMeasurementWindow = nil
-    }
-
-    private func measureCurrentInitialMeasurementViewHeight() -> CGFloat? {
-        guard let view = self.initialMeasurementWindow?.contentViewController?.view else { return nil }
-        view.layoutSubtreeIfNeeded()
-        let fittingHeight = max(view.fittingSize.height, MenuBarPopoverSizing.minimumHeight)
-        guard fittingHeight > MenuBarPopoverSizing.minimumHeight + 1 else { return nil }
-        return fittingHeight
-    }
-
-    private func prepareMenuPresentationForCurrentOpen() {
-        guard self.didPostMenuWillOpenForCurrentPresentation == false else { return }
-        self.didPostMenuWillOpenForCurrentPresentation = true
-        NotificationCenter.default.post(name: .codexpanelStatusItemMenuWillOpen, object: self)
-    }
-
-    private func refreshPopoverSize(
-        desiredContentHeight: CGFloat?,
-        availableHeight: CGFloat?
-    ) {
-        guard let view = self.popover.contentViewController?.view else { return }
-        view.layoutSubtreeIfNeeded()
-        let contentHeight = desiredContentHeight ?? view.fittingSize.height
-        let popoverHeight = MenuBarPopoverSizing.clampedHeight(
-            desiredHeight: contentHeight,
-            availableHeight: availableHeight
-        )
-        let size = NSSize(
-            width: MenuBarStatusItemIdentity.popoverContentWidth,
-            height: popoverHeight
-        )
-        if abs(self.popover.contentSize.height - size.height) > 0.5 || self.popover.contentSize.width != size.width {
-            self.popover.contentSize = size
-        }
-        self.publishAvailableContentHeight(availableHeight)
-        self.recordPopoverSizingDiagnostic(
-            "status_item_menu_refresh_popover_size",
-            fields: [
-                "contentHeight": contentHeight,
-                "popoverHeight": popoverHeight,
-                "availableHeight": availableHeight as Any,
-                "usedCachedMeasurement": desiredContentHeight != nil,
-            ]
-        )
-    }
-
     private func publishAvailableContentHeight(_ height: CGFloat?) {
-        var userInfo: [AnyHashable: Any]?
-        if let height {
-            userInfo = ["height": height]
-        }
         NotificationCenter.default.post(
             name: .codexpanelStatusItemAvailableContentHeightDidChange,
             object: self,
-            userInfo: userInfo
+            userInfo: height.map { ["height": $0] }
         )
     }
+}
 
-    private func recordPopoverSizingDiagnostic(_ type: String, fields: [String: Any]) {
-        #if DEBUG
-        AppLifecycleDiagnostics.shared.recordEvent(type: type, fields: fields)
-        #endif
+struct NativeMenuBarContent: View {
+    var body: some View {
+        // Keep MenuBarView's existing outer insets and all internal content unchanged.
+        // The system supplies the window material, outline and rounded corners.
+        MenuBarView()
+            .environmentObject(TokenStore.shared)
+            .environmentObject(OAuthManager.shared)
+            .environmentObject(UpdateCoordinator.shared)
+            .background(NativeMenuBarWindowReader())
+    }
+}
+
+private struct NativeMenuBarWindowReader: NSViewRepresentable {
+
+    func makeNSView(context: Context) -> ReaderView {
+        ReaderView(frame: .zero)
     }
 
-    private func availablePopoverHeightBelowStatusItem() -> CGFloat? {
-        guard let button = self.statusItem?.button,
-              let window = button.window,
-              let screen = window.screen ?? NSScreen.main else {
-            return nil
+    func updateNSView(_ nsView: ReaderView, context: Context) {
+        nsView.attach()
+    }
+
+    final class ReaderView: NSView {
+        private var observations: [NSObjectProtocol] = []
+
+        override init(frame: NSRect) { super.init(frame: frame) }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            self.observations.forEach { NotificationCenter.default.removeObserver($0) }
+            self.observations.removeAll()
+            guard let window else { return }
+            for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
+                         NSWindow.didChangeOcclusionStateNotification] {
+                self.observations.append(NotificationCenter.default.addObserver(
+                    forName: name, object: window, queue: .main
+                ) { _ in
+                    MainActor.assumeIsolated {
+                        MenuBarStatusItemController.shared.synchronizePresentation()
+                    }
+                })
+            }
+            self.attach()
         }
 
-        let buttonFrameInWindow = button.convert(button.bounds, to: nil)
-        let buttonFrameOnScreen = window.convertToScreen(buttonFrameInWindow)
-        let visibleFrame = screen.visibleFrame
-        return max(
-            MenuBarPopoverSizing.minimumHeight,
-            buttonFrameOnScreen.minY - visibleFrame.minY - MenuBarPopoverSizing.verticalMargin
-        )
-    }
-
-    func popoverWillShow(_ notification: Notification) {
-        self.prepareMenuPresentationForCurrentOpen()
-    }
-
-    func popoverShouldClose(_ popover: NSPopover) -> Bool {
-        if self.allowsProgrammaticPopoverClose {
-            AppLifecycleDiagnostics.shared.recordEvent(
-                type: "status_item_menu_should_close",
-                fields: [
-                    "decision": "allow_programmatic",
-                    "hoverPanelCount": DetachedWindowPresenter.shared.hoverPanelFrames().count,
-                ]
-            )
-            return true
+        func attach() {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                if let window = self.window {
+                    MenuBarStatusItemController.shared.attachMenuWindow(window)
+                }
+            }
         }
 
-        // Treat hover panels as part of the same transient surface as the menu popover.
-        let hoverPanelFrames = DetachedWindowPresenter.shared.hoverPanelFrames()
-        let shouldClose = MenuBarPopoverClosePolicy.shouldClosePopover(
-            mouseLocation: NSEvent.mouseLocation,
-            protectedWindowFrames: hoverPanelFrames
-        )
-        AppLifecycleDiagnostics.shared.recordEvent(
-            type: "status_item_menu_should_close",
-            fields: [
-                "decision": shouldClose ? "allow" : "deny",
-                "mouseX": NSEvent.mouseLocation.x,
-                "mouseY": NSEvent.mouseLocation.y,
-                "hoverPanelCount": hoverPanelFrames.count,
-            ]
-        )
-        return shouldClose
-    }
-
-    func popoverDidClose(_ notification: Notification) {
-        AppLifecycleDiagnostics.shared.recordEvent(
-            type: "status_item_menu_closed",
-            fields: ["pid": getpid()]
-        )
-        self.statusItem?.button?.highlight(false)
-        self.scheduleAppearanceRefresh()
-        self.didPostMenuWillOpenForCurrentPresentation = false
-        self.publishAvailableContentHeight(nil)
-        NotificationCenter.default.post(name: .codexpanelStatusItemMenuDidClose, object: self)
+        deinit { observations.forEach { NotificationCenter.default.removeObserver($0) } }
     }
 }
