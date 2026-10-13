@@ -12,7 +12,7 @@ extension Notification.Name {
     static let codexpanelStatusItemMenuDidClose = Notification.Name("com.codexpanel.status-item-menu.did-close")
 }
 
-private struct MenuBarGlobalShortcut {
+struct MenuBarGlobalShortcut: Equatable {
     let keyCode: UInt32
     let modifiers: UInt32
     let identifier: UInt32
@@ -31,12 +31,18 @@ private struct MenuBarGlobalShortcut {
         modifiers: UInt32(controlKey | optionKey | cmdKey),
         identifier: 2
     )
+    /// 自动化专用：不与正式版或另一开发实例的常用入口竞争。
+    static let debugMenuOpen = Self(
+        keyCode: UInt32(kVK_ANSI_9),
+        modifiers: UInt32(controlKey | optionKey | shiftKey | cmdKey),
+        identifier: 3
+    )
     #endif
 
     static var all: [Self] {
         var shortcuts = [Self.primary]
         #if DEBUG
-        shortcuts.append(.debugAlternate)
+        shortcuts.append(contentsOf: [.debugAlternate, .debugMenuOpen])
         #endif
         return shortcuts
     }
@@ -187,11 +193,11 @@ enum MenuBarPopoverAnchorPolicy {
 }
 
 private final class StatusItemHotKeyController {
-    private let action: () -> Void
+    private let action: (UInt32) -> Void
     private var hotKeyRefs: [EventHotKeyRef] = []
     private var eventHandler: EventHandlerRef?
 
-    init(action: @escaping () -> Void) {
+    init(action: @escaping (UInt32) -> Void) {
         self.action = action
     }
 
@@ -230,7 +236,7 @@ private final class StatusItemHotKeyController {
                 let controller = Unmanaged<StatusItemHotKeyController>
                     .fromOpaque(userData)
                     .takeUnretainedValue()
-                controller.action()
+                controller.action(hotKeyID.id)
                 return noErr
             },
             1,
@@ -238,7 +244,10 @@ private final class StatusItemHotKeyController {
             UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque()),
             &self.eventHandler
         )
-        guard installStatus == noErr else { return }
+        guard installStatus == noErr else {
+            AppLifecycleDiagnostics.shared.recordEvent(type: "status_item_shortcut_handler_failed", fields: ["status": installStatus])
+            return
+        }
 
         for shortcut in MenuBarGlobalShortcut.all {
             var hotKeyRef: EventHotKeyRef?
@@ -255,10 +264,18 @@ private final class StatusItemHotKeyController {
                 &hotKeyRef
             )
             guard registerStatus == noErr, let hotKeyRef else {
-                self.stop()
-                return
+                AppLifecycleDiagnostics.shared.recordEvent(
+                    type: "status_item_shortcut_registration_failed",
+                    fields: ["identifier": shortcut.identifier, "status": registerStatus]
+                )
+                // 某个组合已被其他实例占用时，继续注册剩余入口。
+                continue
             }
             self.hotKeyRefs.append(hotKeyRef)
+            AppLifecycleDiagnostics.shared.recordEvent(
+                type: "status_item_shortcut_registered",
+                fields: ["identifier": shortcut.identifier]
+            )
         }
 
         if self.hotKeyRefs.isEmpty {
@@ -297,7 +314,13 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
     private var isPreparingInitialMeasurementOpenState = false
     private var allowsProgrammaticPopoverClose = false
     private var cancellables: Set<AnyCancellable> = []
-    private lazy var hotKeyController = StatusItemHotKeyController { [weak self] in
+    private lazy var hotKeyController = StatusItemHotKeyController { [weak self] identifier in
+        #if DEBUG
+        if identifier == MenuBarGlobalShortcut.debugMenuOpen.identifier {
+            self?.openPopoverFromDebugShortcut()
+            return
+        }
+        #endif
         self?.togglePopoverFromKeyboardShortcut()
     }
 
@@ -527,6 +550,14 @@ final class MenuBarStatusItemController: NSObject, NSPopoverDelegate {
         }
         self.showPopover(trigger: "keyboard_shortcut")
     }
+
+    #if DEBUG
+    private func openPopoverFromDebugShortcut() {
+        if self.statusItem == nil { self.start() }
+        guard !self.popover.isShown else { return }
+        self.showPopover(trigger: "debug_keyboard_shortcut")
+    }
+    #endif
 
     private func showPopover(trigger: String) {
         guard self.pendingInitialPopoverTrigger == nil,

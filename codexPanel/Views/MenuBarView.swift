@@ -521,14 +521,7 @@ struct MenuBarView: View {
     private let openAIAccountCSVService = OpenAIAccountCSVService()
     private let openAIAccountCSVPanelService = OpenAIAccountCSVPanelService()
     private let codexAppPathPanelService = CodexAppPathPanelService.shared
-    static let codexModelOptions: [String] = [
-        "gpt-5.6",
-        "gpt-5.6-terra",
-        "gpt-5.6-luna",
-        "gpt-5.5",
-        "gpt-5.4",
-        "gpt-5.4-mini",
-    ]
+    static let codexModelOptions = CodexModelCatalog.fallbackModelIDs
     static let defaultCodexReasoningEffortOptions = CodexPanelGlobalSettings.baseReasoningEffortOptions
 
     @State private var isRefreshing = false
@@ -748,6 +741,9 @@ struct MenuBarView: View {
             if isResetCreditsPanelPresented {
                 showResetCreditsPanel()
             }
+        }
+        .onChange(of: self.store.modelCatalogScope) { _ in
+            Task { await self.store.refreshCodexModelCatalog() }
         }
         .onChange(of: self.resetCreditItems.map(\.id)) { _ in
             self.syncResetCreditsPanelAfterItemsChange()
@@ -970,18 +966,16 @@ struct MenuBarView: View {
     private func modelSelectionRow(currentModel: String) -> some View {
         let currentModelValue = self.modelSelectionValue(currentModel: currentModel)
         let displayedCurrentModel = self.modelSelectionDisplayValue(currentModel: currentModel)
-        let effectiveServiceTier = CodexPanelGlobalSettings.compatibleServiceTier(
-            self.store.config.global.serviceTier,
-            for: currentModel,
-            catalog: self.store.codexServiceTierCatalog
-        )
+        let effectiveServiceTier = CodexPanelGlobalSettings.normalizedServiceTier(self.store.config.global.serviceTier)
+            ?? self.store.config.global.serviceTier
 
         return HStack(alignment: .center, spacing: 8) {
             self.compactSelectionMenu(
                 title: displayedCurrentModel,
                 options: self.modelSelectionOptions(currentModel: currentModel),
                 currentValue: currentModelValue,
-                displayValue: self.modelSelectionOptionDisplayValue
+                displayValue: self.modelSelectionOptionDisplayValue,
+                refreshModels: self.store.activeProvider?.kind == .openAIOAuth
             ) { modelID in
                 Task { await self.updateSelectedRouteModel(modelID) }
             }
@@ -990,7 +984,8 @@ struct MenuBarView: View {
                 title: self.store.config.global.reasoningEffort,
                 options: CodexPanelGlobalSettings.reasoningEffortOptions(
                     for: currentModel,
-                    currentValue: self.store.config.global.reasoningEffort
+                    currentValue: self.store.config.global.reasoningEffort,
+                    catalog: self.store.oauthModelCatalog
                 ),
                 currentValue: self.store.config.global.reasoningEffort
             ) { effort in
@@ -999,7 +994,7 @@ struct MenuBarView: View {
 
             self.compactSelectionMenu(
                 title: effectiveServiceTier,
-                options: self.store.serviceTierOptions(for: currentModel),
+                options: self.store.serviceTierOptions(for: currentModel, currentValue: effectiveServiceTier),
                 currentValue: effectiveServiceTier
             ) { serviceTier in
                 Task { await self.updateSelectedServiceTier(serviceTier) }
@@ -1015,6 +1010,7 @@ struct MenuBarView: View {
         options: [String],
         currentValue: String,
         displayValue: @escaping (String) -> String = { $0 },
+        refreshModels: Bool = false,
         onSelect: @escaping (String) -> Void
     ) -> some View {
         Menu {
@@ -1024,10 +1020,29 @@ struct MenuBarView: View {
                 } label: {
                     HStack {
                         Text(displayValue(value))
-                        if value == currentValue {
-                            Image(systemName: "checkmark")
+                        if value == currentValue { Image(systemName: "checkmark") }
+                    }
+                }
+            }
+            if refreshModels {
+                Divider()
+                Button(L.zh ? "刷新模型列表" : "Refresh models") {
+                    Task {
+                        let previousRefreshError = self.store.codexModelRefreshError
+                        await self.store.refreshCodexModelCatalog(force: true)
+                        if let message = self.store.codexModelRefreshError {
+                            self.setGenericError(message)
+                        } else if let previousRefreshError,
+                                  self.errorBanner?.source == .generic,
+                                  self.errorBanner?.message == previousRefreshError {
+                            // 只移除这次模型刷新修复的提示，保留其他操作的错误。
+                            self.clearError()
                         }
                     }
+                }
+                .disabled(self.store.isRefreshingCodexModels)
+                if let fetchedAt = self.store.oauthModelCatalog?.fetchedAt {
+                    Text((L.zh ? "更新于 " : "Updated ") + fetchedAt.formatted(date: .abbreviated, time: .shortened))
                 }
             }
         } label: {
@@ -1060,7 +1075,7 @@ struct MenuBarView: View {
             return Self.uniqueTrimmedModelOptions(candidates)
         }
 
-        return Self.codexModelSelectionOptions(currentModel: currentModel)
+        return Self.codexModelSelectionOptions(currentModel: currentModel, catalog: self.store.oauthModelCatalog)
     }
 
     private func modelSelectionDisplayValue(currentModel: String) -> String {
@@ -1071,55 +1086,24 @@ struct MenuBarView: View {
 
     private func modelSelectionValue(currentModel: String) -> String {
         guard self.modelSelectionOpenRouterProvider == nil else { return currentModel }
-        return Self.normalizedCodexModelID(currentModel)
+        return currentModel
     }
 
     private func modelSelectionOptionDisplayValue(_ modelID: String) -> String {
         guard self.modelSelectionOpenRouterProvider == nil else { return modelID }
-        return Self.codexModelDisplayName(for: modelID)
+        return Self.codexModelDisplayName(for: modelID, catalog: self.store.oauthModelCatalog)
     }
 
-    static func codexModelSelectionOptions(currentModel: String) -> [String] {
-        let normalizedCurrentModel = Self.normalizedCodexModelID(currentModel)
-        var options = Self.codexModelOptions
-        if options.contains(normalizedCurrentModel) == false {
-            options.append(normalizedCurrentModel)
-        }
-        return Self.uniqueTrimmedModelOptions(options)
+    static func codexModelSelectionOptions(currentModel: String, catalog: CodexModelCatalog? = nil) -> [String] {
+        (catalog ?? CodexModelCatalog(models: [], fetchedAt: nil)).selectionOptions(currentModel: currentModel)
     }
 
-    static func codexModelDisplayName(for modelID: String) -> String {
-        switch Self.normalizedCodexModelID(modelID) {
-        case "gpt-5.6": "5.6 Sol"
-        case "gpt-5.6-terra": "5.6 Terra"
-        case "gpt-5.6-luna": "5.6 Luna"
-        case "gpt-5.5": "5.5"
-        case "gpt-5.4": "5.4"
-        case "gpt-5.4-mini": "5.4 Mini"
-        default: modelID
-        }
+    static func codexModelDisplayName(for modelID: String, catalog: CodexModelCatalog? = nil) -> String {
+        catalog?.displayName(for: modelID) ?? CodexModelCatalog.fallbackDisplayName(for: modelID)
     }
 
-    static func codexReasoningEffortOptions(for modelID: String) -> [String] {
-        switch Self.normalizedCodexModelID(modelID) {
-        case "gpt-5.6", "gpt-5.6-terra":
-            Self.defaultCodexReasoningEffortOptions + ["max", "ultra"]
-        case "gpt-5.6-luna":
-            Self.defaultCodexReasoningEffortOptions + ["max"]
-        default:
-            Self.defaultCodexReasoningEffortOptions
-        }
-    }
-
-    private func reasoningEffortOptions(currentModel: String) -> [String] {
-        guard self.modelSelectionOpenRouterProvider == nil else {
-            return Self.defaultCodexReasoningEffortOptions
-        }
-        return Self.codexReasoningEffortOptions(for: currentModel)
-    }
-
-    private static func normalizedCodexModelID(_ modelID: String) -> String {
-        modelID == "gpt-5.6-sol" ? "gpt-5.6" : modelID
+    static func codexReasoningEffortOptions(for modelID: String, catalog: CodexModelCatalog? = nil) -> [String] {
+        CodexPanelGlobalSettings.reasoningEffortOptions(for: modelID, catalog: catalog)
     }
 
     private static func uniqueTrimmedModelOptions(_ candidates: [String]) -> [String] {
@@ -2730,6 +2714,7 @@ struct MenuBarView: View {
             )
         }
 
+        Task { await self.store.refreshCodexModelCatalog() }
         self.scheduleBackgroundUsageBackfill(excluding: activeAccount?.id)
         self.recordMenuDiagnostic(type: "refresh_on_open_finished")
     }
@@ -2770,6 +2755,7 @@ struct MenuBarView: View {
         }
         let outcomes = await WhamService.shared.refreshAll(store: store)
         store.load()
+        Task { await self.store.refreshCodexModelCatalog(force: force) }
         now = Date()
         if didRequestLocalCostRefresh == false {
             store.refreshLocalCostSummary(

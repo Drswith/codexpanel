@@ -86,7 +86,7 @@ final class CodexServiceTierCatalogTests: CodexPanelTestCase {
         XCTAssertFalse(CodexPanelGlobalSettings.supportsServiceTier("ultrafast", for: "gpt-5.5", catalog: catalog))
     }
 
-    func testCodexConfigServiceTierWritesOnlySupportedTiers() throws {
+    func testCodexConfigServiceTierPreservesConfiguredTierUntilExplicitModelChange() throws {
         let catalog = try CodexServiceTierCatalog.parse(Self.fixture(
             models: [
                 Self.model("gpt-5.5", tiers: []),
@@ -106,9 +106,10 @@ final class CodexServiceTierCatalogTests: CodexPanelTestCase {
             CodexPanelGlobalSettings(serviceTier: "ultrafast").codexConfigServiceTier(for: "gpt-6-astra", catalog: catalog),
             "ultrafast"
         )
-        XCTAssertNil(
+        XCTAssertEqual(
             CodexPanelGlobalSettings(serviceTier: "fast").codexConfigServiceTier(for: "gpt-5.5", catalog: catalog),
-            "模型不再支持 fast 时应回落为标准路由并删键"
+            "fast",
+            "目录更新不能隐式改写当前配置"
         )
         XCTAssertEqual(
             CodexPanelGlobalSettings(serviceTier: "standard").codexConfigServiceTier(for: "gpt-defaulted", catalog: catalog),

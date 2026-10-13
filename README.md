@@ -85,6 +85,10 @@
 - 本地 usage / 成本统计
 - GitHub Releases 运行时版本检测与手动“检查更新”
 
+OpenAI OAuth 的模型菜单优先读取 Codex 的 `models_cache.json`，同时读取模型名称、推理强度与服务档位。打开菜单或切换账号时会通过 Codex App Server 的 `model/list` 刷新目录（自动刷新间隔为 15 分钟）；模型菜单中的“刷新模型列表”可立即刷新。
+
+刷新结果按账号保存在 `~/.codexpanel/model-catalogs/`。目录更新不自动改写当前模型、推理强度或服务档位；隐藏模型默认不显示，但当前配置仍保留在选项中。查询失败保留最近成功目录，无可用目录时使用内置兜底。刷新在临时 `CODEX_HOME` 中完成，令牌只经 stdin 传入，不创建对话、不复制或修改共享历史池的 auth/config；旧版本 Codex 不支持相关协议时继续使用缓存。Debug 的所有路径仍遵守开发态隔离。
+
 本地 usage / 成本统计来自对下面目录的扫描：
 
 - `~/.codex/sessions`
