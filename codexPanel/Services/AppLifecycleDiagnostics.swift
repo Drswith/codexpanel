@@ -193,4 +193,14 @@ final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
         self.runtimeController.stop()
         AppLifecycleDiagnostics.shared.markTermination(reason: "applicationWillTerminate")
     }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Settings and the menu are transient windows; the status item owns
+        // the app's lifetime even when neither window is open.
+        AppLifecycleDiagnostics.shared.recordEvent(
+            type: "last_window_closed_keep_running",
+            fields: ["pid": getpid()]
+        )
+        return false
+    }
 }

@@ -9,12 +9,6 @@ struct DetachedWindowConfiguration {
 
     static let standard = Self()
 
-    static let openAISettings = Self(
-        isResizable: true,
-        contentMinSize: CGSize(width: 740, height: 520),
-        resetsContentSizeOnReuse: false,
-        windowLevel: .normal
-    )
 }
 
 /// 菜单栏动作里若同步 `NSHostingController` + `AnyView` 建窗，在 macOS 14 上可能触发 SwiftUI / AttributeGraph

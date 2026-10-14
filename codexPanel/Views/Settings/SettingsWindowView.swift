@@ -53,12 +53,6 @@ struct SettingsWindowView: View {
                 self.coordinator.saveAutomatically(using: self.store)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
-            guard let window = notification.object as? NSWindow,
-                  window.identifier?.rawValue == CodexPanelUICommandRouter.settingsWindowID else { return }
-            self.autoSaveTask?.cancel()
-            self.coordinator.saveAutomatically(using: self.store)
-        }
         .onDisappear {
             self.autoSaveTask?.cancel()
             self.coordinator.saveAutomatically(using: self.store)
@@ -108,7 +102,7 @@ struct SettingsWindowView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle(L.settings)
-        .navigationSplitViewColumnWidth(min: 190, ideal: 200, max: 230)
+        .navigationSplitViewColumnWidth(200)
     }
 
     private var detail: some View {

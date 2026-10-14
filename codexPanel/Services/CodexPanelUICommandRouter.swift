@@ -9,34 +9,31 @@ final class CodexPanelUICommandRouter {
     static let settingsWindowID = "openai-settings"
     static let settingsWindowSize = CGSize(width: 740, height: 520)
 
-    private let store: TokenStore
-    private let updateCoordinator: UpdateCoordinator
-    private let codexAppPathPanelService: CodexAppPathPanelService
+    private var settingsSceneAction: (@MainActor () -> Void)?
+    private var hasPendingSettingsRequest = false
+    private let prepareRuntime: @MainActor () -> Void
 
-    init(
-        store: TokenStore? = nil,
-        updateCoordinator: UpdateCoordinator? = nil,
-        codexAppPathPanelService: CodexAppPathPanelService? = nil
-    ) {
-        self.store = store ?? .shared
-        self.updateCoordinator = updateCoordinator ?? .shared
-        self.codexAppPathPanelService = codexAppPathPanelService ?? .shared
+    init(prepareRuntime: @escaping @MainActor () -> Void = { MenuBarStatusItemController.shared.prepareMenuContent() }) {
+        self.prepareRuntime = prepareRuntime
+    }
+
+    func registerSettingsSceneAction(_ action: @escaping @MainActor () -> Void) {
+        self.settingsSceneAction = action
+        if self.hasPendingSettingsRequest {
+            self.hasPendingSettingsRequest = false
+            DispatchQueue.main.async { action() }
+        }
     }
 
     func openSettings() {
         self.requestCloseMenu()
-        DetachedWindowPresenter.shared.show(
-            id: Self.settingsWindowID,
-            title: L.settingsWindowTitle,
-            size: Self.settingsWindowSize,
-            configuration: .openAISettings
-        ) {
-            SettingsWindowView(
-                store: self.store,
-                updateCoordinator: self.updateCoordinator,
-                codexAppPathPanelService: self.codexAppPathPanelService
-            )
+        self.prepareRuntime()
+        guard let action = self.settingsSceneAction else {
+            self.hasPendingSettingsRequest = true
+            return
         }
+        // 等菜单退出本轮显示事务后再打开原生窗口场景。
+        DispatchQueue.main.async { action() }
     }
 
     func openLogin() {
