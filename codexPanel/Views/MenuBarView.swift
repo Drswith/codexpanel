@@ -126,30 +126,27 @@ private struct AdaptiveMenuScrollContainer<Content: View>: NSViewRepresentable {
     }
 }
 
-private struct AdaptiveMenuHeightReportingContainer<Content: View>: NSViewRepresentable {
-    let onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)?
-    let content: Content
+struct NativeMenuBodyContainer<Content: View>: View {
+    let maxHeight: CGFloat
+    @ViewBuilder let content: Content
 
-    init(
-        onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)? = nil,
-        @ViewBuilder content: () -> Content
-    ) {
-        self.onMeasuredHeightChange = onMeasuredHeightChange
-        self.content = content()
+    var body: some View {
+        ViewThatFits(in: .vertical) {
+            self.content.fixedSize(horizontal: false, vertical: true)
+            ScrollView(.vertical) {
+                self.content
+            }
+            .frame(height: self.maxHeight)
+        }
+        .frame(maxHeight: self.maxHeight, alignment: .top)
     }
+}
 
-    func makeNSView(context: Context) -> AdaptiveMenuHeightReportingHost {
-        AdaptiveMenuHeightReportingHost(
-            rootView: AnyView(content),
-            onMeasuredHeightChange: onMeasuredHeightChange
-        )
-    }
+private struct MenuBarMeasuredSizePreferenceKey: PreferenceKey {
+    static let defaultValue = CGSize.zero
 
-    func updateNSView(_ nsView: AdaptiveMenuHeightReportingHost, context: Context) {
-        nsView.update(
-            rootView: AnyView(content),
-            onMeasuredHeightChange: onMeasuredHeightChange
-        )
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        value = nextValue()
     }
 }
 
@@ -195,109 +192,6 @@ private struct ViewReferenceReader: NSViewRepresentable {
                 self.onResolve(self)
             }
         }
-    }
-}
-
-private final class AdaptiveMenuHeightReportingHost: NSView {
-    private let hostingView = NSHostingView(rootView: AnyView(EmptyView()))
-
-    private var measuredHeight: CGFloat = 1
-    private var lastReportedHeight: CGFloat?
-    private var isMeasuring = false
-    private var lastMeasuredWidth: CGFloat = 0
-    private var onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)?
-
-    init(
-        rootView: AnyView,
-        onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)?
-    ) {
-        self.onMeasuredHeightChange = onMeasuredHeightChange
-        super.init(frame: .zero)
-        self.hostingView.rootView = rootView
-        self.addSubview(self.hostingView)
-        self.scheduleMeasurement()
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override var isFlipped: Bool {
-        true
-    }
-
-    override var intrinsicContentSize: NSSize {
-        NSSize(width: NSView.noIntrinsicMetric, height: measuredHeight)
-    }
-
-    override func layout() {
-        super.layout()
-        let width = max(self.bounds.width, 1)
-        self.hostingView.frame = NSRect(
-            x: 0,
-            y: 0,
-            width: width,
-            height: max(self.measuredHeight, self.bounds.height, 1)
-        )
-
-        guard abs(self.lastMeasuredWidth - width) > 1 else { return }
-        self.lastMeasuredWidth = width
-        self.scheduleMeasurement()
-    }
-
-    func update(
-        rootView: AnyView,
-        onMeasuredHeightChange: ((CGFloat, CGFloat) -> Void)?
-    ) {
-        self.onMeasuredHeightChange = onMeasuredHeightChange
-        self.hostingView.rootView = rootView
-        self.scheduleMeasurement()
-    }
-
-    private func scheduleMeasurement() {
-        DispatchQueue.main.async { [weak self] in
-            self?.recalculateLayout()
-        }
-    }
-
-    private func recalculateLayout() {
-        guard self.isMeasuring == false else { return }
-        self.isMeasuring = true
-        defer { self.isMeasuring = false }
-
-        let width = max(self.bounds.width, 1)
-        self.hostingView.setFrameSize(
-            NSSize(width: width, height: MenuBarPopoverSizing.minimumHeight)
-        )
-
-        let fittingHeight = max(self.hostingView.fittingSize.height, MenuBarPopoverSizing.minimumHeight)
-        self.hostingView.setFrameSize(NSSize(width: width, height: fittingHeight))
-        let acceptsWidth = MenuBarPopoverSizing.acceptsMeasuredContentWidth(width)
-        #if DEBUG
-        AppLifecycleDiagnostics.shared.recordEvent(
-            type: "status_item_menu_height_reporter_measured",
-            fields: [
-                "width": width,
-                "boundsHeight": self.bounds.height,
-                "fittingHeight": fittingHeight,
-                "acceptedWidth": acceptsWidth,
-                "windowAttached": self.window != nil,
-            ]
-        )
-        #endif
-        guard acceptsWidth else { return }
-
-        if abs((self.lastReportedHeight ?? 0) - fittingHeight) > 1 {
-            self.lastReportedHeight = fittingHeight
-            self.onMeasuredHeightChange?(fittingHeight, width)
-        }
-
-        guard abs(self.measuredHeight - fittingHeight) > 1 else { return }
-        self.measuredHeight = fittingHeight
-        self.invalidateIntrinsicContentSize()
-        self.superview?.invalidateIntrinsicContentSize()
-        self.needsLayout = true
     }
 }
 
@@ -553,7 +447,6 @@ struct MenuBarView: View {
     @State private var measuredMenuHeight: CGFloat = 0
     @State private var openAIAccountsMeasuredHeight: CGFloat = 0
     @State private var apiProvidersMeasuredHeight: CGFloat = 0
-    @State private var scrollableMenuBodyMeasuredHeight: CGFloat = 0
     @State private var statusItemAvailableContentHeight: CGFloat?
     @State private var countdownTimerConnection: Cancellable?
     @State private var runningThreadTimerConnection: Cancellable?
@@ -618,12 +511,9 @@ struct MenuBarView: View {
         )
     }
 
-    private var menuBodyHeightCap: CGFloat? {
-        MenuBarPopoverSizing.flexibleSectionHeightCap(
-            totalContentHeight: self.measuredMenuHeight,
-            flexibleSectionHeight: self.scrollableMenuBodyMeasuredHeight,
-            availableHeight: self.statusItemAvailableContentHeight
-        )
+    private var menuBodyMaximumHeight: CGFloat {
+        // 标题、底栏和外边距预留固定空间；长列表交给原生 ScrollView。
+        max(1, (self.statusItemAvailableContentHeight ?? MenuBarPopoverSizing.maximumHeight) - 74)
     }
 
     private var switchTargetAccount: TokenAccount? {
@@ -793,24 +683,25 @@ struct MenuBarView: View {
         }
     }
 
-    @ViewBuilder
     private var mainMenuContent: some View {
-        AdaptiveMenuHeightReportingContainer(onMeasuredHeightChange: self.reportMeasuredMenuHeight) {
-            menuContentStack
-        }
+        // 原生菜单宿主直接观察 SwiftUI 的自然尺寸；不要再异步测量并重设可见 HostingView。
+        menuContentStack
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(key: MenuBarMeasuredSizePreferenceKey.self, value: geometry.size)
+                }
+            }
+            .onPreferenceChange(MenuBarMeasuredSizePreferenceKey.self) { size in
+                guard MenuBarPopoverSizing.acceptsMeasuredContentWidth(size.width), size.height > 1 else { return }
+                self.reportMeasuredMenuHeight(size.height, width: size.width)
+            }
     }
 
     private var menuContentStack: some View {
         VStack(alignment: .leading, spacing: 0) {
             self.menuHeader
 
-            AdaptiveMenuScrollContainer(
-                maxHeight: max(
-                    MenuBarPopoverSizing.minimumHeight,
-                    self.menuBodyHeightCap ?? MenuBarPopoverSizing.maximumHeight
-                ),
-                onMeasuredHeightChange: self.reportScrollableMenuBodyMeasuredHeight
-            ) {
+            NativeMenuBodyContainer(maxHeight: self.menuBodyMaximumHeight) {
                 self.scrollableMenuBody
             }
 
@@ -823,6 +714,8 @@ struct MenuBarView: View {
         .padding(.horizontal, 4)
         .padding(.top, 4)
         .padding(.bottom, 4)
+        // 内容先完成布局，再由原生窗口跟随高度，避免旧窗口高度压缩标题和账号行。
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var menuHeader: some View {
@@ -1908,10 +1801,6 @@ struct MenuBarView: View {
 
     private func reportAPIProvidersMeasuredHeight(_ height: CGFloat) {
         self.apiProvidersMeasuredHeight = height
-    }
-
-    private func reportScrollableMenuBodyMeasuredHeight(_ height: CGFloat) {
-        self.scrollableMenuBodyMeasuredHeight = height
     }
 
     private func requestStatusItemLayoutRefresh() {
