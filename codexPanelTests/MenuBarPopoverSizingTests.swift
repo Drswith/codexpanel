@@ -1,5 +1,6 @@
 import AppKit
 import XCTest
+import SwiftUI
 
 final class MenuBarPopoverSizingTests: XCTestCase {
     private let macOS14 = OperatingSystemVersion(majorVersion: 14, minorVersion: 0, patchVersion: 0)
@@ -139,5 +140,47 @@ final class MenuBarPopoverSizingTests: XCTestCase {
         XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS14).bottom, 6)
         XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS15).top, 8)
         XCTAssertEqual(MenuBarPopoverSizing.contentInsets(for: self.macOS15).bottom, 8)
+    }
+}
+
+@MainActor
+final class NativeMenuBodyContainerTests: XCTestCase {
+    func testShortContentUsesItsNaturalHeight() {
+        let view = NSHostingView(rootView:
+            NativeMenuBodyContainer(maxHeight: 400) {
+                Color.clear.frame(height: 200)
+            }.frame(width: 300)
+        )
+        view.frame = NSRect(x: 0, y: 0, width: 300, height: 1)
+        XCTAssertEqual(view.fittingSize.height, 200, accuracy: 1)
+    }
+
+    func testLongContentUsesScrollableHeightLimit() {
+        let view = NSHostingView(rootView:
+            NativeMenuBodyContainer(maxHeight: 400) {
+                VStack(spacing: 0) {
+                    ForEach(0..<40) { index in
+                        Text("Provider \(index)").frame(height: 20)
+                    }
+                }
+            }.frame(width: 300)
+        )
+        view.frame = NSRect(x: 0, y: 0, width: 300, height: 1)
+        XCTAssertEqual(view.fittingSize.height, 400, accuracy: 1)
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 400),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = view
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.2))
+        window.layoutIfNeeded()
+        view.layoutSubtreeIfNeeded()
+        func scrollViews(in view: NSView) -> [NSScrollView] {
+            (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap { scrollViews(in: $0) }
+        }
+        let scroll = scrollViews(in: view).first
+        XCTAssertNotNil(scroll)
+        XCTAssertGreaterThan(scroll?.documentView?.frame.height ?? 0, 400)
     }
 }
