@@ -74,6 +74,15 @@ final class AppLifecycleDiagnosticsTests: XCTestCase {
 
         controller.start()
 
+        XCTAssertEqual(host.startCount, 1)
+        XCTAssertEqual(store.loadCount, 0)
+        XCTAssertEqual(cleaner.cleanupCount, 0)
+        XCTAssertEqual(usage.startCount, 0)
+        XCTAssertEqual(oauth.startCount, 0)
+        XCTAssertEqual(updater.startCount, 0)
+        controller.startBackgroundServices()
+        controller.startBackgroundServices()
+
         XCTAssertEqual(cleaner.cleanupCount, 1)
         XCTAssertEqual(store.loadCount, 1)
         XCTAssertEqual(host.startCount, 1)
@@ -97,6 +106,7 @@ final class AppLifecycleDiagnosticsTests: XCTestCase {
         }
 
         controller.start()
+        controller.startBackgroundServices()
 
         XCTAssertEqual(events, ["single_process_runtime_services_started"])
     }
@@ -113,9 +123,10 @@ final class AppLifecycleDiagnosticsTests: XCTestCase {
             legacyMenuHostCleaner: MenuHostCleanerSpy()
         ) { _, _ in }
 
+        controller.startBackgroundServices()
         await controller.handleApplicationDidBecomeActive()
 
-        XCTAssertEqual(store.loadCount, 1)
+        XCTAssertEqual(store.loadCount, 2)
         XCTAssertEqual(oauth.refreshDueAccountsCount, 1)
     }
 
