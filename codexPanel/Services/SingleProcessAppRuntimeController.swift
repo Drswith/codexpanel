@@ -30,6 +30,38 @@ extension TokenStore: TokenStoreReloading {}
 extension MenuHostBootstrapService: MenuHostLegacyCleaning {}
 
 @MainActor
+private final class DeferredLifecycleController: LifecycleControlling {
+    private let factory: () -> any LifecycleControlling
+    private var service: (any LifecycleControlling)?
+    init(_ factory: @escaping () -> any LifecycleControlling) { self.factory = factory }
+    func start() {
+        let service = self.service ?? self.factory()
+        self.service = service
+        service.start()
+    }
+    func stop() { self.service?.stop() }
+}
+
+@MainActor
+private final class DeferredOAuthRefreshController: OAuthRefreshLifecycleControlling {
+    private var service: (any OAuthRefreshLifecycleControlling)?
+    private func resolve() -> any OAuthRefreshLifecycleControlling {
+        if let service { return service }
+        let service = OpenAIOAuthRefreshService.shared
+        self.service = service
+        return service
+    }
+    func start() { self.resolve().start() }
+    func stop() { self.service?.stop() }
+    func refreshDueAccountsNow() async { await self.resolve().refreshDueAccountsNow() }
+}
+
+@MainActor
+private final class DeferredTokenStore: TokenStoreReloading {
+    func load() { TokenStore.shared.load() }
+}
+
+@MainActor
 final class SingleProcessAppRuntimeController {
     typealias EventRecorder = (_ type: String, _ fields: [String: Any]) -> Void
 
@@ -40,6 +72,7 @@ final class SingleProcessAppRuntimeController {
     private let tokenStore: any TokenStoreReloading
     private let legacyMenuHostCleaner: any MenuHostLegacyCleaning
     private let recordEvent: EventRecorder
+    private(set) var hasStartedBackgroundServices = false
 
     init(
         statusItemHost: any LifecycleControlling,
@@ -62,10 +95,10 @@ final class SingleProcessAppRuntimeController {
     static func live() -> SingleProcessAppRuntimeController {
         SingleProcessAppRuntimeController(
             statusItemHost: MenuBarStatusItemController.shared,
-            usagePolling: OpenAIUsagePollingService.shared,
-            oauthRefresh: OpenAIOAuthRefreshService.shared,
-            updateCoordinator: UpdateCoordinator.shared,
-            tokenStore: TokenStore.shared,
+            usagePolling: DeferredLifecycleController { OpenAIUsagePollingService.shared },
+            oauthRefresh: DeferredOAuthRefreshController(),
+            updateCoordinator: DeferredLifecycleController { UpdateCoordinator.shared },
+            tokenStore: DeferredTokenStore(),
             legacyMenuHostCleaner: MenuHostBootstrapService.shared
         ) { type, fields in
             AppLifecycleDiagnostics.shared.recordEvent(type: type, fields: fields)
@@ -73,6 +106,12 @@ final class SingleProcessAppRuntimeController {
     }
 
     func start() {
+        self.statusItemHost.start()
+    }
+
+    func startBackgroundServices() {
+        guard !self.hasStartedBackgroundServices else { return }
+        self.hasStartedBackgroundServices = true
         let cleanupResult = self.legacyMenuHostCleaner.cleanupLegacyArtifacts()
         if cleanupResult.hadLegacyArtifacts {
             self.recordEvent(
@@ -88,7 +127,6 @@ final class SingleProcessAppRuntimeController {
         }
 
         self.tokenStore.load()
-        self.statusItemHost.start()
         self.usagePolling.start()
         self.oauthRefresh.start()
         self.updateCoordinator.start()
@@ -103,6 +141,7 @@ final class SingleProcessAppRuntimeController {
         self.oauthRefresh.stop()
         self.usagePolling.stop()
         self.statusItemHost.stop()
+        self.hasStartedBackgroundServices = false
         self.recordEvent(
             "single_process_runtime_services_stopped",
             ["pid": getpid()]
@@ -110,6 +149,7 @@ final class SingleProcessAppRuntimeController {
     }
 
     func handleApplicationDidBecomeActive() async {
+        guard self.hasStartedBackgroundServices else { return }
         self.tokenStore.load()
         await self.oauthRefresh.refreshDueAccountsNow()
     }

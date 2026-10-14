@@ -170,6 +170,9 @@ final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
             ]
         )
         self.runtimeController.start()
+        MenuBarStatusItemController.shared.runtimeInitializer = { [weak self] in
+            self?.runtimeController.startBackgroundServices()
+        }
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

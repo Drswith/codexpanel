@@ -305,6 +305,8 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
     static let shared = MenuBarStatusItemController()
 
     @Published var isInserted = true
+    @Published private(set) var isRuntimeReady = false
+    var runtimeInitializer: (() -> Void)?
     @Published private(set) var presentation = MenuBarStatusItemPresentation(
         iconName: "terminal", title: "", emphasis: .primary
     )
@@ -312,6 +314,10 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
     private weak var menuWindow: NSWindow?
     private var isPresented = false
     private var cancellables: Set<AnyCancellable> = []
+    private var deferredRuntimeWork: DispatchWorkItem?
+    private var hasReportedFirstFrame = false
+    private var isStarted = false
+    private var isPreparingRuntime = false
     private lazy var hotKeyController = StatusItemHotKeyController { [weak self] identifier in
         #if DEBUG
         if identifier == MenuBarGlobalShortcut.debugMenuOpen.identifier {
@@ -325,18 +331,12 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
 
     func start() {
         guard self.cancellables.isEmpty else { return }
+        self.isStarted = true
         MenuBarStatusItemIdentity.repairVisibilityIfNeeded(userDefaults: .standard)
         self.isInserted = Self.resolvedVisibilityPreference()
-        self.updateAppearance()
         self.hotKeyController.start()
-        DispatchQueue.main.async { [weak self] in _ = self?.resolveStatusItem() }
+        self.observeFirstFrame()
 
-        for publisher in [TokenStore.shared.objectWillChange.eraseToAnyPublisher(),
-                          UpdateCoordinator.shared.objectWillChange.eraseToAnyPublisher()] {
-            publisher.receive(on: RunLoop.main).sink { [weak self] _ in
-                DispatchQueue.main.async { self?.updateAppearance() }
-            }.store(in: &self.cancellables)
-        }
         NotificationCenter.default.publisher(for: .codexpanelRequestCloseStatusItemMenu)
             .receive(on: RunLoop.main).sink { [weak self] _ in self?.closeMenu() }
             .store(in: &self.cancellables)
@@ -348,11 +348,60 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
         AppLifecycleDiagnostics.shared.recordEvent(type: "status_item_host_started", fields: ["pid": getpid()])
     }
 
+    private func observeFirstFrame(attempts: Int = 100) {
+        guard self.isStarted else { return }
+        if let button = self.resolveStatusItem()?.button, let window = button.window,
+           window.isVisible, button.bounds.width > 0, button.image != nil {
+            button.displayIfNeeded()
+            if !self.hasReportedFirstFrame {
+                self.hasReportedFirstFrame = true
+                AppLifecycleDiagnostics.shared.recordEvent(type: "status_item_first_frame_ready", fields: ["pid": getpid()])
+            }
+            self.scheduleRuntimeInitialization()
+        } else if attempts > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(10)) { [weak self] in
+                self?.observeFirstFrame(attempts: attempts - 1)
+            }
+        } else {
+            self.scheduleRuntimeInitialization()
+        }
+    }
+
+    private func scheduleRuntimeInitialization() {
+        guard !self.isRuntimeReady, self.deferredRuntimeWork == nil else { return }
+        let work = DispatchWorkItem { [weak self] in self?.prepareMenuContent() }
+        self.deferredRuntimeWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(750), execute: work)
+    }
+
+    func prepareMenuContent() {
+        guard !self.isRuntimeReady, !self.isPreparingRuntime else { return }
+        self.isPreparingRuntime = true
+        defer { self.isPreparingRuntime = false }
+        self.deferredRuntimeWork?.cancel()
+        self.deferredRuntimeWork = nil
+        self.runtimeInitializer?()
+        self.updateAppearance()
+
+        for publisher in [TokenStore.shared.objectWillChange.eraseToAnyPublisher(),
+                          UpdateCoordinator.shared.objectWillChange.eraseToAnyPublisher()] {
+            publisher.receive(on: RunLoop.main).sink { [weak self] _ in
+                DispatchQueue.main.async { self?.updateAppearance() }
+            }.store(in: &self.cancellables)
+        }
+        self.isRuntimeReady = true
+    }
+
     func stop() {
+        self.isStarted = false
+        self.deferredRuntimeWork?.cancel()
+        self.deferredRuntimeWork = nil
         self.closeMenu()
         self.hotKeyController.stop()
         self.cancellables.removeAll()
         self.isInserted = false
+        self.isRuntimeReady = false
+        self.hasReportedFirstFrame = false
     }
 
     nonisolated static func resolvedVisibilityPreference(userDefaults: UserDefaults = .standard) -> Bool {
@@ -376,6 +425,11 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
         guard let window = self.menuWindow else { return }
         // Occlusion notifications also fire when the native menu is ordered out.
         let visible = window.isVisible
+        if visible && !self.isRuntimeReady {
+            self.prepareMenuContent()
+            DispatchQueue.main.async { [weak self] in self?.synchronizePresentation() }
+            return
+        }
         guard visible != self.isPresented else { return }
         if visible { self.menuWillOpen() } else { self.menuDidClose() }
     }
@@ -489,14 +543,21 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
 }
 
 struct NativeMenuBarContent: View {
-    var body: some View {
+    @ObservedObject private var controller = MenuBarStatusItemController.shared
+    var body: AnyView {
         // Keep MenuBarView's existing outer insets and all internal content unchanged.
         // The system supplies the window material, outline and rounded corners.
-        MenuBarView()
+        // 运行态准备完毕后再构造完整菜单，轻量分支保持稳定的 AnyView 类型。
+        if !self.controller.isRuntimeReady {
+            return AnyView(ProgressView()
+                .frame(width: MenuBarStatusItemIdentity.popoverContentWidth, height: 80)
+                .background(NativeMenuBarWindowReader()))
+        }
+        return AnyView(MenuBarView()
             .environmentObject(TokenStore.shared)
             .environmentObject(OAuthManager.shared)
             .environmentObject(UpdateCoordinator.shared)
-            .background(NativeMenuBarWindowReader())
+            .background(NativeMenuBarWindowReader()))
     }
 }
 

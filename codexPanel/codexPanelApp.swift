@@ -9,9 +9,14 @@ struct codexPanelApp: App {
         Settings {
             EmptyView()
         }
+        .commandsRemoved()
         .commands {
+            if menuController.isRuntimeReady {
+                TextEditingCommands()
+            }
             CommandGroup(replacing: .appSettings) {
                 Button(L.settings) {
+                    menuController.prepareMenuContent()
                     CodexPanelUICommandRouter.shared.openSettings()
                 }
                 .keyboardShortcut(",", modifiers: .command)
@@ -29,5 +34,6 @@ struct codexPanelApp: App {
             NativeMenuBarContent()
         }
         .menuBarExtraStyle(.window)
+        .commandsRemoved()
     }
 }
