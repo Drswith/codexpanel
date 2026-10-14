@@ -87,6 +87,48 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         let fileSize: Int
         let modificationDate: Date
         let fileIdentifier: String?
+        let hasPreciseModificationDate: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case fileSize, modificationDate, fileIdentifier, modificationDateReferenceTime
+        }
+
+        init(fileSize: Int, modificationDate: Date, fileIdentifier: String?) {
+            self.fileSize = fileSize
+            self.modificationDate = modificationDate
+            self.fileIdentifier = fileIdentifier
+            self.hasPreciseModificationDate = true
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.fileSize = try container.decode(Int.self, forKey: .fileSize)
+            self.fileIdentifier = try container.decodeIfPresent(String.self, forKey: .fileIdentifier)
+            if let time = try container.decodeIfPresent(Double.self, forKey: .modificationDateReferenceTime) {
+                self.modificationDate = Date(timeIntervalSinceReferenceDate: time)
+                self.hasPreciseModificationDate = true
+            } else {
+                self.modificationDate = try container.decode(Date.self, forKey: .modificationDate)
+                self.hasPreciseModificationDate = false
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(self.fileSize, forKey: .fileSize)
+            try container.encodeIfPresent(self.fileIdentifier, forKey: .fileIdentifier)
+            try container.encode(self.modificationDate, forKey: .modificationDate)
+            try container.encode(self.modificationDate.timeIntervalSinceReferenceDate, forKey: .modificationDateReferenceTime)
+        }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            guard lhs.fileSize == rhs.fileSize, lhs.fileIdentifier == rhs.fileIdentifier else { return false }
+            if lhs.hasPreciseModificationDate && rhs.hasPreciseModificationDate {
+                return lhs.modificationDate == rhs.modificationDate
+            }
+            // 旧 ISO 缓存只保存毫秒，允许其四舍五入误差；命中后立即升级为精确指纹。
+            return abs(lhs.modificationDate.timeIntervalSince(rhs.modificationDate)) <= 0.000_501
+        }
     }
 
     private struct CachedSessionRecord: Codable {
@@ -477,6 +519,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         rebuildAll: Bool,
         collectWarnings: Bool
     ) throws -> RefreshedCachedSessions {
+        let startedAt = ProcessInfo.processInfo.systemUptime
         let scanResult = try self.sessionFilesThrowing(collectWarnings: collectWarnings)
         let files = scanResult.files
         let previousSessionCache = rebuildAll ? [:] : self.sessionCache
@@ -494,6 +537,8 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         var parsedFileCount = 0
         var changedFileCount = 0
         var incrementallyParsedFileCount = 0
+        var upgradedFingerprintCount = 0
+        var parsedBytes: Int64 = 0
 
         for fileURL in files {
             autoreleasepool {
@@ -513,10 +558,22 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
 
                 if let cached = previousSessionCache[fileURL],
                    cached.fingerprint == fingerprint,
-                   collectWarnings == false || cached.record != nil {
-                    nextSessionCache[fileURL] = cached
-                    cachedSessions.append(cached)
+                   collectWarnings == false || cached.record != nil || cached.isComplete {
+                    let reusable = CachedSessionRecord(
+                        fingerprint: fingerprint, record: cached.record, usageEvents: cached.usageEvents,
+                        parsedBytes: cached.parsedBytes, anchorHash: cached.anchorHash,
+                        isComplete: cached.isComplete, hasTrailingNewline: cached.hasTrailingNewline
+                    )
+                    if cached.fingerprint.hasPreciseModificationDate == false { upgradedFingerprintCount += 1 }
+                    nextSessionCache[fileURL] = reusable
+                    cachedSessions.append(reusable)
                     cacheHitCount += 1
+                    if collectWarnings && cached.record == nil {
+                        warnings.append(RecordsSnapshotWarning(
+                            sessionFilePath: fileURL.path, kind: .incompleteSessionRecord,
+                            message: "Missing required session metadata or model."
+                        ))
+                    }
                     return
                 }
 
@@ -540,7 +597,9 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
                    ) {
                     parsed = incrementallyParsed
                     incrementallyParsedFileCount += 1
+                    parsedBytes += max(0, incrementallyParsed.cachedRecord.parsedBytes - previous.parsedBytes)
                 } else {
+                    parsedBytes += Int64(max(0, fingerprint.fileSize))
                     parsed = self.parseSession(
                         fileURL,
                         fingerprint: fingerprint,
@@ -556,7 +615,16 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         }
 
         self.sessionCache = nextSessionCache
-        self.persistSessionCache(nextSessionCache)
+        if parsedFileCount > 0 || upgradedFingerprintCount > 0 || nextSessionCache.count != previousSessionCache.count {
+            self.persistSessionCache(nextSessionCache)
+        }
+        self.recordsDiagnosticsRecorder("session_cache_refreshed", [
+            "durationMs": Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1_000),
+            "fileCount": files.count, "cacheHitCount": cacheHitCount,
+            "fullParsedFileCount": parsedFileCount - incrementallyParsedFileCount,
+            "incrementallyParsedFileCount": incrementallyParsedFileCount,
+            "parsedBytes": parsedBytes, "upgradedFingerprintCount": upgradedFingerprintCount,
+        ])
 
         return RefreshedCachedSessions(
             records: cachedSessions,
