@@ -363,6 +363,10 @@ enum L {
     static func settingsRecordsActiveArchivedFootnote(_ activeCount: Int) -> String {
         zh ? "当前活跃 \(activeCount)" : "Active now: \(activeCount)"
     }
+    static var settingsRecordsSessionIDTitle: String { "Session ID" }
+    static var settingsRecordsModelTitle: String { "Model" }
+    static var settingsRecordsStatusTitle: String { zh ? "状态" : "Status" }
+    static var settingsRecordsDetailsTitle: String { zh ? "记录详情" : "Record Details" }
     static var settingsRecordsSessionsTitle: String { zh ? "Sessions" : "Sessions" }
     static var settingsRecordsSessionsHint: String {
         zh ? "主视图按最近活动时间倒序展示 session 记录；列表只消费单个完整 snapshot。" : "Primary view sorted by latest activity descending. The list always renders from one complete snapshot."

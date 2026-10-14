@@ -1,7 +1,21 @@
+import AppKit
 import XCTest
 
 @MainActor
 final class AppLifecycleDiagnosticsTests: XCTestCase {
+    func testClosingLastTransientWindowKeepsMenuBarAppRunning() {
+        let runtime = SingleProcessAppRuntimeController(
+            statusItemHost: LifecycleSpy(),
+            usagePolling: LifecycleSpy(),
+            oauthRefresh: OAuthRefreshSpy(),
+            updateCoordinator: LifecycleSpy(),
+            tokenStore: TokenStoreSpy(),
+            legacyMenuHostCleaner: MenuHostCleanerSpy()
+        ) { _, _ in }
+        let delegate = AppLifecycleObserver(runtimeController: runtime)
+        XCTAssertFalse(delegate.applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared))
+    }
+
     private final class LifecycleSpy: LifecycleControlling {
         private(set) var startCount = 0
         private(set) var stopCount = 0

@@ -5,6 +5,29 @@ import XCTest
 
 @MainActor
 final class SettingsWindowCoordinatorTests: XCTestCase {
+    func testSettingsRouterDefersToRegisteredNativeScene() async {
+        var prepared = 0
+        let router = CodexPanelUICommandRouter(prepareRuntime: { prepared += 1 })
+        let opened = expectation(description: "native scene opened")
+        router.openSettings()
+        XCTAssertEqual(prepared, 1)
+        router.registerSettingsSceneAction { opened.fulfill() }
+        await fulfillment(of: [opened], timeout: 1)
+        XCTAssertEqual(prepared, 1)
+    }
+
+    func testSettingsRouterUsesNativeSceneForSubsequentRequests() async {
+        var prepared = 0
+        let router = CodexPanelUICommandRouter(prepareRuntime: { prepared += 1 })
+        let opened = expectation(description: "native scene opened twice")
+        opened.expectedFulfillmentCount = 2
+        router.registerSettingsSceneAction { opened.fulfill() }
+        router.openSettings()
+        router.openSettings()
+        await fulfillment(of: [opened], timeout: 1)
+        XCTAssertEqual(prepared, 2)
+    }
+
     func testAutomaticSavePersistsEditsAndDoesNotRepeatUnchangedWrites() {
         let config = self.makeConfig()
         let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: [])
@@ -872,7 +895,7 @@ final class DetachedWindowPresenterTests: XCTestCase {
         XCTAssertEqual(window.level.rawValue, NSWindow.Level.floating.rawValue)
     }
 
-    func testOpenAISettingsWindowIsResizableAndAppliesMinimumContentSize() throws {
+    func testResizableDetachedWindowAppliesMinimumContentSize() throws {
         let presenter = DetachedWindowPresenter()
         let id = "openai-settings-\(UUID().uuidString)"
         defer { presenter.close(id: id) }
@@ -881,7 +904,10 @@ final class DetachedWindowPresenterTests: XCTestCase {
             id: id,
             title: "Settings",
             size: CGSize(width: 820, height: 620),
-            configuration: .openAISettings
+            configuration: DetachedWindowConfiguration(
+                isResizable: true, contentMinSize: CGSize(width: 740, height: 520),
+                resetsContentSizeOnReuse: false, windowLevel: .normal
+            )
         ) {
             EmptyView()
         }
@@ -899,7 +925,7 @@ final class DetachedWindowPresenterTests: XCTestCase {
         XCTAssertEqual(window.level.rawValue, NSWindow.Level.normal.rawValue)
     }
 
-    func testExistingSettingsWindowReplaysConfigurationWithoutResettingUserSizedContent() throws {
+    func testExistingResizableDetachedWindowPreservesUserSizedContent() throws {
         let presenter = DetachedWindowPresenter()
         let id = "openai-settings-\(UUID().uuidString)"
         defer { presenter.close(id: id) }
@@ -908,7 +934,10 @@ final class DetachedWindowPresenterTests: XCTestCase {
             id: id,
             title: "Settings",
             size: CGSize(width: 820, height: 620),
-            configuration: .openAISettings
+            configuration: DetachedWindowConfiguration(
+                isResizable: true, contentMinSize: CGSize(width: 740, height: 520),
+                resetsContentSizeOnReuse: false, windowLevel: .normal
+            )
         ) {
             EmptyView()
         }
@@ -926,7 +955,10 @@ final class DetachedWindowPresenterTests: XCTestCase {
             id: id,
             title: "Settings",
             size: CGSize(width: 820, height: 620),
-            configuration: .openAISettings
+            configuration: DetachedWindowConfiguration(
+                isResizable: true, contentMinSize: CGSize(width: 740, height: 520),
+                resetsContentSizeOnReuse: false, windowLevel: .normal
+            )
         ) {
             Text("Updated")
         }

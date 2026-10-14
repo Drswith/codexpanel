@@ -103,6 +103,7 @@ struct RecordsSnapshotService: RecordsSnapshotServing {
         self.snapshotCacheURL = snapshotCacheURL
     }
 
+    @concurrent
     func loadCached() async -> RecordsSnapshot? {
         guard let data = try? Data(contentsOf: self.snapshotCacheURL) else { return nil }
         let decoder = JSONDecoder()
@@ -120,6 +121,7 @@ struct RecordsSnapshotService: RecordsSnapshotServing {
         )
     }
 
+    @concurrent
     func loadCurrent() async throws -> RecordsSnapshot {
         let snapshot = try await self.requestCoordinator.runRequest(
             refreshMode: .incremental,
@@ -131,6 +133,7 @@ struct RecordsSnapshotService: RecordsSnapshotServing {
         return snapshot
     }
 
+    @concurrent
     func refreshAll(timeout: TimeInterval) async throws -> RecordsSnapshot {
         let snapshot = try await self.requestCoordinator.runRequest(
             refreshMode: .rebuildAll,

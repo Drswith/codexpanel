@@ -230,6 +230,11 @@ typealias SettingsRecordsModel = SettingsRecordsViewModel
 struct SettingsRecordsPage: View {
     @ObservedObject var recordsModel: SettingsRecordsViewModel
     let onOpenUsage: () -> Void
+    @State private var selectedSessionID: String?
+
+    private var selectedSession: HistoricalSessionRecord? {
+        self.recordsModel.filteredSessions.first { $0.id == self.selectedSessionID }
+    }
 
     var body: some View {
         Form {
@@ -248,12 +253,32 @@ struct SettingsRecordsPage: View {
                 }
             }
             if self.recordsModel.shouldShowSkeleton {
-                Section {
-                    ProgressView(L.settingsRecordsLoading)
-                }
+                Section { ProgressView(L.settingsRecordsLoading) }
             } else if self.recordsModel.hasSnapshot {
                 SettingsRecordsOverview(recordsModel: self.recordsModel)
-                SettingsRecordsSessionsSection(recordsModel: self.recordsModel)
+                Section {
+                    SettingsRecordsSessionTable(
+                        sessions: self.recordsModel.filteredSessions,
+                        selection: self.$selectedSessionID
+                    )
+                    .frame(height: 300)
+                } header: {
+                    Text(L.settingsRecordsSessionsTitle)
+                } footer: {
+                    Text(L.settingsRecordsSessionsHint)
+                }
+                if let session = self.selectedSession {
+                    Section(L.settingsRecordsDetailsTitle) {
+                        LabeledContent(L.settingsRecordsSessionIDTitle, value: session.sessionID)
+                        LabeledContent(L.settingsRecordsModelTitle, value: session.modelID)
+                        LabeledContent(L.settingsRecordsStartedAtTitle,
+                                       value: session.startedAt.formatted(date: .abbreviated, time: .shortened))
+                        LabeledContent(L.settingsRecordsLastActivityTitle,
+                                       value: session.lastActivityAt.formatted(date: .abbreviated, time: .shortened))
+                        LabeledContent(L.settingsRecordsTotalTokensTitle, value: "\(session.totalTokens)")
+                    }
+                    .textSelection(.enabled)
+                }
                 SettingsRecordsModelsSection(recordsModel: self.recordsModel)
                 if self.recordsModel.snapshot?.warnings.isEmpty == false {
                     SettingsRecordsWarningsSection(recordsModel: self.recordsModel)
@@ -271,6 +296,34 @@ struct SettingsRecordsPage: View {
             }
         }
         .onAppear { self.recordsModel.pageDidAppear() }
+    }
+}
+
+private struct SettingsRecordsSessionTable: View {
+    let sessions: [HistoricalSessionRecord]
+    @Binding var selection: String?
+
+    var body: some View {
+        // Table 使用系统虚拟化行；Form 只布局一个有限高度的表格。
+        Table(self.sessions, selection: self.$selection) {
+            TableColumn(L.settingsRecordsSessionIDTitle) { session in
+                Text(session.sessionID).font(.body.monospaced())
+                    .lineLimit(1).truncationMode(.middle).help(session.sessionID)
+            }
+            .width(min: 150, ideal: 220)
+            TableColumn(L.settingsRecordsModelTitle, value: \.modelID)
+                .width(min: 100, ideal: 140)
+            TableColumn(L.settingsRecordsStatusTitle) { session in
+                Text(session.isArchived ? L.settingsRecordsArchivedBadge : L.settingsRecordsCurrentBadge)
+                    .foregroundStyle(.secondary)
+            }
+            .width(70)
+        }
+        .overlay {
+            if self.sessions.isEmpty {
+                Text(L.settingsRecordsNoSearchResults).foregroundStyle(.secondary)
+            }
+        }
     }
 }
 
@@ -314,50 +367,6 @@ private struct SettingsRecordsOverview: View {
         } label: {
             Text(title)
             Text(detail).font(.caption).foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct SettingsRecordsSessionsSection: View {
-    @ObservedObject var recordsModel: SettingsRecordsViewModel
-
-    var body: some View {
-        Section {
-            if self.recordsModel.filteredSessions.isEmpty {
-                Text(self.recordsModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                     ? L.settingsRecordsSessionsEmpty : L.settingsRecordsNoSearchResults)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(self.recordsModel.filteredSessions) { session in
-                    SettingsRecordsSessionRow(session: session)
-                }
-            }
-        } header: {
-            Text(L.settingsRecordsSessionsTitle)
-        } footer: {
-            Text(L.settingsRecordsSessionsHint)
-        }
-    }
-}
-
-private struct SettingsRecordsSessionRow: View {
-    let session: HistoricalSessionRecord
-
-    var body: some View {
-        DisclosureGroup {
-            LabeledContent(L.settingsRecordsStartedAtTitle,
-                           value: self.session.startedAt.formatted(date: .abbreviated, time: .shortened))
-            LabeledContent(L.settingsRecordsLastActivityTitle,
-                           value: self.session.lastActivityAt.formatted(date: .abbreviated, time: .shortened))
-            LabeledContent(L.settingsRecordsTotalTokensTitle, value: "\(self.session.totalTokens)")
-        } label: {
-            LabeledContent {
-                Text(self.session.isArchived ? L.settingsRecordsArchivedBadge : L.settingsRecordsCurrentBadge)
-                    .foregroundStyle(.secondary)
-            } label: {
-                Text(self.session.sessionID).font(.body.monospaced()).textSelection(.enabled)
-                Text(self.session.modelID).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-            }
         }
     }
 }

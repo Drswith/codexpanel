@@ -1,8 +1,50 @@
 import Foundation
+import AppKit
+import SwiftUI
 import XCTest
 
 @MainActor
 final class SettingsRecordsViewModelTests: XCTestCase {
+    func testLargeRecordsPageKeepsFirstLayoutResponsive() async throws {
+        let now = Date()
+        let snapshot = RecordsSnapshot(
+            generatedAt: now,
+            refreshMode: .incremental,
+            models: [],
+            sessions: (0..<5_000).map { index in
+                HistoricalSessionRecord(
+                    sessionID: "layout-fixture-\(index)", modelID: "gpt-6-astra",
+                    startedAt: now, lastActivityAt: now, isArchived: false, totalTokens: index
+                )
+            },
+            warnings: []
+        )
+        let service = RecordsSnapshotServiceStub()
+        await service.enqueueLoadCurrent(snapshot)
+        await service.enqueueLoadCurrent(snapshot)
+        let viewModel = SettingsRecordsViewModel(service: service)
+        viewModel.pageDidAppear()
+        try await self.waitUntil(timeout: 1) { viewModel.snapshot != nil }
+
+        let host = NSHostingView(rootView: SettingsRecordsPage(recordsModel: viewModel, onOpenUsage: {}))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 740, height: 552),
+            styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        window.orderFront(nil)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        host.layoutSubtreeIfNeeded()
+
+        let elapsed = ProcessInfo.processInfo.systemUptime - startedAt
+        print("records_page_5000_first_layout_seconds=\(elapsed)")
+        XCTAssertLessThan(elapsed, 5, "首次布局应保持主线程响应，不能一次构造全部历史行")
+        XCTAssertEqual(viewModel.filteredSessions.count, 5_000)
+    }
+
     func testPageDidAppearLoadsCurrentSnapshotWithoutForcingFullRefresh() async throws {
         let service = RecordsSnapshotServiceStub()
         await service.enqueueLoadCurrent(self.makeSnapshot(sessionID: "load-current", modelID: "gpt-5.5"))
