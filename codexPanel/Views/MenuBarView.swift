@@ -735,6 +735,24 @@ struct MenuBarView: View {
 
             Spacer()
 
+            if let availability = self.updateCoordinator.pendingAvailability {
+                Button {
+                    Task { await self.updateCoordinator.handleToolbarAction() }
+                } label: {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.borderless)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+                .foregroundColor(.accentColor)
+                .help(L.menuUpdateAvailableTitle(availability.release.version))
+                .accessibilityLabel(L.menuUpdateAction)
+                .accessibilityIdentifier("codexpanel.update.toolbar")
+                .disabled(self.updateCoordinator.isChecking)
+            }
+
             Button {
                 Task { await refresh(origin: .manual, announceResult: true) }
             } label: {
@@ -783,12 +801,6 @@ struct MenuBarView: View {
                 }
                 .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
                 .padding(.vertical, 8)
-            }
-
-            if let pendingAvailability = self.updateCoordinator.pendingAvailability {
-                Divider()
-                    .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-                self.updateAvailableBanner(availability: pendingAvailability)
             }
 
             Divider()
@@ -1099,32 +1111,6 @@ struct MenuBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(.borderless)
-        }
-        .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-        .padding(.vertical, 8)
-    }
-
-    private func updateAvailableBanner(availability: AppUpdateAvailability) -> some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.accentColor)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(L.menuUpdateAvailableTitle(availability.release.version))
-                    .font(.system(size: 11, weight: .medium))
-                Text(L.menuUpdateAvailableSubtitle(availability.currentVersion, availability.release.version))
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer(minLength: 8)
-
-            Button(L.menuUpdateAction) {
-                Task { await self.updateCoordinator.handleToolbarAction() }
-            }
-            .disabled(self.updateCoordinator.isChecking)
         }
         .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
         .padding(.vertical, 8)
