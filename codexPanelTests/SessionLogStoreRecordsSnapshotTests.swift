@@ -2,6 +2,62 @@ import Foundation
 import XCTest
 
 final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
+    func testPersistedCacheReusesUnchangedFileAndUpgradesLegacyMilliseconds() async throws {
+        let home = try self.makeCodexHome()
+        let directory = home.appendingPathComponent(".codex/sessions")
+        try self.writeFastSession(directory: directory, fileName: "stable.jsonl", id: "stable",
+            timestamp: "2026-04-21T08:00:00Z", model: "gpt-5.5", inputTokens: 100, cachedInputTokens: 20, outputTokens: 20)
+        let file = directory.appendingPathComponent("stable.jsonl")
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_777_000_000.123456)], ofItemAtPath: file.path)
+        _ = try await self.makeStore(home: home).loadRecordsSourceSnapshot(refreshMode: .incremental)
+
+        let cacheURL = home.appendingPathComponent(".codexpanel/test-records-session-cache.json")
+        var cache = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: cacheURL)) as? [String: Any])
+        var files = try XCTUnwrap(cache["files"] as? [String: [String: Any]])
+        let cacheKey = try XCTUnwrap(files.keys.first)
+        var record = try XCTUnwrap(files[cacheKey])
+        var fingerprint = try XCTUnwrap(record["fingerprint"] as? [String: Any])
+        fingerprint.removeValue(forKey: "modificationDateReferenceTime")
+        record["fingerprint"] = fingerprint; files[cacheKey] = record; cache["files"] = files
+        try JSONSerialization.data(withJSONObject: cache).write(to: cacheURL)
+
+        for _ in 0..<2 {
+            let sink = DiagnosticsSink()
+            let store = self.makeStore(home: home) { sink.record(type: $0, fields: $1) }
+            let snapshot = try await store.loadRecordsSourceSnapshot(refreshMode: .incremental)
+            XCTAssertEqual(snapshot.sessions.first?.totalTokens, 120)
+            let event = try XCTUnwrap(sink.events().last { $0.type == "records_snapshot_load_finished" })
+            XCTAssertEqual(event.fields["cacheHitCount"] as? Int, 1)
+            XCTAssertEqual(event.fields["parsedFileCount"] as? Int, 0)
+        }
+        let upgraded = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: cacheURL)) as? [String: Any])
+        let upgradedFiles = try XCTUnwrap(upgraded["files"] as? [String: [String: Any]])
+        let upgradedFingerprint = try XCTUnwrap(upgradedFiles[cacheKey]?["fingerprint"] as? [String: Any])
+        XCTAssertNotNil(upgradedFingerprint["modificationDateReferenceTime"] as? Double)
+    }
+
+    func testPersistedPreciseFingerprintDetectsSameSizeRewriteWithinMillisecond() async throws {
+        let home = try self.makeCodexHome()
+        let directory = home.appendingPathComponent(".codex/sessions")
+        try self.writeFastSession(directory: directory, fileName: "changed.jsonl", id: "changed",
+            timestamp: "2026-04-21T08:00:00Z", model: "gpt-5.5", inputTokens: 100, cachedInputTokens: 20, outputTokens: 20)
+        let file = directory.appendingPathComponent("changed.jsonl")
+        let firstDate = Date(timeIntervalSince1970: 1_777_000_000.1231)
+        try FileManager.default.setAttributes([.modificationDate: firstDate], ofItemAtPath: file.path)
+        _ = try await self.makeStore(home: home).loadRecordsSourceSnapshot(refreshMode: .incremental)
+        let data = try String(contentsOf: file).replacingOccurrences(of: "\"input_tokens\":100", with: "\"input_tokens\":200")
+        // 原地、等长重写，保留文件身份；修改时间只增加 0.2 ms。
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.write(contentsOf: Data(data.utf8)); try handle.close()
+        try FileManager.default.setAttributes([.modificationDate: firstDate.addingTimeInterval(0.0002)], ofItemAtPath: file.path)
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(home: home) { sink.record(type: $0, fields: $1) }
+        let snapshot = try await store.loadRecordsSourceSnapshot(refreshMode: .incremental)
+        XCTAssertEqual(snapshot.sessions.first?.totalTokens, 220)
+        let event = try XCTUnwrap(sink.events().last { $0.type == "records_snapshot_load_finished" })
+        XCTAssertEqual(event.fields["parsedFileCount"] as? Int, 1)
+        XCTAssertEqual(event.fields["incrementallyParsedFileCount"] as? Int, 0)
+    }
     func testConstructingStoreDefersCacheRestorationUntilFirstQuery() throws {
         let home = try self.makeCodexHome()
         let sink = DiagnosticsSink()
@@ -164,6 +220,12 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
         XCTAssertEqual(snapshot.warnings.count, 1)
         XCTAssertTrue(snapshot.warnings[0].sessionFilePath.hasSuffix("/incomplete.jsonl"))
         XCTAssertEqual(snapshot.warnings[0].kind, .incompleteSessionRecord)
+        let reloaded = self.makeStore(home: home) { sink.record(type: $0, fields: $1) }
+        let cachedSnapshot = try await reloaded.loadRecordsSourceSnapshot(refreshMode: .incremental)
+        XCTAssertEqual(cachedSnapshot.warnings, snapshot.warnings)
+        let cachedScan = try XCTUnwrap(sink.events().last { $0.type == "records_snapshot_load_finished" })
+        XCTAssertEqual(cachedScan.fields["cacheHitCount"] as? Int, 2)
+        XCTAssertEqual(cachedScan.fields["parsedFileCount"] as? Int, 0)
     }
 
     func testRebuildAllReturnsFreshRecordsSourceSnapshot() async throws {
@@ -279,7 +341,9 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
         try handle.write(contentsOf: Data(appendedLine.utf8))
         try handle.close()
 
-        let appendedSnapshot = try await store.loadRecordsSourceSnapshot(refreshMode: .incremental)
+        // 重启服务后仍只读取追加内容。
+        let reloaded = self.makeStore(home: home) { sink.record(type: $0, fields: $1) }
+        let appendedSnapshot = try await reloaded.loadRecordsSourceSnapshot(refreshMode: .incremental)
         XCTAssertEqual(appendedSnapshot.sessions.first?.totalTokens, 200)
 
         let finished = try XCTUnwrap(
@@ -290,6 +354,9 @@ final class SessionLogStoreRecordsSnapshotTests: CodexPanelTestCase {
         XCTAssertEqual(finished.fields["changedFileCount"] as? Int, 1)
         XCTAssertEqual(finished.fields["incrementallyParsedFileCount"] as? Int, 1)
         XCTAssertEqual(finished.fields["warningCount"] as? Int, 0)
+        let scan = try XCTUnwrap(sink.events().last { $0.type == "session_cache_refreshed" })
+        XCTAssertEqual(scan.fields["fullParsedFileCount"] as? Int, 0)
+        XCTAssertEqual(scan.fields["parsedBytes"] as? Int64, Int64(appendedLine.utf8.count))
     }
 
     func testChangedSessionFileFallsBackToFullParse() async throws {
