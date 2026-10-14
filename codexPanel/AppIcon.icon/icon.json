@@ -1,0 +1,92 @@
+{
+  "fill": {
+    "solid": "srgb:0.00000,0.00000,0.00000,0.00000"
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name-specializations": [
+            {
+              "value": "5-card-content-light.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "5-card-content-dark.png"
+            }
+          ],
+          "name": "Card Content"
+        },
+        {
+          "image-name-specializations": [
+            {
+              "value": "4-front-card-light.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "4-front-card-dark.png"
+            }
+          ],
+          "name": "Front Card"
+        }
+      ],
+      "name": "Front Card"
+    },
+    {
+      "layers": [
+        {
+          "image-name-specializations": [
+            {
+              "value": "3-middle-card-light.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "3-middle-card-dark.png"
+            }
+          ],
+          "name": "Middle Card"
+        }
+      ],
+      "name": "Middle Card"
+    },
+    {
+      "layers": [
+        {
+          "image-name-specializations": [
+            {
+              "value": "2-back-card-light.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "2-back-card-dark.png"
+            }
+          ],
+          "name": "Back Card"
+        }
+      ],
+      "name": "Back Card"
+    },
+    {
+      "layers": [
+        {
+          "image-name-specializations": [
+            {
+              "value": "1-background-light.png"
+            },
+            {
+              "appearance": "dark",
+              "value": "1-background-dark.png"
+            }
+          ],
+          "name": "Background"
+        }
+      ],
+      "name": "Background"
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}
