@@ -24,33 +24,13 @@ If you switch often between official OpenAI accounts, relay backends, or OpenAI-
 
 `codexpanel` is meant to make that switching workflow feel like one continuous Codex workspace instead of several loosely related homes.
 
-## Screenshots
+## Interface and Settings
 
-These screenshots reflect the current product UI used by the README. The descriptions focus on what each surface lets you do directly from the app.
+The menu bar shows costs, OpenAI quota, and provider accounts. Settings includes Accounts, Usage, Diagnostics, and About, with automatic saving.
 
-### OpenAI Account View
+The menu bar icon remains present while the app runs. The app no longer stores or reads an icon visibility preference. Reopening the app from Finder or Spotlight shows the panel.
 
-The main menu surfaces the current mode, model, daily and 30-day cost summaries, account availability, and the timing signals that actually determine when an exhausted OpenAI account becomes usable again.
-
-<p align="center">
-  <img src="./docs/assets/readme-openai-accounts-view.png" alt="codexpanel OpenAI accounts view" width="652" />
-</p>
-
-### Provider Management View
-
-The provider section expands inline, so you can manage multiple OpenAI-compatible backends, multiple API-key accounts per backend, and the active default target without leaving the menu bar workflow.
-
-<p align="center">
-  <img src="./docs/assets/readme-provider-management-view.png" alt="codexpanel providers view" width="652" />
-</p>
-
-### Settings Window
-
-The settings window consolidates account mode, ordering rules, manual activation behavior, preferred Codex Desktop path, diagnostics export, and update-related controls into one dedicated surface.
-
-<p align="center">
-  <img src="./docs/assets/readme-settings-window.png" alt="codexpanel settings window" width="1120" />
-</p>
+Codex owns the model, review model, reasoning effort, and service tier. Startup, account/provider switching, and aggregate-mode changes only synchronize authentication and routing. Existing model settings are preserved, and absent keys stay absent. Third-party gateways use the model sent by Codex rather than a stored Panel model.
 
 ## One Shared `~/.codex` Session Pool
 
@@ -78,10 +58,11 @@ That is the main value of the app: switching account or provider does not mean s
 - Dual OpenAI account modes: **manual switch / aggregate gateway**
 - OpenAI account CSV import / export
 - OpenAI account ordering: quota-weighted or manual order
-- Settings for manual activation behavior and preferred Codex.app path
 - One-click diagnostics export with the latest matching crash report
 - Local usage and cost estimates
 - Runtime version detection from GitHub Releases plus a manual "Check for Updates" entry
+
+Settings includes Accounts, Usage, Diagnostics, and About. Configure the model, reasoning effort, and service tier in Codex.
 
 Local usage and cost estimates are derived from:
 
@@ -95,8 +76,6 @@ The current UI also covers a few newer workflow details that the older README di
 - OpenAI accounts can run in either **manual switch** mode or **aggregate gateway** mode
 - OpenAI OAuth accounts can be imported from or exported to CSV
 - Settings also let you choose whether OpenAI accounts are shown by quota-weighted ranking or your own manual order
-- manual activation can either update config only or launch a fresh Codex instance while already-running instances stay open
-- when launching a fresh instance, you can set a preferred local Codex.app path in Settings, and invalid paths fall back to automatic detection
 - the settings window can export a GitHub-issue-ready diagnostics bundle with the latest matching crash report plus runtime lifecycle logs
 
 ## Version Checks and Updates
@@ -226,4 +205,4 @@ Detailed attribution is available in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTI
 
 This repository is licensed under the Apache License, Version 2.0 by default. See [LICENSE](./LICENSE).
 
-The upstream MIT license notice is preserved in [LICENSE.MIT](./LICENSE.MIT). Project origin, third-party attribution, and licensing boundaries are documented in [NOTICE](./NOTICE) and [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+The upstream MIT license notice is preserved in [LICENSE.MIT](./LICENSE.MIT). Project origin, third-party attribution, and licensing boundaries are documented in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

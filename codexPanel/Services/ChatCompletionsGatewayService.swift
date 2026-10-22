@@ -36,7 +36,6 @@ struct ChatCompletionsGatewayTestResponse {
 
 private struct ChatCompletionsGatewayState {
     let apiKey: String
-    let modelID: String
     let baseURL: String
     let quirks: CodexPanelChatQuirks
 }
@@ -118,7 +117,7 @@ final class ChatCompletionsGatewayService: ChatCompletionsGatewayControlling {
         let result = try await self.upstreamChatStream(body: request.body, state: state)
         var body = Data()
         let converter = ResponsesChatCompletionsTranslator.StreamConverter(
-            model: state.modelID,
+            model: self.requestModel(from: request.body),
             responseID: ResponsesChatCompletionsTranslator.makeID("resp"),
             reasoningEffort: self.reasoningEffort(fromResponsesBody: request.body),
             supportsReasoning: state.quirks.supportsReasoning
@@ -348,7 +347,7 @@ final class ChatCompletionsGatewayService: ChatCompletionsGatewayControlling {
         try await self.send(Data(head.utf8), on: connection)
 
         let converter = ResponsesChatCompletionsTranslator.StreamConverter(
-            model: state.modelID,
+            model: self.requestModel(from: responsesBody),
             responseID: ResponsesChatCompletionsTranslator.makeID("resp"),
             reasoningEffort: self.reasoningEffort(fromResponsesBody: responsesBody),
             supportsReasoning: state.quirks.supportsReasoning
@@ -376,7 +375,7 @@ final class ChatCompletionsGatewayService: ChatCompletionsGatewayControlling {
         let responsesObject = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] ?? [:]
         let chatBody = ResponsesChatCompletionsTranslator.chatRequestBody(
             fromResponses: responsesObject,
-            model: state.modelID,
+            model: self.requestModel(from: body),
             quirks: state.quirks,
             forceStream: true
         )
@@ -447,6 +446,13 @@ final class ChatCompletionsGatewayService: ChatCompletionsGatewayControlling {
         return (try? JSONSerialization.jsonObject(with: Data(payload.utf8))) as? [String: Any]
     }
 
+    private func requestModel(from body: Data) -> String {
+        guard let object = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] else { return "" }
+        let isEnvelope = object["input"] == nil && (object["type"] as? String) == "response.create"
+        let source = isEnvelope ? (object["response"] as? [String: Any] ?? object) : object
+        return source["model"] as? String ?? ""
+    }
+
     private func reasoningEffort(fromResponsesBody body: Data) -> String? {
         guard let object = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any],
               let reasoning = object["reasoning"] as? [String: Any],
@@ -478,7 +484,7 @@ final class ChatCompletionsGatewayService: ChatCompletionsGatewayControlling {
         let chatObject = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] ?? [:]
         let envelope = ResponsesChatCompletionsTranslator.responsesEnvelope(
             fromChatCompletion: chatObject,
-            model: state.modelID,
+            model: self.requestModel(from: responsesBody),
             responseID: ResponsesChatCompletionsTranslator.makeID("resp"),
             reasoningEffort: self.reasoningEffort(fromResponsesBody: responsesBody)
         )
@@ -516,7 +522,6 @@ final class ChatCompletionsGatewayService: ChatCompletionsGatewayControlling {
             }
             return ChatCompletionsGatewayState(
                 apiKey: apiKey,
-                modelID: selection.modelID,
                 baseURL: selection.baseURL,
                 quirks: CodexPanelProviderPresetCatalog.quirks(forPresetID: provider.presetID)
             )

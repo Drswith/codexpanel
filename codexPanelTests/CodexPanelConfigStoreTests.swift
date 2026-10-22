@@ -25,7 +25,7 @@ final class CodexPanelConfigStoreTests: CodexPanelTestCase {
         XCTAssertEqual(restored.email, account.email)
     }
 
-    func testLoadOrMigrateMapsLegacyFlexServiceTierToStandard() throws {
+    func testLoadOrMigratePreservesLegacyCodexServiceTier() throws {
         try CodexPaths.ensureDirectories()
         try CodexPaths.writeSecureFile(
             Data(
@@ -40,7 +40,7 @@ final class CodexPanelConfigStoreTests: CodexPanelTestCase {
 
         let loaded = try CodexPanelConfigStore().loadOrMigrate()
 
-        XCTAssertEqual(loaded.global.serviceTier, "standard")
+        XCTAssertEqual(loaded.global.serviceTier, "flex")
     }
 
     func testLoadOrMigrateTreatsMissingServiceTierAsStandard() throws {

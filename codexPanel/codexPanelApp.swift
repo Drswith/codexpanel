@@ -31,10 +31,7 @@ private struct codexPanelApp<SettingsScene: SettingsWindowSceneProviding>: App {
                 CommandGroup(replacing: .newItem) { }
             }
 
-        MenuBarExtra(isInserted: Binding(
-            get: { menuController.isInserted },
-            set: { if menuController.isInserted != $0 { menuController.isInserted = $0 } }
-        )) {
+        MenuBarExtra(isInserted: .constant(true)) {
             NativeMenuBarContent()
         } label: {
             NativeMenuBarSceneLabel(controller: menuController)
@@ -88,7 +85,7 @@ private struct NativeSettingsSceneContent: View {
     var body: some View {
         Group {
             if self.controller.isRuntimeReady {
-                SettingsWindowView(store: .shared, codexAppPathPanelService: .shared)
+                SettingsWindowView(store: .shared)
             } else {
                 ProgressView().onAppear { self.controller.prepareMenuContent() }
             }

@@ -304,7 +304,6 @@ private final class StatusItemHotKeyController {
 final class MenuBarStatusItemController: NSObject, ObservableObject {
     static let shared = MenuBarStatusItemController()
 
-    @Published var isInserted = true
     @Published private(set) var isRuntimeReady = false
     var runtimeInitializer: (() -> Void)?
     @Published private(set) var presentation = MenuBarStatusItemPresentation(
@@ -332,19 +331,12 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
     func start() {
         guard self.cancellables.isEmpty else { return }
         self.isStarted = true
-        MenuBarStatusItemIdentity.repairVisibilityIfNeeded(userDefaults: .standard)
-        self.isInserted = Self.resolvedVisibilityPreference()
         self.hotKeyController.start()
         self.observeFirstFrame()
 
         NotificationCenter.default.publisher(for: .codexpanelRequestCloseStatusItemMenu)
             .receive(on: RunLoop.main).sink { [weak self] _ in self?.closeMenu() }
             .store(in: &self.cancellables)
-        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
-            .receive(on: RunLoop.main).sink { [weak self] _ in
-                let visible = Self.resolvedVisibilityPreference()
-                if self?.isInserted != visible { self?.isInserted = visible }
-            }.store(in: &self.cancellables)
         AppLifecycleDiagnostics.shared.recordEvent(type: "status_item_host_started", fields: ["pid": getpid()])
     }
 
@@ -399,13 +391,8 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
         self.closeMenu()
         self.hotKeyController.stop()
         self.cancellables.removeAll()
-        self.isInserted = false
         self.isRuntimeReady = false
         self.hasReportedFirstFrame = false
-    }
-
-    nonisolated static func resolvedVisibilityPreference(userDefaults: UserDefaults = .standard) -> Bool {
-        MenuBarStatusItemIdentity.resolvedVisibility(domain: userDefaults.dictionaryRepresentation())
     }
 
     func attachMenuWindow(_ window: NSWindow) {
@@ -465,15 +452,22 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
     }
 
     private func toggleFromKeyboardShortcut() {
-        if self.isInserted == false { self.isInserted = true }
+        self.requestMenuPresentation(toggle: true)
+    }
+
+    func reopenMenu() {
+        self.requestMenuPresentation(toggle: false)
+    }
+
+    private func requestMenuPresentation(toggle: Bool) {
         DispatchQueue.main.async { [weak self] in
-            guard let self, let item = self.resolveStatusItem() else { return }
+            guard let self, self.isStarted, let item = self.resolveStatusItem() else { return }
             NSApp.activate(ignoringOtherApps: true)
             let delegateSelector = NSSelectorFromString("expandedInterfaceDelegate")
             if #available(macOS 27.0, *), item.responds(to: delegateSelector),
                item.perform(delegateSelector)?.takeUnretainedValue() != nil {
                 if let session = self.expandedSession(for: item) {
-                    session.perform(NSSelectorFromString("cancel"))
+                    if toggle { session.perform(NSSelectorFromString("cancel")) }
                 } else {
                     // macOS 27 no longer assigns a button action to window-style extras.
                     // AppKit exposes session cancellation, but not a public begin method.
@@ -484,7 +478,8 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
                     unsafeBitCast(implementation, to: BeginSession.self)(item, selector, .greatestFiniteMagnitude)
                 }
             } else {
-                item.button?.performClick(nil)
+                self.synchronizePresentation()
+                if toggle || !self.isPresented { item.button?.performClick(nil) }
             }
         }
     }
@@ -500,7 +495,8 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
     }
 
     private func resolveStatusItem() -> NSStatusItem? {
-        if let nativeStatusItem { return nativeStatusItem }
+        if let nativeStatusItem, nativeStatusItem.button?.window != nil { return nativeStatusItem }
+        self.nativeStatusItem = nil
         // MenuBarExtra has no public status-item accessor. Restrict introspection to
         // its status-bar windows and exclude inactive-display replicas.
         let selector = NSSelectorFromString("statusItem")
@@ -512,8 +508,8 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
             return item
         }.first
         if let item = self.nativeStatusItem {
-            item.autosaveName = MenuBarStatusItemIdentity.statusItemAutosaveName
-            item.behavior = MenuBarStatusItemIdentity.statusItemBehavior
+            // 固定常驻状态项，不启用 SwiftUI 默认的可移除行为。
+            item.behavior = []
             item.button?.setAccessibilityLabel(MenuBarStatusItemIdentity.accessibilityLabel)
             item.button?.setAccessibilityIdentifier(MenuBarStatusItemIdentity.accessibilityIdentifier)
         }

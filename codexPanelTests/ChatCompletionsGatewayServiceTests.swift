@@ -4,10 +4,12 @@ import XCTest
 final class ChatCompletionsGatewayServiceTests: CodexPanelTestCase {
     func testBufferedRequestTranslatesResponsesToChatAndStreamsBack() async throws {
         let service = self.makeService()
-        let provider = self.makeChatProvider(model: "deepseek-chat")
+        var provider = self.makeChatProvider(model: "legacy-panel-model")
+        provider.defaultModel = nil
+        provider.selectedModelID = nil
         service.updateState(provider: provider, isActiveProvider: true)
 
-        let requestBody = #"{"model":"gpt-5","input":"hello","stream":true}"#
+        let requestBody = #"{"model":"gpt-5","reasoning":{"effort":"high"},"service_tier":"priority","input":"hello","stream":true}"#
 
         var capturedURL: URL?
         var capturedAuthorization: String?
@@ -65,7 +67,9 @@ final class ChatCompletionsGatewayServiceTests: CodexPanelTestCase {
         XCTAssertEqual(capturedAuthorization, "Bearer sk-chat-primary")
 
         let chatRequest = try XCTUnwrap(JSONSerialization.jsonObject(with: capturedBody) as? [String: Any])
-        XCTAssertEqual(chatRequest["model"] as? String, "deepseek-chat")
+        XCTAssertEqual(chatRequest["model"] as? String, "gpt-5")
+        XCTAssertEqual(chatRequest["reasoning_effort"] as? String, "high")
+        XCTAssertEqual(chatRequest["service_tier"] as? String, "priority")
         XCTAssertEqual(chatRequest["stream"] as? Bool, true)
 
         XCTAssertTrue(bodyText.contains(#""type":"response.created""#))

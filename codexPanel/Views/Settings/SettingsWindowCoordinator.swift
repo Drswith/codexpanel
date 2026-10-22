@@ -13,7 +13,6 @@ extension TokenStore: SettingsSaveRequestApplying {
 
 enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
     case accounts
-    case records
     case usage
     case about
     case diagnostics
@@ -280,14 +279,6 @@ final class SettingsWindowCoordinator: ObservableObject {
         self.draft.accountOrderingMode == .manual
     }
 
-    var showsManualActivationBehaviorSection: Bool {
-        false
-    }
-
-    var showsCodexAppPathSection: Bool {
-        false
-    }
-
     func moveAccount(accountID: String, offset: Int) {
         guard let currentIndex = self.draft.accountOrder.firstIndex(of: accountID) else { return }
         let targetIndex = currentIndex + offset
@@ -330,18 +321,6 @@ final class SettingsWindowCoordinator: ObservableObject {
         }
     }
 
-    func saveAndClose(
-        using sink: SettingsSaveRequestApplying,
-        onClose: () -> Void
-    ) {
-        do {
-            _ = try self.save(using: sink)
-            onClose()
-        } catch {
-            self.validationMessage = error.localizedDescription
-        }
-    }
-
     func save(using sink: SettingsSaveRequestApplying) throws -> SettingsSaveRequests {
         let requests = self.makeSaveRequests()
         guard requests.isEmpty == false else { return requests }
@@ -350,17 +329,6 @@ final class SettingsWindowCoordinator: ObservableObject {
         self.dirtyFields.removeAll()
         self.validationMessage = nil
         return requests
-    }
-
-    func cancelAndClose(onClose: () -> Void) {
-        self.cancel()
-        onClose()
-    }
-
-    func cancel() {
-        self.draft = self.baseline
-        self.dirtyFields.removeAll()
-        self.validationMessage = nil
     }
 
     func reconcileExternalState(

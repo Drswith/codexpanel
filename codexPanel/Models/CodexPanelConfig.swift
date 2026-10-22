@@ -77,27 +77,8 @@ enum CodexPanelAccountKind: String, Codable {
     case apiKey = "api_key"
 }
 
+/// 旧版配置的兼容数据，仅供迁移读取；不参与 Codex 配置同步。
 struct CodexPanelGlobalSettings: Codable {
-    static let baseReasoningEffortOptions = ["low", "medium", "high", "xhigh"]
-    static let reasoningEffortOptionsByModel: [String: [String]] = [
-        "gpt-6.1-sol": baseReasoningEffortOptions + ["max", "ultra"],
-        "gpt-6-astra": baseReasoningEffortOptions + ["max", "ultra"],
-        "gpt-6-sol": baseReasoningEffortOptions + ["max", "ultra"],
-        "gpt-6-luna": baseReasoningEffortOptions + ["max"],
-        "gpt-5.6": baseReasoningEffortOptions + ["max", "ultra"],
-        "gpt-5.6-sol": baseReasoningEffortOptions + ["max", "ultra"],
-        "gpt-5.6-terra": baseReasoningEffortOptions + ["max", "ultra"],
-        "gpt-5.6-luna": baseReasoningEffortOptions + ["max"],
-    ]
-
-    /// 标准路由。标准档位在 Codex 配置中通常不需要写入 service_tier。
-    static let standardServiceTier = "standard"
-    /// 快速路由；Codex 模型目录中的 priority 与此值等价。
-    static let fastServiceTier = "fast"
-    static let priorityCatalogTierID = "priority"
-    static let codexDefaultServiceTierSentinel = "default"
-    static let fallbackServiceTierOptions = [standardServiceTier, fastServiceTier]
-
     var defaultModel: String
     var reviewModel: String
     var reasoningEffort: String
@@ -114,12 +95,12 @@ struct CodexPanelGlobalSettings: Codable {
         defaultModel: String = "gpt-5.5",
         reviewModel: String = "gpt-5.5",
         reasoningEffort: String = "medium",
-        serviceTier: String = Self.standardServiceTier
+        serviceTier: String = "standard"
     ) {
         self.defaultModel = defaultModel
         self.reviewModel = reviewModel
         self.reasoningEffort = reasoningEffort
-        self.serviceTier = Self.normalizedServiceTier(serviceTier) ?? "standard"
+        self.serviceTier = serviceTier
     }
 
     init(from decoder: Decoder) throws {
@@ -128,109 +109,8 @@ struct CodexPanelGlobalSettings: Codable {
             defaultModel: try container.decodeIfPresent(String.self, forKey: .defaultModel) ?? "gpt-5.5",
             reviewModel: try container.decodeIfPresent(String.self, forKey: .reviewModel) ?? "gpt-5.5",
             reasoningEffort: try container.decodeIfPresent(String.self, forKey: .reasoningEffort) ?? "medium",
-            serviceTier: try container.decodeIfPresent(String.self, forKey: .serviceTier) ?? Self.standardServiceTier
+            serviceTier: try container.decodeIfPresent(String.self, forKey: .serviceTier) ?? "standard"
         )
-    }
-
-    static func serviceTierValue(forCatalogTierID tierID: String) -> String {
-        let normalized = tierID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized == Self.priorityCatalogTierID ? Self.fastServiceTier : normalized
-    }
-
-    static func serviceTierOptions(
-        for modelID: String,
-        catalog: CodexServiceTierCatalog?
-    ) -> [String] {
-        catalog?.serviceTierOptions(for: modelID) ?? Self.fallbackServiceTierOptions
-    }
-
-    static func supportsServiceTier(
-        _ serviceTier: String,
-        for modelID: String,
-        catalog: CodexServiceTierCatalog?
-    ) -> Bool {
-        guard let normalized = Self.normalizedServiceTier(serviceTier) else { return false }
-        return Self.serviceTierOptions(for: modelID, catalog: catalog).contains(normalized)
-    }
-
-    static func compatibleServiceTier(
-        _ serviceTier: String,
-        for modelID: String,
-        catalog: CodexServiceTierCatalog?
-    ) -> String {
-        let normalized = Self.normalizedServiceTier(serviceTier) ?? Self.standardServiceTier
-        return Self.supportsServiceTier(normalized, for: modelID, catalog: catalog)
-            ? normalized
-            : Self.standardServiceTier
-    }
-
-    /// 返回写入 Codex config.toml 的值；nil 表示删除 service_tier 键。
-    func codexConfigServiceTier(
-        for modelID: String,
-        catalog: CodexServiceTierCatalog?
-    ) -> String? {
-        let compatible = Self.normalizedServiceTier(self.serviceTier) ?? Self.standardServiceTier
-        guard compatible == Self.standardServiceTier else { return compatible }
-        if catalog?.model(for: modelID)?.defaultServiceTier != nil {
-            return Self.codexDefaultServiceTierSentinel
-        }
-        return nil
-    }
-
-    static func reasoningEffortOptions(
-        for modelID: String,
-        currentValue: String? = nil,
-        catalog: CodexModelCatalog? = nil
-    ) -> [String] {
-        let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let options = catalog?.reasoningEffortOptions(for: modelID)
-            ?? Self.reasoningEffortOptionsByModel[normalizedModelID]
-            ?? Self.baseReasoningEffortOptions
-        return CodexModelCatalog.uniqueStrings(options + [currentValue ?? ""])
-    }
-
-    static func compatibleReasoningEffort(
-        _ effort: String, for modelID: String, catalog: CodexModelCatalog? = nil
-    ) -> String {
-        let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let options = catalog?.reasoningEffortOptions(for: modelID) ?? Self.reasoningEffortOptionsByModel[normalizedModelID]
-        guard let options, !options.contains(effort) else { return effort }
-        let preferred = catalog?.model(for: modelID)?.defaultReasoningEffort
-        if let preferred, options.contains(preferred) { return preferred }
-        return options.last ?? effort
-    }
-
-    static func supportsReasoningEffort(
-        _ effort: String, for modelID: String, catalog: CodexModelCatalog? = nil
-    ) -> Bool {
-        let normalizedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard let options = catalog?.reasoningEffortOptions(for: modelID)
-            ?? Self.reasoningEffortOptionsByModel[normalizedModelID] else { return true }
-        return options.contains(effort)
-    }
-
-    static func normalizedServiceTier(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard trimmed.isEmpty == false else { return nil }
-        switch trimmed {
-        case Self.standardServiceTier, "flex", Self.codexDefaultServiceTierSentinel:
-            return Self.standardServiceTier
-        case Self.fastServiceTier, Self.priorityCatalogTierID:
-            return Self.fastServiceTier
-        default:
-            return Self.isCatalogTierIdentifier(trimmed) ? trimmed : nil
-        }
-    }
-
-    private static func isCatalogTierIdentifier(_ value: String) -> Bool {
-        guard let first = value.unicodeScalars.first,
-              CharacterSet.lowercaseLetters.contains(first) || CharacterSet.decimalDigits.contains(first) else {
-            return false
-        }
-        let allowed = CharacterSet.lowercaseLetters
-            .union(.decimalDigits)
-            .union(CharacterSet(charactersIn: "_-"))
-        return value.unicodeScalars.allSatisfy(allowed.contains)
     }
 }
 
@@ -929,35 +809,26 @@ struct CodexPanelProvider: Codable, Identifiable, Equatable {
         self.kind == .openAICompatible && self.wireAPI == .chat
     }
 
-    var compatibleEffectiveModelID: String? {
-        guard self.kind == .openAICompatible else { return nil }
-        return Self.normalizedOpenRouterModelID(self.selectedModelID) ?? Self.normalizedDefaultModel(self.defaultModel)
-    }
-
-    var chatCompletionsServiceableSelection: (account: CodexPanelProviderAccount, modelID: String, baseURL: String)? {
+    var chatCompletionsServiceableSelection: (account: CodexPanelProviderAccount, baseURL: String)? {
         guard self.usesChatCompletionsGateway,
               let account = self.activeAccount,
               let apiKey = account.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines),
               apiKey.isEmpty == false,
-              let modelID = self.compatibleEffectiveModelID?.trimmingCharacters(in: .whitespacesAndNewlines),
-              modelID.isEmpty == false,
               let baseURL = self.baseURL?.trimmingCharacters(in: .whitespacesAndNewlines),
               baseURL.isEmpty == false else {
             return nil
         }
-        return (account, modelID, baseURL)
+        return (account, baseURL)
     }
 
-    var openRouterServiceableSelection: (account: CodexPanelProviderAccount, modelID: String)? {
+    var openRouterServiceableSelection: CodexPanelProviderAccount? {
         guard self.kind == .openRouter,
               let account = self.activeAccount,
               let apiKey = account.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines),
-              apiKey.isEmpty == false,
-              let modelID = self.openRouterEffectiveModelID?.trimmingCharacters(in: .whitespacesAndNewlines),
-              modelID.isEmpty == false else {
+              apiKey.isEmpty == false else {
             return nil
         }
-        return (account, modelID)
+        return account
     }
 
     fileprivate static func normalizedDefaultModel(_ value: String?) -> String? {
@@ -1275,63 +1146,6 @@ extension CodexPanelConfig {
         return stored
     }
 
-    mutating func setOpenRouterDefaultModel(_ value: String?) throws {
-        try self.setOpenRouterSelectedModel(value)
-    }
-
-    mutating func setOpenRouterSelectedModel(_ value: String?) throws {
-        guard var provider = self.openRouterProvider() else {
-            throw TokenStoreError.providerNotFound
-        }
-        provider.selectedModelID = CodexPanelProvider.normalizedOpenRouterModelID(value)
-        provider.pinnedModelIDs = CodexPanelProvider.resolvedPinnedModelIDs(
-            provider.pinnedModelIDs,
-            selectedModelID: provider.selectedModelID
-        )
-        self.upsertProvider(provider)
-    }
-
-    mutating func setOpenRouterModelSelection(
-        selectedModelID: String?,
-        pinnedModelIDs: [String],
-        cachedModelCatalog: [CodexPanelOpenRouterModel]? = nil,
-        fetchedAt: Date? = nil
-    ) throws {
-        guard var provider = self.openRouterProvider() else {
-            throw TokenStoreError.providerNotFound
-        }
-
-        let normalizedSelectedModelID = CodexPanelProvider.normalizedOpenRouterModelID(selectedModelID)
-        provider.selectedModelID = normalizedSelectedModelID
-        provider.pinnedModelIDs = CodexPanelProvider.resolvedPinnedModelIDs(
-            pinnedModelIDs,
-            selectedModelID: normalizedSelectedModelID
-        )
-        if let cachedModelCatalog {
-            provider.cachedModelCatalog = Self.uniqueOpenRouterModelCatalog(cachedModelCatalog)
-        }
-        if let fetchedAt {
-            provider.modelCatalogFetchedAt = fetchedAt
-        }
-        self.upsertProvider(provider)
-    }
-
-    mutating func updateOpenRouterModelCatalog(
-        _ models: [CodexPanelOpenRouterModel],
-        fetchedAt: Date
-    ) throws {
-        guard var provider = self.openRouterProvider() else {
-            throw TokenStoreError.providerNotFound
-        }
-        provider.cachedModelCatalog = Self.uniqueOpenRouterModelCatalog(models)
-        provider.modelCatalogFetchedAt = fetchedAt
-        provider.pinnedModelIDs = CodexPanelProvider.resolvedPinnedModelIDs(
-            provider.pinnedModelIDs,
-            selectedModelID: provider.selectedModelID
-        )
-        self.upsertProvider(provider)
-    }
-
     mutating func setOpenAIManualActivationBehavior(_ behavior: CodexPanelOpenAIManualActivationBehavior) {
         self.openAI.manualActivationBehavior = behavior
     }
@@ -1559,19 +1373,6 @@ extension CodexPanelConfig {
     private static func uniqueAccountIDs(from accountIDs: [String]) -> [String] {
         var seen: Set<String> = []
         return accountIDs.filter { seen.insert($0).inserted }
-    }
-
-    private static func uniqueOpenRouterModelCatalog(
-        _ models: [CodexPanelOpenRouterModel]
-    ) -> [CodexPanelOpenRouterModel] {
-        var seen: Set<String> = []
-        return models.compactMap { model in
-            guard let normalizedID = CodexPanelProvider.normalizedOpenRouterModelID(model.id),
-                  seen.insert(normalizedID).inserted else {
-                return nil
-            }
-            return CodexPanelOpenRouterModel(id: normalizedID, name: model.name)
-        }
     }
 
     private static func isSharedOpenAITeamAccount(_ account: CodexPanelProviderAccount) -> Bool {

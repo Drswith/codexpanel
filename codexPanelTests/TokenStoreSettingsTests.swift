@@ -11,31 +11,6 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertEqual(config.global.reasoningEffort, "medium")
     }
 
-    func testReasoningEffortOptionsFollowGPT56ModelCapabilities() {
-        XCTAssertEqual(
-            CodexPanelGlobalSettings.reasoningEffortOptions(for: "gpt-5.6-sol"),
-            ["low", "medium", "high", "xhigh", "max", "ultra"]
-        )
-        XCTAssertEqual(
-            CodexPanelGlobalSettings.reasoningEffortOptions(for: "gpt-5.6"),
-            ["low", "medium", "high", "xhigh", "max", "ultra"]
-        )
-        XCTAssertEqual(
-            CodexPanelGlobalSettings.reasoningEffortOptions(for: "gpt-5.6-luna"),
-            ["low", "medium", "high", "xhigh", "max"]
-        )
-    }
-
-    func testReasoningEffortOptionsPreserveUnknownCurrentValue() {
-        XCTAssertEqual(
-            CodexPanelGlobalSettings.reasoningEffortOptions(
-                for: "future-model",
-                currentValue: "future-effort"
-            ),
-            ["low", "medium", "high", "xhigh", "future-effort"]
-        )
-    }
-
     func testAggregateGatewayProxyURLPersistsAndRejectsCredentials() throws {
         var config = CodexPanelConfig()
         config.openAI.aggregateGatewayProxyURL = "socks5://127.0.0.1:7890"
@@ -135,9 +110,6 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         try self.writeConfig(CodexPanelConfig())
 
         let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
         )
 
         XCTAssertEqual(store.config.providers.count, 3)
@@ -180,10 +152,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
                 .appendingPathComponent(".codexpanel/test-cost-event-ledger.json")
         )
         let store = self.makeTokenStore(
-            costSummaryService: LocalCostSummaryService(sessionLogStore: sessionStore),
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
+            costSummaryService: LocalCostSummaryService(sessionLogStore: sessionStore)
         )
 
         let timeout = Date().addingTimeInterval(3)
@@ -233,10 +202,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         )
 
         let store = self.makeTokenStore(
-            costSummaryService: LocalCostSummaryService(sessionLogStore: sessionStore),
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
+            costSummaryService: LocalCostSummaryService(sessionLogStore: sessionStore)
         )
 
         XCTAssertEqual(store.historicalModels, ["google/gemini-2.5-pro"])
@@ -251,9 +217,6 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
 
     func testSaveModelPricingSettingsPersistsAcrossReload() throws {
         let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
         )
 
         try store.saveModelPricingSettings(
@@ -291,9 +254,6 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
 
     func testSaveModelPricingSettingsSanitizesNonFiniteValues() throws {
         let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
         )
 
         try store.saveModelPricingSettings(
@@ -319,133 +279,6 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         )
     }
 
-    func testSaveGlobalSettingsPersistsAndSyncsCodexConfig() throws {
-        try self.writeConfig(self.activeOpenAIConfig())
-        let store = self.makeTokenStore(
-            syncService: CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()),
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-
-        try store.saveGlobalSettings(
-            GlobalSettingsUpdate(
-                defaultModel: "gpt-5.5-mini",
-                reviewModel: "gpt-5.5-mini",
-                reasoningEffort: "medium",
-                serviceTier: "fast"
-            )
-        )
-
-        XCTAssertEqual(store.config.global.defaultModel, "gpt-5.5-mini")
-        XCTAssertEqual(store.config.global.reviewModel, "gpt-5.5-mini")
-        XCTAssertEqual(store.config.global.reasoningEffort, "medium")
-        XCTAssertEqual(store.config.global.serviceTier, "fast")
-
-        let reloaded = try CodexPanelConfigStore().loadOrMigrate()
-        XCTAssertEqual(reloaded.global.defaultModel, "gpt-5.5-mini")
-        XCTAssertEqual(reloaded.global.reviewModel, "gpt-5.5-mini")
-        XCTAssertEqual(reloaded.global.reasoningEffort, "medium")
-        XCTAssertEqual(reloaded.global.serviceTier, "fast")
-
-        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
-        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.5-mini""#))
-        XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-mini""#))
-        XCTAssertTrue(tomlText.contains(#"model_reasoning_effort = "medium""#))
-        XCTAssertTrue(tomlText.contains(#"service_tier = "fast""#))
-    }
-
-    func testUpdateRouteModelUpdatesGlobalModelAndSyncsCodexConfig() throws {
-        try self.writeConfig(self.activeOpenAIConfig())
-        let store = self.makeTokenStore(
-            syncService: CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()),
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-
-        try store.updateRouteModel("gpt-5.5-nano")
-
-        XCTAssertEqual(store.config.global.defaultModel, "gpt-5.5-nano")
-        XCTAssertEqual(store.config.global.reviewModel, "gpt-5.5-nano")
-
-        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
-        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.5-nano""#))
-        XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-nano""#))
-    }
-
-    func testUpdateReasoningEffortPreservesModelsAndSyncsCodexConfig() throws {
-        var config = self.activeOpenAIConfig()
-        config.global = CodexPanelGlobalSettings(
-            defaultModel: "gpt-5.5-mini",
-            reviewModel: "gpt-5.5-mini",
-            reasoningEffort: "medium",
-            serviceTier: "standard"
-        )
-        try self.writeConfig(config)
-        let store = self.makeTokenStore(
-            syncService: CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()),
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-
-        try store.updateReasoningEffort("high")
-
-        XCTAssertEqual(store.config.global.defaultModel, "gpt-5.5-mini")
-        XCTAssertEqual(store.config.global.reviewModel, "gpt-5.5-mini")
-        XCTAssertEqual(store.config.global.reasoningEffort, "high")
-        XCTAssertEqual(store.config.global.serviceTier, "standard")
-
-        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
-        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.5-mini""#))
-        XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-mini""#))
-        XCTAssertTrue(tomlText.contains(#"model_reasoning_effort = "high""#))
-        XCTAssertFalse(tomlText.contains("service_tier"), tomlText)
-    }
-
-    func testSwitchingFromUltraToLunaFallsBackToMax() throws {
-        var config = self.activeOpenAIConfig()
-        config.global = CodexPanelGlobalSettings(
-            defaultModel: "gpt-5.6-terra",
-            reviewModel: "gpt-5.6-terra",
-            reasoningEffort: "ultra",
-            serviceTier: "standard"
-        )
-        try self.writeConfig(config)
-
-        let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-
-        try store.updateRouteModel("gpt-5.6-luna")
-
-        XCTAssertEqual(store.config.global.defaultModel, "gpt-5.6-luna")
-        XCTAssertEqual(store.config.global.reasoningEffort, "max")
-    }
-
-    func testLunaRejectsUnsupportedUltraReasoningEffort() throws {
-        var config = self.activeOpenAIConfig()
-        config.global = CodexPanelGlobalSettings(
-            defaultModel: "gpt-5.6-luna",
-            reviewModel: "gpt-5.6-luna",
-            reasoningEffort: "max",
-            serviceTier: "standard"
-        )
-        try self.writeConfig(config)
-
-        let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-
-        XCTAssertThrowsError(try store.updateReasoningEffort("ultra"))
-        XCTAssertEqual(store.config.global.reasoningEffort, "max")
-    }
-
     func testPreserveNewerOAuthQuotaSnapshotsKeepsTheNewestRuntimeState() {
         let oldChecked = Date(timeIntervalSince1970: 1_700_000_000)
         let newChecked = oldChecked.addingTimeInterval(60)
@@ -460,116 +293,6 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertTrue(loaded.preserveNewerOAuthQuotaSnapshots(from: previous))
         XCTAssertEqual(loaded.providers[0].accounts[0].primaryUsedPercent, 72)
         XCTAssertEqual(loaded.providers[0].accounts[0].lastChecked, newChecked)
-    }
-
-    func testUpdateServiceTierPreservesModelsAndReasoningEffort() throws {
-        var config = self.activeOpenAIConfig()
-        config.global = CodexPanelGlobalSettings(
-            defaultModel: "gpt-5.5-mini",
-            reviewModel: "gpt-5.5-mini",
-            reasoningEffort: "high",
-            serviceTier: "standard"
-        )
-        try self.writeConfig(config)
-        let store = self.makeTokenStore(
-            syncService: CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()),
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-
-        try store.updateServiceTier("fast")
-
-        XCTAssertEqual(store.config.global.defaultModel, "gpt-5.5-mini")
-        XCTAssertEqual(store.config.global.reviewModel, "gpt-5.5-mini")
-        XCTAssertEqual(store.config.global.reasoningEffort, "high")
-        XCTAssertEqual(store.config.global.serviceTier, "fast")
-
-        let reloaded = try CodexPanelConfigStore().loadOrMigrate()
-        XCTAssertEqual(reloaded.global.defaultModel, "gpt-5.5-mini")
-        XCTAssertEqual(reloaded.global.reviewModel, "gpt-5.5-mini")
-        XCTAssertEqual(reloaded.global.reasoningEffort, "high")
-        XCTAssertEqual(reloaded.global.serviceTier, "fast")
-
-        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
-        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.5-mini""#))
-        XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5-mini""#))
-        XCTAssertTrue(tomlText.contains(#"model_reasoning_effort = "high""#))
-        XCTAssertTrue(tomlText.contains(#"service_tier = "fast""#))
-    }
-
-    func testServiceTierOptionsFollowCodexModelsCache() throws {
-        try CodexServiceTierCatalogTests.writeFixture(models: [
-            CodexServiceTierCatalogTests.model("gpt-5.6-sol", tiers: [("priority", "Fast")]),
-            CodexServiceTierCatalogTests.model("gpt-6-astra", tiers: [("priority", "Fast"), ("ultrafast", "Ultrafast")]),
-            CodexServiceTierCatalogTests.model("gpt-5.5", tiers: []),
-        ])
-        try self.writeOAuthConfig(model: "gpt-6-astra", serviceTier: "standard")
-
-        let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-
-        XCTAssertEqual(store.serviceTierOptions(for: "gpt-6-astra"), ["standard", "fast", "ultrafast"])
-        XCTAssertEqual(store.serviceTierOptions(for: "gpt-5.6-sol"), ["standard", "fast"])
-        XCTAssertEqual(store.serviceTierOptions(for: "gpt-5.5"), ["standard"])
-        XCTAssertEqual(store.serviceTierOptions(for: "gpt-unlisted"), ["standard", "fast"])
-
-        try store.updateServiceTier("ultrafast")
-        XCTAssertEqual(store.config.global.serviceTier, "ultrafast")
-
-        XCTAssertThrowsError(try store.updateServiceTier("turbo"))
-        XCTAssertEqual(store.config.global.serviceTier, "ultrafast")
-        try store.updateServiceTier("flex")
-        XCTAssertEqual(store.config.global.serviceTier, "standard")
-        try store.updateServiceTier("ultrafast")
-
-        try store.updateRouteModel("gpt-5.6-sol")
-        XCTAssertEqual(store.config.global.serviceTier, "standard")
-        try store.updateServiceTier("fast")
-        try store.updateRouteModel("gpt-5.5")
-        XCTAssertEqual(store.config.global.serviceTier, "standard")
-    }
-
-    func testLoadPreservesStoredServiceTierWhenCodexCatalogChanges() throws {
-        try CodexServiceTierCatalogTests.writeFixture(models: [
-            CodexServiceTierCatalogTests.model("gpt-5.6-sol", tiers: [("priority", "Fast")]),
-        ])
-        try self.writeOAuthConfig(model: "gpt-5.6-sol", serviceTier: "fast")
-
-        let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-        XCTAssertEqual(store.config.global.serviceTier, "fast")
-        XCTAssertEqual(store.codexServiceTierCatalog?.models.map(\.slug), ["gpt-5.6-sol"])
-
-        try CodexServiceTierCatalogTests.writeFixture(models: [
-            CodexServiceTierCatalogTests.model("gpt-5.6-sol", tiers: []),
-        ])
-        store.load()
-
-        XCTAssertEqual(store.config.global.serviceTier, "fast")
-        XCTAssertEqual(store.serviceTierOptions(for: "gpt-5.6-sol"), ["standard"])
-        let reloaded = try CodexPanelConfigStore().loadOrMigrate()
-        XCTAssertEqual(reloaded.global.serviceTier, "fast")
-    }
-
-    func testInitializationAutoAdjustsLegacyFlexServiceTier() throws {
-        try self.writeOAuthConfig(model: "gpt-5.6-sol", serviceTier: "flex")
-
-        let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-
-        XCTAssertEqual(store.config.global.serviceTier, "standard")
-        XCTAssertNil(store.codexServiceTierCatalog)
-        XCTAssertEqual(store.serviceTierOptions(for: "gpt-5.6-sol"), ["standard", "fast"])
     }
 
     func testInitializationRebuildsLocalCostSummaryWhenCachedSummaryIsZeroButLedgerExists() throws {
@@ -617,10 +340,7 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         try CodexPaths.writeSecureFile(ledgerData, to: CodexPaths.costEventLedgerURL)
 
         let store = self.makeTokenStore(
-            costSummaryService: LocalCostSummaryService(sessionLogStore: sessionStore),
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
+            costSummaryService: LocalCostSummaryService(sessionLogStore: sessionStore)
         )
 
         let timeout = Date().addingTimeInterval(3)
@@ -814,125 +534,49 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         XCTAssertEqual(store.activeProvider?.id, "openrouter-custom")
     }
 
-    func testOpenRouterManualModelFallbackWorksWithoutCatalog() throws {
-        let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-
-        try store.addOpenRouterProvider(accountLabel: "Primary", apiKey: "sk-or-v1-manual")
-
-        XCTAssertNil(store.openRouterProvider?.openRouterEffectiveModelID)
-        XCTAssertTrue(store.openRouterProvider?.cachedModelCatalog.isEmpty ?? true)
-
-        try store.updateOpenRouterSelectedModel("google/gemini-2.5-pro")
-
-        XCTAssertEqual(store.openRouterProvider?.selectedModelID, "google/gemini-2.5-pro")
-        XCTAssertEqual(store.openRouterProvider?.openRouterEffectiveModelID, "google/gemini-2.5-pro")
-        XCTAssertTrue(store.openRouterProvider?.cachedModelCatalog.isEmpty ?? true)
-
-        let reloaded = try CodexPanelConfigStore().loadOrMigrate()
-        XCTAssertEqual(reloaded.openRouterProvider()?.selectedModelID, "google/gemini-2.5-pro")
-    }
-
-    func testOpenRouterPinnedModelsRemainAfterSwitchingCurrentModel() throws {
-        let store = self.makeTokenStore(
-            openRouterCatalogService: OpenRouterModelCatalogServiceSpy(
-                result: .failure(URLError(.notConnectedToInternet))
-            )
-        )
-        let fetchedAt = Date(timeIntervalSince1970: 1_710_000_500)
-        let catalog = [
-            CodexPanelOpenRouterModel(id: "openai/gpt-4.1", name: "GPT-4.1"),
-            CodexPanelOpenRouterModel(id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro"),
-        ]
-
-        try store.addOpenRouterProvider(
-            apiKey: "sk-or-v1-primary",
-            selectedModelID: "openai/gpt-4.1",
-            pinnedModelIDs: ["openai/gpt-4.1", "google/gemini-2.5-pro"],
-            cachedModelCatalog: catalog,
-            fetchedAt: fetchedAt
-        )
-
-        XCTAssertEqual(store.openRouterProvider?.pinnedModelIDs, ["openai/gpt-4.1", "google/gemini-2.5-pro"])
-        XCTAssertEqual(store.openRouterProvider?.openRouterEffectiveModelID, "openai/gpt-4.1")
-
-        try store.updateOpenRouterSelectedModel("google/gemini-2.5-pro")
-
-        XCTAssertEqual(store.openRouterProvider?.openRouterEffectiveModelID, "google/gemini-2.5-pro")
-        XCTAssertEqual(store.openRouterProvider?.pinnedModelIDs, ["openai/gpt-4.1", "google/gemini-2.5-pro"])
-        XCTAssertEqual(store.openRouterProvider?.cachedModelCatalog.map(\.id), ["openai/gpt-4.1", "google/gemini-2.5-pro"])
-    }
-
-    func testRefreshOpenRouterModelCatalogCachesFetchedModels() async throws {
-        let fetchedAt = Date(timeIntervalSince1970: 1_710_000_000)
-        let catalogService = OpenRouterModelCatalogServiceSpy(
-            result: .success(
-                OpenRouterModelCatalogSnapshot(
-                    models: [
-                        CodexPanelOpenRouterModel(id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet"),
-                        CodexPanelOpenRouterModel(id: "openai/gpt-4.1", name: "GPT-4.1"),
-                    ],
-                    fetchedAt: fetchedAt
-                )
-            )
-        )
-        let store = self.makeTokenStore(openRouterCatalogService: catalogService)
-
-        try store.addOpenRouterProvider(accountLabel: "Primary", apiKey: "sk-or-v1-primary")
-        try await store.refreshOpenRouterModelCatalog()
-
-        XCTAssertEqual(catalogService.requestedAPIKeys, ["sk-or-v1-primary"])
-        XCTAssertEqual(
-            store.openRouterProvider?.cachedModelCatalog.map(\.id),
-            ["anthropic/claude-3.7-sonnet", "openai/gpt-4.1"]
-        )
-        XCTAssertEqual(store.openRouterProvider?.modelCatalogFetchedAt, fetchedAt)
-
-        let reloaded = try CodexPanelConfigStore().loadOrMigrate()
-        XCTAssertEqual(
-            reloaded.openRouterProvider()?.cachedModelCatalog.map(\.id),
-            ["anthropic/claude-3.7-sonnet", "openai/gpt-4.1"]
-        )
-        XCTAssertEqual(reloaded.openRouterProvider()?.modelCatalogFetchedAt, fetchedAt)
-    }
-
-    func testRefreshOpenRouterCatalogFailurePreservesSelectedModelAndCache() async throws {
-        let fetchedAt = Date(timeIntervalSince1970: 1_710_000_100)
-        let catalogService = OpenRouterModelCatalogServiceSpy(
-            result: .success(
-                OpenRouterModelCatalogSnapshot(
-                    models: [
-                        CodexPanelOpenRouterModel(id: "anthropic/claude-3.7-sonnet", name: "Claude 3.7 Sonnet"),
-                        CodexPanelOpenRouterModel(id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro"),
-                    ],
-                    fetchedAt: fetchedAt
-                )
-            )
-        )
-        let store = self.makeTokenStore(openRouterCatalogService: catalogService)
-
-        try store.addOpenRouterProvider(accountLabel: "Primary", apiKey: "sk-or-v1-primary")
-        try store.updateOpenRouterSelectedModel("anthropic/claude-3.7-sonnet")
-        try await store.refreshOpenRouterModelCatalog()
-
-        catalogService.result = .failure(URLError(.notConnectedToInternet))
-
-        do {
-            try await store.refreshOpenRouterModelCatalog()
-            XCTFail("Expected refresh to fail")
-        } catch {
-            XCTAssertEqual((error as? URLError)?.code, .notConnectedToInternet)
+    func testStartupAndAllSwitchesPreserveCodexOwnedModelSettings() throws {
+        var config = self.activeOpenAIConfig()
+        let account = try self.makeOAuthAccount(accountID: "second-account", email: "second@example.com")
+        let second = CodexPanelProviderAccount.fromTokenAccount(account, existingID: "second-account")
+        config.providers[0].accounts.append(second)
+        try self.writeConfig(config)
+        let protected = """
+        model = "codex-model" # user's choice
+        review_model = "codex-review-model"
+        model_reasoning_effort = "user-effort"
+        service_tier = "user-tier"
+        model_catalog_json = "/tmp/codex-owned-models.json"
+        [profiles.work]
+        model = "profile-model"
+        service_tier = "profile-tier"
+        """
+        try CodexPaths.writeSecureFile(Data(protected.utf8), to: CodexPaths.configTomlURL)
+        let store = self.makeTokenStore(syncService: CodexSyncService(networkConfiguration: self.releaseNetworkConfiguration()))
+        func assertPreserved(file: StaticString = #filePath, line: UInt = #line) throws {
+            let text = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
+            XCTAssertTrue(text.contains(protected), text, file: file, line: line)
         }
-
-        XCTAssertEqual(store.openRouterProvider?.openRouterEffectiveModelID, "anthropic/claude-3.7-sonnet")
-        XCTAssertEqual(
-            store.openRouterProvider?.cachedModelCatalog.map(\.id),
-            ["anthropic/claude-3.7-sonnet", "google/gemini-2.5-pro"]
-        )
-        XCTAssertEqual(store.openRouterProvider?.modelCatalogFetchedAt, fetchedAt)
+        try assertPreserved() // Startup
+        try store.activate(account)
+        try assertPreserved()
+        for mode in [CodexPanelOpenAIAccountUsageMode.aggregateGateway, .switchAccount] {
+            try store.saveOpenAIAccountSettings(OpenAIAccountSettingsUpdate(
+                accountOrder: [], accountUsageMode: mode,
+                accountOrderingMode: .quotaSort, manualActivationBehavior: .updateConfigOnly
+            ))
+            try assertPreserved()
+        }
+        for wire in [CodexPanelWireAPI.responses, .chat] {
+            try store.addCompatibleProvider(label: "Provider \(wire.rawValue)", baseURL: "https://example.invalid/v1",
+                accountLabel: "Account", apiKey: "fixture-key", wireAPI: wire, presetID: nil)
+            try assertPreserved()
+        }
+        try store.addOpenRouterProvider(apiKey: "fixture-openrouter-key")
+        let router = try XCTUnwrap(store.openRouterProvider)
+        try store.activateOpenRouterProvider(accountID: try XCTUnwrap(router.accounts.first?.id))
+        try assertPreserved()
+        try store.activate(account)
+        try assertPreserved()
     }
 
     private func makeValidCodexApp(named relativePath: String) throws -> URL {
@@ -975,31 +619,6 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
         )
     }
 
-    private func writeOAuthConfig(model: String, serviceTier: String) throws {
-        let accountID = "acct_service_tier"
-        let account = try self.makeOAuthAccount(accountID: accountID, email: "tier@example.com")
-        let stored = CodexPanelProviderAccount.fromTokenAccount(account, existingID: accountID)
-        let provider = CodexPanelProvider(
-            id: "openai-oauth",
-            kind: .openAIOAuth,
-            label: "OpenAI",
-            activeAccountId: accountID,
-            accounts: [stored]
-        )
-        try self.writeConfig(
-            CodexPanelConfig(
-                global: CodexPanelGlobalSettings(
-                    defaultModel: model,
-                    reviewModel: model,
-                    reasoningEffort: "medium",
-                    serviceTier: serviceTier
-                ),
-                active: CodexPanelActiveSelection(providerId: provider.id, accountId: accountID),
-                providers: [provider]
-            )
-        )
-    }
-
     private func releaseNetworkConfiguration() -> CodexPanelRuntimeNetworkConfiguration {
         CodexPanelRuntimeProfile.resolve(
             channel: .release,
@@ -1014,15 +633,14 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
 
     private func makeTokenStore(
         syncService: any CodexSynchronizing = CodexSyncServiceNoOp(),
-        costSummaryService: LocalCostSummaryService = LocalCostSummaryService(),
-        openRouterCatalogService: any OpenRouterModelCatalogFetching
+        costSummaryService: LocalCostSummaryService = LocalCostSummaryService()
     ) -> TokenStore {
         TokenStore(
             syncService: syncService,
             costSummaryService: costSummaryService,
             openAIAccountGatewayService: OpenAIAccountGatewayControllerStub(),
             openRouterGatewayService: OpenRouterGatewayControllerStub(),
-            openRouterModelCatalogService: openRouterCatalogService,
+            chatCompletionsGatewayService: ChatGatewayControllerStub(),
             aggregateGatewayLeaseStore: AggregateGatewayLeaseStoreStub(),
             aggregateRouteJournalStore: AggregateRouteJournalStoreStub(),
             codexRunningProcessIDs: { [] }
@@ -1067,16 +685,8 @@ private final class AggregateRouteJournalStoreStub: OpenAIAggregateRouteJournalS
     func routeHistory() -> [OpenAIAggregateRouteRecord] { [] }
 }
 
-private final class OpenRouterModelCatalogServiceSpy: OpenRouterModelCatalogFetching {
-    var result: Result<OpenRouterModelCatalogSnapshot, Error>
-    private(set) var requestedAPIKeys: [String] = []
-
-    init(result: Result<OpenRouterModelCatalogSnapshot, Error>) {
-        self.result = result
-    }
-
-    func fetchCatalog(apiKey: String) async throws -> OpenRouterModelCatalogSnapshot {
-        self.requestedAPIKeys.append(apiKey)
-        return try self.result.get()
-    }
+private final class ChatGatewayControllerStub: ChatCompletionsGatewayControlling {
+    func startIfNeeded() {}
+    func stop() {}
+    func updateState(provider: CodexPanelProvider?, isActiveProvider: Bool) {}
 }

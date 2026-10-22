@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
+final class SessionLogStore: @unchecked Sendable {
     static let shared = SessionLogStore()
 
     enum TaskLifecycleState: String, Codable, Equatable {
@@ -186,31 +186,6 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         let record: SessionLifecycleRecord?
     }
 
-    private struct RefreshedCachedSessions {
-        let records: [CachedSessionRecord]
-        let warnings: [RecordsSnapshotWarning]
-        let stats: RecordsSnapshotLoadStats
-    }
-
-    private struct RecordsSnapshotLoadStats {
-        let fileCount: Int
-        let totalBytes: Int
-        let cacheHitCount: Int
-        let parsedFileCount: Int
-        let changedFileCount: Int
-        let incrementallyParsedFileCount: Int
-        let warningCount: Int
-    }
-
-    private struct SessionFileScanResult {
-        let files: [URL]
-        let warnings: [RecordsSnapshotWarning]
-    }
-
-    private struct ParsedSessionResult {
-        let cachedRecord: CachedSessionRecord
-        let warning: RecordsSnapshotWarning?
-    }
 
     private struct IncrementalLineScanResult {
         let didRead: Bool
@@ -275,7 +250,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     private let persistedCacheURL: URL
     private let persistedUsageLedgerURL: URL
     private let billableCostCalculator: (String, Usage, Usage) -> Double?
-    private let recordsDiagnosticsRecorder: (String, [String: Any]) -> Void
+    private let diagnosticsRecorder: (String, [String: Any]) -> Void
     private let queue = DispatchQueue(label: "com.codexpanel.session-log-store", qos: .utility)
     private let persistedCacheVersion = 5
     private let persistedUsageLedgerVersion = 2
@@ -291,7 +266,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         codexRootURL: URL = CodexPaths.codexRoot,
         persistedCacheURL: URL = CodexPaths.costSessionCacheURL,
         persistedUsageLedgerURL: URL? = nil,
-        recordsDiagnosticsRecorder: @escaping (String, [String: Any]) -> Void = { type, fields in
+        diagnosticsRecorder: @escaping (String, [String: Any]) -> Void = { type, fields in
             AppLifecycleDiagnostics.shared.recordEvent(type: type, fields: fields)
         },
         billableCostCalculator: @escaping (String, Usage, Usage) -> Double? = { model, usage, sessionUsage in
@@ -303,7 +278,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         self.persistedCacheURL = persistedCacheURL
         self.persistedUsageLedgerURL = persistedUsageLedgerURL
             ?? persistedCacheURL.deletingLastPathComponent().appendingPathComponent("cost-event-ledger.json")
-        self.recordsDiagnosticsRecorder = recordsDiagnosticsRecorder
+        self.diagnosticsRecorder = diagnosticsRecorder
         self.billableCostCalculator = billableCostCalculator
     }
 
@@ -321,7 +296,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         if self.usageLedger.didSeedFromSessionCache {
             self.seedSessionCache = nil
         }
-        self.recordsDiagnosticsRecorder("session_cache_restored", [
+        self.diagnosticsRecorder("session_cache_restored", [
             "durationMs": Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1_000),
             "sessionCount": self.sessionCache.count,
             "ledgerSessionCount": self.usageLedger.sessions.count,
@@ -380,50 +355,6 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         }
     }
 
-    func loadRecordsSourceSnapshot(
-        refreshMode: RecordsRefreshMode
-    ) async throws -> RecordsSourceSnapshot {
-        try await withCheckedThrowingContinuation { continuation in
-            self.queue.async {
-                self.loadPersistedStateIfNeededLocked()
-                let startedAt = Date()
-                self.recordsDiagnosticsRecorder(
-                    "records_snapshot_load_started",
-                    self.recordsSnapshotDiagnosticFields(
-                        refreshMode: refreshMode,
-                        durationMs: 0,
-                        stats: nil
-                    )
-                )
-                do {
-                    let result = try self.loadRecordsSourceSnapshotLocked(refreshMode: refreshMode)
-                    let durationMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
-                    self.recordsDiagnosticsRecorder(
-                        "records_snapshot_load_finished",
-                        self.recordsSnapshotDiagnosticFields(
-                            refreshMode: refreshMode,
-                            durationMs: durationMs,
-                            stats: result.stats
-                        )
-                    )
-                    let snapshot = result.snapshot
-                    continuation.resume(returning: snapshot)
-                } catch {
-                    let durationMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
-                    self.recordsDiagnosticsRecorder(
-                        "records_snapshot_load_failed",
-                        self.recordsSnapshotDiagnosticFields(
-                            refreshMode: refreshMode,
-                            durationMs: durationMs,
-                            stats: nil,
-                            errorDescription: error.localizedDescription
-                        )
-                    )
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
-    }
 
     func reduceUsageEvents<Result>(
         into initialResult: Result,
@@ -509,20 +440,13 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     }
 
     private func refreshCachedSessionsLocked() -> [CachedSessionRecord] {
-        (try? self.refreshCachedSessionsLocked(
-            rebuildAll: false,
-            collectWarnings: false
-        ).records) ?? Array(self.sessionCache.values)
+        (try? self.refreshCachedSessionsFromDiskLocked()) ?? Array(self.sessionCache.values)
     }
 
-    private func refreshCachedSessionsLocked(
-        rebuildAll: Bool,
-        collectWarnings: Bool
-    ) throws -> RefreshedCachedSessions {
+    private func refreshCachedSessionsFromDiskLocked() throws -> [CachedSessionRecord] {
         let startedAt = ProcessInfo.processInfo.systemUptime
-        let scanResult = try self.sessionFilesThrowing(collectWarnings: collectWarnings)
-        let files = scanResult.files
-        let previousSessionCache = rebuildAll ? [:] : self.sessionCache
+        let files = try self.sessionFilesThrowing()
+        let previousSessionCache = self.sessionCache
 
         var nextSessionCache: [URL: CachedSessionRecord] = [:]
         nextSessionCache.reserveCapacity(files.count)
@@ -530,12 +454,8 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         var cachedSessions: [CachedSessionRecord] = []
         cachedSessions.reserveCapacity(files.count)
 
-        var warnings = scanResult.warnings
-        warnings.reserveCapacity(files.count)
-        var totalBytes = 0
         var cacheHitCount = 0
         var parsedFileCount = 0
-        var changedFileCount = 0
         var incrementallyParsedFileCount = 0
         var upgradedFingerprintCount = 0
         var parsedBytes: Int64 = 0
@@ -543,22 +463,11 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         for fileURL in files {
             autoreleasepool {
                 guard let fingerprint = self.fingerprint(for: fileURL) else {
-                    if collectWarnings {
-                        warnings.append(
-                            RecordsSnapshotWarning(
-                                sessionFilePath: fileURL.path,
-                                kind: .unreadableSessionFile,
-                                message: "Unable to read session file metadata."
-                            )
-                        )
-                    }
                     return
                 }
-                totalBytes += max(0, fingerprint.fileSize)
 
                 if let cached = previousSessionCache[fileURL],
-                   cached.fingerprint == fingerprint,
-                   collectWarnings == false || cached.record != nil || cached.isComplete {
+                   cached.fingerprint == fingerprint {
                     let reusable = CachedSessionRecord(
                         fingerprint: fingerprint, record: cached.record, usageEvents: cached.usageEvents,
                         parsedBytes: cached.parsedBytes, anchorHash: cached.anchorHash,
@@ -568,22 +477,11 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
                     nextSessionCache[fileURL] = reusable
                     cachedSessions.append(reusable)
                     cacheHitCount += 1
-                    if collectWarnings && cached.record == nil {
-                        warnings.append(RecordsSnapshotWarning(
-                            sessionFilePath: fileURL.path, kind: .incompleteSessionRecord,
-                            message: "Missing required session metadata or model."
-                        ))
-                    }
                     return
                 }
 
                 parsedFileCount += 1
-                if let previous = previousSessionCache[fileURL], previous.fingerprint != fingerprint {
-                    changedFileCount += 1
-                } else if previousSessionCache[fileURL] == nil {
-                    changedFileCount += 1
-                }
-                let parsed: ParsedSessionResult
+                let parsed: CachedSessionRecord
                 if let previous = previousSessionCache[fileURL],
                    self.canIncrementallyAppend(
                        previous: previous,
@@ -597,20 +495,16 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
                    ) {
                     parsed = incrementallyParsed
                     incrementallyParsedFileCount += 1
-                    parsedBytes += max(0, incrementallyParsed.cachedRecord.parsedBytes - previous.parsedBytes)
+                    parsedBytes += max(0, incrementallyParsed.parsedBytes - previous.parsedBytes)
                 } else {
                     parsedBytes += Int64(max(0, fingerprint.fileSize))
                     parsed = self.parseSession(
                         fileURL,
-                        fingerprint: fingerprint,
-                        collectWarning: collectWarnings
+                        fingerprint: fingerprint
                     )
                 }
-                nextSessionCache[fileURL] = parsed.cachedRecord
-                cachedSessions.append(parsed.cachedRecord)
-                if let warning = parsed.warning {
-                    warnings.append(warning)
-                }
+                nextSessionCache[fileURL] = parsed
+                cachedSessions.append(parsed)
             }
         }
 
@@ -618,7 +512,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         if parsedFileCount > 0 || upgradedFingerprintCount > 0 || nextSessionCache.count != previousSessionCache.count {
             self.persistSessionCache(nextSessionCache)
         }
-        self.recordsDiagnosticsRecorder("session_cache_refreshed", [
+        self.diagnosticsRecorder("session_cache_refreshed", [
             "durationMs": Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1_000),
             "fileCount": files.count, "cacheHitCount": cacheHitCount,
             "fullParsedFileCount": parsedFileCount - incrementallyParsedFileCount,
@@ -626,120 +520,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
             "parsedBytes": parsedBytes, "upgradedFingerprintCount": upgradedFingerprintCount,
         ])
 
-        return RefreshedCachedSessions(
-            records: cachedSessions,
-            warnings: warnings.sorted { lhs, rhs in
-                if lhs.sessionFilePath != rhs.sessionFilePath {
-                    return lhs.sessionFilePath < rhs.sessionFilePath
-                }
-                if lhs.kind != rhs.kind {
-                    return lhs.kind.rawValue < rhs.kind.rawValue
-                }
-                return lhs.message < rhs.message
-            },
-            stats: RecordsSnapshotLoadStats(
-                fileCount: files.count,
-                totalBytes: totalBytes,
-                cacheHitCount: cacheHitCount,
-                parsedFileCount: parsedFileCount,
-                changedFileCount: changedFileCount,
-                incrementallyParsedFileCount: incrementallyParsedFileCount,
-                warningCount: warnings.count
-            )
-        )
-    }
-
-    private func loadRecordsSourceSnapshotLocked(
-        refreshMode: RecordsRefreshMode
-    ) throws -> (snapshot: RecordsSourceSnapshot, stats: RecordsSnapshotLoadStats) {
-        let refreshed = try self.refreshCachedSessionsLocked(
-            rebuildAll: refreshMode == .rebuildAll,
-            collectWarnings: true
-        )
-
-        if self.ensureUsageLedgerSeededLocked() {
-            self.refreshUsageLedgerLocked(using: refreshed.records)
-        }
-
-        return (
-            snapshot: RecordsSourceSnapshot(
-                generatedAt: Date(),
-                refreshMode: refreshMode,
-                sessions: self.historicalSessionRecords(from: refreshed.records),
-                warnings: refreshed.warnings
-            ),
-            stats: refreshed.stats
-        )
-    }
-
-    private func recordsSnapshotDiagnosticFields(
-        refreshMode: RecordsRefreshMode,
-        durationMs: Int,
-        stats: RecordsSnapshotLoadStats?,
-        errorDescription: String? = nil
-    ) -> [String: Any] {
-        var fields: [String: Any] = [
-            "refreshMode": self.diagnosticsRefreshModeValue(refreshMode),
-            "durationMs": max(0, durationMs),
-            "fileCount": stats?.fileCount ?? 0,
-            "totalBytes": stats?.totalBytes ?? 0,
-            "cacheHitCount": stats?.cacheHitCount ?? 0,
-            "parsedFileCount": stats?.parsedFileCount ?? 0,
-            "changedFileCount": stats?.changedFileCount ?? 0,
-            "incrementallyParsedFileCount": stats?.incrementallyParsedFileCount ?? 0,
-            "warningCount": stats?.warningCount ?? 0,
-        ]
-        if let errorDescription, errorDescription.isEmpty == false {
-            fields["error"] = errorDescription
-        }
-        return fields
-    }
-
-    private func diagnosticsRefreshModeValue(_ refreshMode: RecordsRefreshMode) -> String {
-        switch refreshMode {
-        case .incremental:
-            return "incremental"
-        case .rebuildAll:
-            return "rebuildAll"
-        }
-    }
-
-    private func historicalSessionRecords(
-        from cachedSessions: [CachedSessionRecord]
-    ) -> [HistoricalSessionRecord] {
-        var preferredRecordBySessionID: [String: CachedSessionRecord] = [:]
-        preferredRecordBySessionID.reserveCapacity(cachedSessions.count)
-
-        for cached in cachedSessions {
-            guard let record = cached.record else { continue }
-
-            if let existing = preferredRecordBySessionID[record.id],
-               self.shouldIngestBefore(existing, cached) {
-                continue
-            }
-            preferredRecordBySessionID[record.id] = cached
-        }
-
-        return preferredRecordBySessionID.values.compactMap { cached in
-            guard let record = cached.record else { return nil }
-            return HistoricalSessionRecord(
-                sessionID: record.id,
-                modelID: record.model,
-                startedAt: record.startedAt,
-                lastActivityAt: record.lastActivityAt,
-                isArchived: record.isArchived,
-                totalTokens: record.usage.totalTokens
-            )
-        }
-        .sorted { lhs, rhs in
-            if lhs.lastActivityAt != rhs.lastActivityAt {
-                return lhs.lastActivityAt > rhs.lastActivityAt
-            }
-            if lhs.startedAt != rhs.startedAt {
-                return lhs.startedAt > rhs.startedAt
-            }
-            return lhs.sessionID < rhs.sessionID
-        }
+        return cachedSessions
     }
 
     private func ensureUsageLedgerSeededLocked() -> Bool {
@@ -943,12 +724,12 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
                 .flatMap { $0 }
 
             return CachedSessionRecord(
-                fingerprint: cached.fingerprint,
-                record: cached.record,
-                usageEvents: self.alignedSeedUsageEvents(
-                    cached.usageEvents,
-                    using: currentUsageEvents
-                )
+            fingerprint: cached.fingerprint,
+            record: cached.record,
+            usageEvents: self.alignedSeedUsageEvents(
+                cached.usageEvents,
+                using: currentUsageEvents
+            )
             )
         }
     }
@@ -964,8 +745,8 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
 
         return seedEvents.map { event in
             guard var timestamps = timestampsByUsage[event.usage],
-                  let matchedTimestamp = timestamps.first else {
-                return event
+              let matchedTimestamp = timestamps.first else {
+            return event
             }
             timestamps.removeFirst()
             timestampsByUsage[event.usage] = timestamps
@@ -980,24 +761,24 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
             let session = self.usageLedger.sessions[sessionID]
             let model = session?.model ?? ""
             let sessionUsage = (session?.events ?? []).reduce(Usage.zero) { partial, event in
-                partial + event.usage
+            partial + event.usage
             }
             return (session?.events ?? []).map { event in
-                BillableUsageEvent(
-                    sessionID: sessionID,
-                    model: model,
-                    sessionUsage: sessionUsage,
-                    timestamp: event.timestamp,
-                    usage: event.usage,
-                    costUSD: model.isEmpty == false
-                        ? costCalculator(model, event.usage, sessionUsage)
-                        : event.costUSD
-                )
+            BillableUsageEvent(
+                sessionID: sessionID,
+                model: model,
+                sessionUsage: sessionUsage,
+                timestamp: event.timestamp,
+                usage: event.usage,
+                costUSD: model.isEmpty == false
+                    ? costCalculator(model, event.usage, sessionUsage)
+                    : event.costUSD
+            )
             }
         }
         .sorted { lhs, rhs in
             if lhs.timestamp == rhs.timestamp {
-                return lhs.sessionID < rhs.sessionID
+            return lhs.sessionID < rhs.sessionID
             }
             return lhs.timestamp < rhs.timestamp
         }
@@ -1077,12 +858,12 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         self.queue.sync {
             var result = initialResult
             self.reduceCachedSessionLifecycleLocked(
-                into: &result,
-                matchingSessionIDs: matchingSessionIDs
+            into: &result,
+            matchingSessionIDs: matchingSessionIDs
             ) { partialResult, cached in
-                if let record = cached.record {
-                    update(&partialResult, record)
-                }
+            if let record = cached.record {
+                update(&partialResult, record)
+            }
             }
             return result
         }
@@ -1099,43 +880,43 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
 
         for fileURL in files {
             autoreleasepool {
-                if let matchingSessionIDs,
-                   self.matchesSessionLifecycleFilter(
-                        fileURL: fileURL,
-                        sessionIDs: matchingSessionIDs
-                   ) == false {
-                    return
-                }
+            if let matchingSessionIDs,
+               self.matchesSessionLifecycleFilter(
+                    fileURL: fileURL,
+                    sessionIDs: matchingSessionIDs
+               ) == false {
+                return
+            }
 
-                guard let fingerprint = self.fingerprint(for: fileURL) else { return }
+            guard let fingerprint = self.fingerprint(for: fileURL) else { return }
 
-                if let cached = self.sessionLifecycleCache[fileURL], cached.fingerprint == fingerprint {
-                    nextLifecycleCache[fileURL] = cached
-                    update(&result, cached)
-                    return
-                }
-
-                if let cachedSession = self.sessionCache[fileURL],
-                   cachedSession.fingerprint == fingerprint,
-                   let record = cachedSession.record {
-                    let lifecycleRecord = CachedSessionLifecycleRecord(
-                        fingerprint: fingerprint,
-                        record: SessionLifecycleRecord(
-                            id: record.id,
-                            startedAt: record.startedAt,
-                            lastActivityAt: record.lastActivityAt,
-                            isArchived: record.isArchived,
-                            taskLifecycleState: record.taskLifecycleState
-                        )
-                    )
-                    nextLifecycleCache[fileURL] = lifecycleRecord
-                    update(&result, lifecycleRecord)
-                    return
-                }
-
-                let cached = self.parseSessionLifecycle(fileURL, fingerprint: fingerprint)
+            if let cached = self.sessionLifecycleCache[fileURL], cached.fingerprint == fingerprint {
                 nextLifecycleCache[fileURL] = cached
                 update(&result, cached)
+                return
+            }
+
+            if let cachedSession = self.sessionCache[fileURL],
+               cachedSession.fingerprint == fingerprint,
+               let record = cachedSession.record {
+                let lifecycleRecord = CachedSessionLifecycleRecord(
+                    fingerprint: fingerprint,
+                    record: SessionLifecycleRecord(
+                        id: record.id,
+                        startedAt: record.startedAt,
+                        lastActivityAt: record.lastActivityAt,
+                        isArchived: record.isArchived,
+                        taskLifecycleState: record.taskLifecycleState
+                    )
+                )
+                nextLifecycleCache[fileURL] = lifecycleRecord
+                update(&result, lifecycleRecord)
+                return
+            }
+
+            let cached = self.parseSessionLifecycle(fileURL, fingerprint: fingerprint)
+            nextLifecycleCache[fileURL] = cached
+            update(&result, cached)
             }
         }
 
@@ -1151,67 +932,50 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     }
 
     private func sessionFiles() -> [URL] {
-        (try? self.sessionFilesThrowing(collectWarnings: false).files) ?? []
+        (try? self.sessionFilesThrowing()) ?? []
     }
 
-    private func sessionFilesThrowing(
-        collectWarnings: Bool
-    ) throws -> SessionFileScanResult {
+    private func sessionFilesThrowing() throws -> [URL] {
         let directories = [
             self.codexRootURL.appendingPathComponent("sessions", isDirectory: true),
             self.codexRootURL.appendingPathComponent("archived_sessions", isDirectory: true),
         ]
 
         var files: [URL] = []
-        var warnings: [RecordsSnapshotWarning] = []
         for directory in directories {
             guard self.fileManager.fileExists(atPath: directory.path) else { continue }
 
             var enumeratorDidFail = false
             guard let enumerator = self.fileManager.enumerator(
-                at: directory,
-                includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey],
-                errorHandler: { fileURL, error in
-                    guard collectWarnings else {
-                        enumeratorDidFail = true
-                        return false
-                    }
-
-                    warnings.append(
-                        RecordsSnapshotWarning(
-                            sessionFilePath: fileURL.path,
-                            kind: .unreadableSessionFile,
-                            message: error.localizedDescription
-                        )
-                    )
-                    return true
-                }
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey],
+            errorHandler: { _, _ in
+                enumeratorDidFail = true
+                return false
+            }
             ) else {
-                throw RecordsSourceSnapshotError.directoryEnumerationFailed(path: directory.path)
+            throw SessionFileScanError.directoryEnumerationFailed(path: directory.path)
             }
 
             while let url = enumerator.nextObject() as? URL {
-                guard url.pathExtension == "jsonl" else { continue }
-                files.append(url)
+            guard url.pathExtension == "jsonl" else { continue }
+            files.append(url)
             }
 
             if enumeratorDidFail {
-                throw RecordsSourceSnapshotError.directoryEnumerationFailed(path: directory.path)
+            throw SessionFileScanError.directoryEnumerationFailed(path: directory.path)
             }
         }
-        return SessionFileScanResult(
-            files: files.sorted { $0.path < $1.path },
-            warnings: warnings
-        )
+        return files.sorted { $0.path < $1.path }
     }
 
     private func fingerprint(for fileURL: URL) -> FileFingerprint? {
         guard let values = try? fileURL.resourceValues(
             forKeys: [
-                .isRegularFileKey,
-                .contentModificationDateKey,
-                .fileSizeKey,
-                .fileResourceIdentifierKey,
+            .isRegularFileKey,
+            .contentModificationDateKey,
+            .fileSizeKey,
+            .fileResourceIdentifierKey,
             ]
         ),
               values.isRegularFile == true else { return nil }
@@ -1244,9 +1008,8 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
 
     private func parseSession(
         _ fileURL: URL,
-        fingerprint: FileFingerprint,
-        collectWarning: Bool
-    ) -> ParsedSessionResult {
+        fingerprint: FileFingerprint
+    ) -> CachedSessionRecord {
         var sessionID: String?
         var sessionDate: Date?
         var model: String?
@@ -1275,7 +1038,6 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         }
 
         let record: SessionRecord?
-        let warning: RecordsSnapshotWarning?
         let resolvedModel = model?.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasTrailingNewline = self.hasTrailingNewline(in: fileURL)
 
@@ -1292,36 +1054,21 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
                 usage: usageHighWater ?? .zero,
                 taskLifecycleState: taskLifecycleState
             )
-            warning = nil
         } else {
             record = nil
-            if collectWarning {
-                warning = RecordsSnapshotWarning(
-                    sessionFilePath: fileURL.path,
-                    kind: didRead ? .incompleteSessionRecord : .unreadableSessionFile,
-                    message: didRead
-                        ? "Missing required session metadata or model."
-                        : "Unable to read session file."
-                )
-            } else {
-                warning = nil
-            }
         }
 
-        return ParsedSessionResult(
-            cachedRecord: CachedSessionRecord(
-                fingerprint: fingerprint,
-                record: record,
-                usageEvents: usageEvents,
-                parsedBytes: Int64(max(0, fingerprint.fileSize)),
-                anchorHash: self.anchorHash(
-                    for: fileURL,
-                    parsedBytes: Int64(max(0, fingerprint.fileSize))
-                ),
-                isComplete: didRead && hasTrailingNewline,
-                hasTrailingNewline: hasTrailingNewline
+        return CachedSessionRecord(
+            fingerprint: fingerprint,
+            record: record,
+            usageEvents: usageEvents,
+            parsedBytes: Int64(max(0, fingerprint.fileSize)),
+            anchorHash: self.anchorHash(
+                for: fileURL,
+                parsedBytes: Int64(max(0, fingerprint.fileSize))
             ),
-            warning: warning
+            isComplete: didRead && hasTrailingNewline,
+            hasTrailingNewline: hasTrailingNewline
         )
     }
 
@@ -1329,7 +1076,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
         _ fileURL: URL,
         previous: CachedSessionRecord,
         fingerprint: FileFingerprint
-    ) -> ParsedSessionResult? {
+    ) -> CachedSessionRecord? {
         guard let previousRecord = previous.record,
               previous.parsedBytes > 0,
               previous.hasTrailingNewline,
@@ -1382,17 +1129,14 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
 
         guard scan.parsedBytes > 0, anchorHash != nil else { return nil }
 
-        return ParsedSessionResult(
-            cachedRecord: CachedSessionRecord(
-                fingerprint: fingerprint,
-                record: updatedRecord,
-                usageEvents: usageEvents,
-                parsedBytes: scan.parsedBytes,
-                anchorHash: anchorHash,
-                isComplete: scan.didRead && scan.hasTrailingNewline,
-                hasTrailingNewline: scan.hasTrailingNewline
-            ),
-            warning: nil
+        return CachedSessionRecord(
+            fingerprint: fingerprint,
+            record: updatedRecord,
+            usageEvents: usageEvents,
+            parsedBytes: scan.parsedBytes,
+            anchorHash: anchorHash,
+            isComplete: scan.didRead && scan.hasTrailingNewline,
+            hasTrailingNewline: scan.hasTrailingNewline
         )
     }
 
@@ -1827,7 +1571,7 @@ final class SessionLogStore: @unchecked Sendable, RecordsSourceSnapshotLoading {
     }
 }
 
-private enum RecordsSourceSnapshotError: LocalizedError {
+private enum SessionFileScanError: LocalizedError {
     case directoryEnumerationFailed(path: String)
 
     var errorDescription: String? {

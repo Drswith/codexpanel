@@ -37,6 +37,13 @@ enum ResponsesChatCompletionsTranslator {
             request["parallel_tool_calls"] = parallel
         }
 
+        if let effort = (source["reasoning"] as? [String: Any])?["effort"], effort is NSNull == false {
+            request["reasoning_effort"] = effort
+        }
+        if let tier = source["service_tier"], tier is NSNull == false {
+            request["service_tier"] = tier
+        }
+
         let tools = self.tools(from: source["tools"])
         if tools.isEmpty == false {
             request["tools"] = tools

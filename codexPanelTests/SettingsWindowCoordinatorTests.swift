@@ -173,26 +173,6 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.showsManualAccountOrderSection)
     }
 
-    func testCodexAppPathSectionStaysHiddenWhenLaunchIsUnsupported() {
-        let accounts = [
-            self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
-            self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
-        ]
-        let coordinator = SettingsWindowCoordinator(
-            config: self.makeConfig(),
-            accounts: accounts,
-            historicalModels: ["gpt-5.5"]
-        )
-
-        XCTAssertFalse(coordinator.showsCodexAppPathSection)
-
-        coordinator.update(\.manualActivationBehavior, to: .launchNewInstance, field: .manualActivationBehavior)
-        XCTAssertFalse(coordinator.showsCodexAppPathSection)
-
-        coordinator.update(\.manualActivationBehavior, to: .updateConfigOnly, field: .manualActivationBehavior)
-        XCTAssertFalse(coordinator.showsCodexAppPathSection)
-    }
-
     func testSaveEmitsChangedDomainRequestsAndReopenReflectsSavedValues() throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -374,121 +354,6 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         XCTAssertNil(sink.config.openAI.aggregateGatewayProxyURL)
     }
 
-    func testCancelRollsBackAcrossPagesAndDoesNotTriggerRequests() {
-        let accounts = [
-            self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
-            self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
-        ]
-        let baseConfig = self.makeConfig()
-        let sink = TestSettingsSaveSink(config: baseConfig)
-        let coordinator = SettingsWindowCoordinator(
-            config: baseConfig,
-            accounts: accounts,
-            historicalModels: ["gpt-5.5"]
-        )
-
-        coordinator.update(\.manualActivationBehavior, to: .launchNewInstance, field: .manualActivationBehavior)
-        coordinator.selectedPage = .usage
-        coordinator.update(\.usageDisplayMode, to: .remaining, field: .usageDisplayMode)
-        coordinator.update(\.plusRelativeWeight, to: 14, field: .plusRelativeWeight)
-        coordinator.update(\.proRelativeToPlusMultiplier, to: 15, field: .proRelativeToPlusMultiplier)
-        coordinator.selectedPage = .accounts
-        coordinator.update(\.preferredCodexAppPath, to: "/Applications/Codex.app", field: .preferredCodexAppPath)
-
-        coordinator.cancel()
-
-        XCTAssertTrue(sink.appliedRequests.isEmpty)
-        XCTAssertEqual(
-            coordinator.draft,
-            SettingsWindowDraft(
-                config: baseConfig,
-                accounts: accounts,
-                historicalModels: ["gpt-5.5"]
-            )
-        )
-
-        let reopened = SettingsWindowCoordinator(
-            config: sink.config,
-            accounts: accounts,
-            historicalModels: ["gpt-5.5"]
-        )
-        XCTAssertEqual(
-            reopened.draft,
-            SettingsWindowDraft(
-                config: baseConfig,
-                accounts: accounts,
-                historicalModels: ["gpt-5.5"]
-            )
-        )
-    }
-
-    func testSaveAndCloseClosesWindowAfterSuccessfulSave() {
-        let accounts = [
-            self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
-            self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
-        ]
-        let sink = TestSettingsSaveSink(config: self.makeConfig())
-        let coordinator = SettingsWindowCoordinator(
-            config: sink.config,
-            accounts: accounts,
-            historicalModels: ["gpt-5.5"]
-        )
-        var closeCount = 0
-
-        coordinator.update(\.usageDisplayMode, to: .remaining, field: .usageDisplayMode)
-        coordinator.saveAndClose(using: sink) {
-            closeCount += 1
-        }
-
-        XCTAssertEqual(closeCount, 1)
-        XCTAssertEqual(sink.appliedRequests.count, 1)
-    }
-
-    func testCancelAndCloseDoesNotSaveButClosesWindow() {
-        let accounts = [
-            self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
-            self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
-        ]
-        let sink = TestSettingsSaveSink(config: self.makeConfig())
-        let coordinator = SettingsWindowCoordinator(
-            config: sink.config,
-            accounts: accounts,
-            historicalModels: ["gpt-5.5"]
-        )
-        var closeCount = 0
-
-        coordinator.update(\.usageDisplayMode, to: .remaining, field: .usageDisplayMode)
-        coordinator.cancelAndClose {
-            closeCount += 1
-        }
-
-        XCTAssertEqual(closeCount, 1)
-        XCTAssertTrue(sink.appliedRequests.isEmpty)
-        XCTAssertEqual(coordinator.draft.usageDisplayMode, .used)
-    }
-
-    func testSaveAndCloseKeepsWindowOpenWhenSaveFails() {
-        let accounts = [
-            self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
-            self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
-        ]
-        let coordinator = SettingsWindowCoordinator(
-            config: self.makeConfig(),
-            accounts: accounts,
-            historicalModels: ["gpt-5.5"]
-        )
-        let sink = FailingSettingsSaveSink()
-        var closeCount = 0
-
-        coordinator.update(\.usageDisplayMode, to: .remaining, field: .usageDisplayMode)
-        coordinator.saveAndClose(using: sink) {
-            closeCount += 1
-        }
-
-        XCTAssertEqual(closeCount, 0)
-        XCTAssertEqual(coordinator.validationMessage, "save failed")
-    }
-
     func testReconcileExternalStateRefreshesUntouchedFieldsAndPreservesEditedFields() {
         let initialAccounts = [
             self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
@@ -610,7 +475,7 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.orderedAccounts.map(\.id), ["acct_gamma", "acct_alpha"])
     }
 
-    func testRecordsPageNavigationDoesNotDirtySettings() {
+    func testDiagnosticsPageNavigationDoesNotDirtySettings() {
         let accounts = [
             self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
             self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
@@ -622,7 +487,7 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
             historicalModels: ["gpt-5.5"]
         )
 
-        coordinator.selectedPage = .records
+        coordinator.selectedPage = .diagnostics
 
         XCTAssertFalse(coordinator.hasChanges)
         XCTAssertEqual(coordinator.makeSaveRequests(), SettingsSaveRequests())
@@ -636,7 +501,7 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         )
     }
 
-    func testSavingFromRecordsPageDoesNotEmitAdditionalSettingsRequests() throws {
+    func testSavingFromDiagnosticsPageDoesNotEmitAdditionalSettingsRequests() throws {
         let accounts = [
             self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),
             self.makeAccount(email: "beta@example.com", accountId: "acct_beta"),
@@ -648,7 +513,7 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
             historicalModels: ["gpt-5.5"]
         )
 
-        coordinator.selectedPage = .records
+        coordinator.selectedPage = .diagnostics
 
         let requests = try coordinator.save(using: sink)
 
@@ -678,22 +543,22 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
             config: self.makeConfig(),
             accounts: [],
             historicalModels: ["gpt-5.5"],
-            selectedPage: .records
+            selectedPage: .diagnostics
         )
 
         let selection = SettingsSidebarSelectionAdapter.binding(for: coordinator)
         selection.wrappedValue = nil
 
-        XCTAssertEqual(coordinator.selectedPage, .records)
-        XCTAssertEqual(selection.wrappedValue, .records)
+        XCTAssertEqual(coordinator.selectedPage, .diagnostics)
+        XCTAssertEqual(selection.wrappedValue, .diagnostics)
     }
 
-    func testRecordsToUsageNavigationKeepsSelectionBackedDetail() {
+    func testDiagnosticsToUsageNavigationKeepsSelectionBackedDetail() {
         let coordinator = SettingsWindowCoordinator(
             config: self.makeConfig(),
             accounts: [],
             historicalModels: ["gpt-5.5"],
-            selectedPage: .records
+            selectedPage: .diagnostics
         )
 
         SettingsSidebarSelectionAdapter.apply(.usage, to: coordinator)

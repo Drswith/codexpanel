@@ -41,7 +41,6 @@ final class CodexPanelProviderWireAPITests: XCTestCase {
         XCTAssertEqual(decoded.presetID, "deepseek")
         XCTAssertTrue(decoded.usesChatCompletionsGateway)
         let selection = try XCTUnwrap(decoded.chatCompletionsServiceableSelection)
-        XCTAssertEqual(selection.modelID, "deepseek-chat")
         XCTAssertEqual(selection.baseURL, "https://api.deepseek.com/v1")
     }
 

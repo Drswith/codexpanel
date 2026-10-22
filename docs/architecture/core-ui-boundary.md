@@ -29,7 +29,7 @@ SwiftUI / AppKit -> UI Adapter -> CodexPanelCore
 
 1. `codexPanel/UI/Adapters/CodexSyncService.swift` 从 UI 模型选择激活 provider 和账号。
 2. Adapter 生成 `CodexConfigurationSyncRequest`，并注入当前 runtime profile 的 gateway 地址与 `CodexPaths`。
-3. `CodexPanelCore` 校验契约版本和凭据，渲染 `auth.json` 与 `config.toml`。
+3. `CodexPanelCore` 校验契约版本和凭据，渲染 `auth.json`，并只更新 `config.toml` 中的认证与路由字段。模型、审核模型、推理强度、服务档位和模型目录由 Codex 管理，保留原值及缺省状态；profile 中的模型配置也保留。
 4. Core 同步用例统一执行备份、安全写入和失败回滚。
 5. App 继续通过现有 `CodexSynchronizing` 窄接口调用，因此 `TokenStore` 与 OAuth 账号流程无需知道 Core 的实现细节。
 
@@ -37,7 +37,7 @@ SwiftUI / AppKit -> UI Adapter -> CodexPanelCore
 
 ## 契约约束
 
-- `CodexConfigurationSyncRequest.schemaVersion` 当前为 `1`。新增或改变字段语义时必须显式演进版本并保留迁移策略。
+- `CodexConfigurationSyncRequest.schemaVersion` 当前为 `2`。v2 移除了全局模型参数和 provider 模型 ID，仅传递认证、路由与网关地址；旧版 v1 请求会被明确拒绝。当前只有进程内调用，App 与 Core 同步升级。
 - `CodexConfigurationSyncError` 的 raw value 是稳定错误码；UI 负责本地化呈现，调用方不得依赖自由文本判断错误。
 - 请求包含 token/API key，只允许在受控的进程内边界中传递。不得打印、埋点、写入诊断包或把完整请求持久化。
 - Core 只写入 adapter 明确提供的路径。Debug App 仍通过 `CodexPaths` 使用开发态隔离 home，不得绕过 `CODEXPANEL_HOME` / runtime profile。
@@ -68,6 +68,6 @@ GitHub Actions 的 `core (Linux)` job 使用官方 Swift Linux 镜像执行同�
 ## 非目标
 
 - 本阶段不引入 Rust、Cargo、IPC 或 sidecar 生命周期管理。
-- 不改变现有产品行为、配置格式和 Debug/Release home 规则。
+- 保留 Debug/Release home 隔离规则；模型相关配置的控制权属于 Codex。
 - 不把 AppKit/SwiftUI 界面代码迁入 Core。
 - 不宣称 issue #13 已完成；本变更只是其第一条可运行前置切片。

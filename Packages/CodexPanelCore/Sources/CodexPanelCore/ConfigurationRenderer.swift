@@ -13,31 +13,15 @@ public struct CodexConfigurationRenderer: Sendable {
             throw CodexConfigurationSyncError.unsupportedSchemaVersion
         }
 
-        let effectiveModel = try self.effectiveModel(for: request)
         let authJSON = try self.renderAuthJSON(request: request, now: now)
         let configTOML = self.renderConfigTOML(
             request: request,
-            existingText: existingConfigTOML,
-            effectiveModel: effectiveModel
+            existingText: existingConfigTOML
         )
         return CodexRenderedConfiguration(
             authJSON: authJSON,
             configTOML: Data(configTOML.utf8)
         )
-    }
-
-    private func effectiveModel(for request: CodexConfigurationSyncRequest) throws -> String {
-        switch request.provider.kind {
-        case .openRouter:
-            guard let modelID = self.normalized(request.provider.modelID) else {
-                throw CodexConfigurationSyncError.missingOpenRouterModel
-            }
-            return modelID
-        case .openAICompatible:
-            return self.normalized(request.provider.modelID) ?? request.global.defaultModel
-        case .openAIOAuth:
-            return request.global.defaultModel
-        }
     }
 
     private func renderAuthJSON(
@@ -93,42 +77,12 @@ public struct CodexConfigurationRenderer: Sendable {
 
     private func renderConfigTOML(
         request: CodexConfigurationSyncRequest,
-        existingText: String,
-        effectiveModel: String
+        existingText: String
     ) -> String {
         var text = existingText
         text = self.upsertSetting(text, key: "model_provider", value: "\"openai\"")
-        text = self.upsertSetting(text, key: "model", value: self.quote(effectiveModel))
-        text = self.upsertSetting(
-            text,
-            key: "review_model",
-            value: self.quote(
-                request.provider.kind == .openRouter
-                    ? effectiveModel
-                    : request.global.reviewModel
-            )
-        )
-        text = self.upsertSetting(
-            text,
-            key: "model_reasoning_effort",
-            value: self.quote(request.global.reasoningEffort)
-        )
-
-        if request.provider.kind == .openAIOAuth,
-           let serviceTier = request.global.serviceTier,
-           serviceTier.isEmpty == false {
-            text = self.upsertSetting(
-                text,
-                key: "service_tier",
-                value: self.quote(serviceTier)
-            )
-        } else {
-            text = self.removeSetting(text, key: "service_tier")
-        }
-
         text = self.removeSetting(text, key: "oss_provider")
         text = self.removeSetting(text, key: "openai_base_url")
-        text = self.removeSetting(text, key: "model_catalog_json")
         text = self.removeSetting(text, key: "preferred_auth_method")
         text = self.removeBlock(text, key: "OpenAI")
         text = self.removeBlock(text, key: "openai")
@@ -158,14 +112,7 @@ public struct CodexConfigurationRenderer: Sendable {
             text = self.upsertSetting(text, key: "openai_base_url", value: self.quote(baseURL))
         }
 
-        return text.replacingOccurrences(of: "\n\n\n", with: "\n\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines) + "\n"
-    }
-
-    private func normalized(_ value: String?) -> String? {
-        guard let value else { return nil }
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+        return text.hasSuffix("\n") ? text : text + "\n"
     }
 
     private func quote(_ value: String) -> String {

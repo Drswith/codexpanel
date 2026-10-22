@@ -53,7 +53,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         XCTAssertEqual(try Data(contentsOf: CodexPaths.configTomlURL), originalToml)
     }
 
-    func testSynchronizePreservesChatGPTAuthAndWritesConfiguredServiceTierWhenAggregateModeIsEnabled() throws {
+    func testSynchronizePreservesChatGPTAuthAndExistingServiceTierWhenAggregateModeIsEnabled() throws {
         try CodexPaths.ensureDirectories()
         try CodexPaths.writeSecureFile(
             Data(
@@ -103,7 +103,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         XCTAssertFalse(tomlText.contains("preferred_auth_method"))
     }
 
-    func testSynchronizeRemovesLegacyFlexServiceTierForStandardRouting() throws {
+    func testSynchronizePreservesCodexModelAndFlexServiceTierForDirectRouting() throws {
         try CodexPaths.ensureDirectories()
         try CodexPaths.writeSecureFile(
             Data(
@@ -119,48 +119,13 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         try CodexSyncService().synchronize(config: config)
 
         let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
-        XCTAssertFalse(tomlText.contains("service_tier"), tomlText)
-        XCTAssertFalse(tomlText.contains("flex"), tomlText)
-        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.6-sol""#))
+        XCTAssertTrue(tomlText.contains(#"service_tier = "flex""#), tomlText)
+        XCTAssertFalse(tomlText.contains(#"service_tier = "standard""#), tomlText)
+        XCTAssertTrue(tomlText.contains(#"model = "gpt-5.5-mini""#))
     }
 
-    func testSynchronizePreservesConfiguredServiceTierWhenCatalogChanges() throws {
-        try CodexPaths.ensureDirectories()
-        try CodexPaths.writeSecureFile(Data(#"service_tier = "fast""#.utf8), to: CodexPaths.configTomlURL)
-        try CodexServiceTierCatalogTests.writeFixture(models: [
-            CodexServiceTierCatalogTests.model("gpt-5.6-sol", tiers: []),
-            CodexServiceTierCatalogTests.model("gpt-6-astra", tiers: [("priority", "Fast"), ("ultrafast", "Ultrafast")]),
-        ])
 
-        try CodexSyncService().synchronize(config: Self.oauthConfig(model: "gpt-5.6-sol", serviceTier: "fast"))
 
-        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
-        XCTAssertTrue(tomlText.contains(#"service_tier = "fast""#), tomlText)
-    }
-
-    func testSynchronizeWritesCatalogAdvertisedTierEvenWhenNotBuiltIn() throws {
-        try CodexPaths.ensureDirectories()
-        try CodexServiceTierCatalogTests.writeFixture(models: [
-            CodexServiceTierCatalogTests.model("gpt-6-astra", tiers: [("priority", "Fast"), ("ultrafast", "Ultrafast")]),
-        ])
-
-        try CodexSyncService().synchronize(config: Self.oauthConfig(model: "gpt-6-astra", serviceTier: "ultrafast"))
-
-        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
-        XCTAssertTrue(tomlText.contains(#"service_tier = "ultrafast""#))
-    }
-
-    func testSynchronizeWritesDefaultSentinelWhenCatalogDeclaresDefaultTier() throws {
-        try CodexPaths.ensureDirectories()
-        try CodexServiceTierCatalogTests.writeFixture(models: [
-            CodexServiceTierCatalogTests.model("gpt-6-astra", tiers: [("priority", "Fast")], defaultTier: "priority"),
-        ])
-
-        try CodexSyncService().synchronize(config: Self.oauthConfig(model: "gpt-6-astra", serviceTier: "standard"))
-
-        let tomlText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
-        XCTAssertTrue(tomlText.contains(#"service_tier = "default""#))
-    }
 
     func testSynchronizeWritesOAuthLifecycleMetadataToAuthJSON() throws {
         let tokenLastRefreshAt = Date(timeIntervalSince1970: 1_790_000_000)
@@ -203,7 +168,7 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
         XCTAssertEqual(tokens["account_id"] as? String, "acct_sync_metadata")
     }
 
-    func testSynchronizeWritesOpenRouterGatewayConfigAndProviderModel() throws {
+    func testSynchronizeWritesOpenRouterGatewayWithoutInjectingModel() throws {
         let account = CodexPanelProviderAccount(
             id: "acct_openrouter",
             kind: .apiKey,
@@ -236,11 +201,11 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
 
         XCTAssertEqual(authObject["OPENAI_API_KEY"] as? String, OpenRouterGatewayConfiguration.apiKey)
         XCTAssertTrue(tomlText.contains(#"openai_base_url = "http://localhost:1457/v1""#))
-        XCTAssertTrue(tomlText.contains(#"model = "anthropic/claude-3.7-sonnet""#))
-        XCTAssertTrue(tomlText.contains(#"review_model = "anthropic/claude-3.7-sonnet""#))
+        XCTAssertFalse(tomlText.contains("model ="))
+        XCTAssertFalse(tomlText.contains("review_model ="))
     }
 
-    func testSynchronizeWritesChatCompletionsGatewayConfigAndProviderModel() throws {
+    func testSynchronizeWritesChatCompletionsGatewayWithoutInjectingModel() throws {
         let account = CodexPanelProviderAccount(
             id: "acct_chat",
             kind: .apiKey,
@@ -272,8 +237,8 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
 
         XCTAssertEqual(authObject["OPENAI_API_KEY"] as? String, "sk-chat-primary")
         XCTAssertTrue(tomlText.contains(#"openai_base_url = "http://localhost:1458/v1""#))
-        XCTAssertTrue(tomlText.contains(#"model = "deepseek-chat""#))
-        XCTAssertTrue(tomlText.contains(#"review_model = "gpt-5.5""#))
+        XCTAssertFalse(tomlText.contains("model ="))
+        XCTAssertFalse(tomlText.contains("review_model ="))
     }
 
     func testSynchronizeWritesDebugGatewayBaseURLsWhenUsingDebugNetworkProfile() throws {
