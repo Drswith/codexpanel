@@ -52,7 +52,7 @@ struct SettingsWindowView: View {
             self.coordinator.reconcileExternalState(
                 config: config,
                 accounts: self.store.accounts,
-                historicalModels: self.store.historicalModels
+                historicalModels: self.store.localCostSummary.historicalModels ?? []
             )
         }
         .onReceive(self.store.$accounts.dropFirst()) { accounts in
@@ -62,11 +62,11 @@ struct SettingsWindowView: View {
                 historicalModels: self.store.historicalModels
             )
         }
-        .onReceive(self.store.$historicalModels.dropFirst()) { historicalModels in
+        .onReceive(self.store.$localCostSummary.dropFirst()) { summary in
             self.coordinator.reconcileExternalState(
                 config: self.store.config,
                 accounts: self.store.accounts,
-                historicalModels: historicalModels
+                historicalModels: summary.historicalModels ?? []
             )
         }
     }
@@ -113,7 +113,7 @@ struct SettingsWindowView: View {
                         coordinator: self.coordinator
                     )
                 case .usage:
-                    SettingsUsagePage(coordinator: self.coordinator)
+                    SettingsUsagePage(store: self.store, coordinator: self.coordinator)
                 case .diagnostics:
                     SettingsDiagnosticsPage()
                 case .about:
@@ -198,10 +198,13 @@ private struct SettingsAccountsPage: View {
 }
 
 private struct SettingsUsagePage: View {
+    @ObservedObject var store: TokenStore
     @ObservedObject var coordinator: SettingsWindowCoordinator
 
     var body: some View {
         Form {
+            SettingsLocalUsageEngineSection(store: self.store)
+
             SettingsUsageDisplayModeSection(
                 usageDisplayMode: Binding(
                     get: { self.coordinator.draft.usageDisplayMode },
@@ -224,7 +227,141 @@ private struct SettingsUsagePage: View {
                 )
             )
 
-            SettingsModelPricingSection(coordinator: self.coordinator)
+            if self.store.localUsageEnabled {
+                SettingsModelPricingSection(coordinator: self.coordinator)
+            }
+        }
+    }
+}
+
+private struct SettingsLocalUsageEngineSection: View {
+    @ObservedObject var store: TokenStore
+    @State private var hasRequestedDownload = false
+
+    private var isBusy: Bool {
+        self.store.isCheckingTokscaleEngines || self.store.isInstallingTokscaleEngine
+    }
+
+    private var hasCompatibleManagedEngine: Bool {
+        self.store.tokscaleEngines.contains { $0.source == .managed && $0.isCompatible }
+    }
+
+    var body: some View {
+        Section {
+            Toggle(
+                L.localUsageEnabledTitle,
+                isOn: Binding(
+                    get: { self.store.localUsageEnabled },
+                    set: { self.store.setLocalUsageEnabled($0) }
+                )
+            )
+
+            if !self.store.localUsageEnabled {
+                Text(L.localUsageDisabledHint)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let engine = self.store.activeTokscaleEngine {
+                LabeledContent(
+                    self.store.localUsageEnabled ? L.localUsageEngineCurrentVersion : L.localUsageEngineSelectedVersion
+                ) {
+                    Text("tokscale \(engine.version) · \(self.sourceTitle(engine))")
+                        .textSelection(.enabled)
+                        .help(engine.executableURL.path)
+                }
+            }
+
+            if self.store.isCheckingTokscaleEngines {
+                self.progressRow(L.localUsageEngineChecking)
+            }
+            if self.store.isInstallingTokscaleEngine {
+                self.progressRow(L.localUsageEngineDownloading)
+            }
+
+            if self.store.tokscaleEngines.isEmpty && !self.isBusy && self.store.tokscaleEngineError == nil {
+                Text(self.store.hasCheckedTokscaleEngines ? L.localUsageEngineNotFound : L.localUsageEngineUnchecked)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            ForEach(self.store.tokscaleEngines, id: \.id) { engine in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("tokscale \(engine.version)")
+                                .font(.callout.weight(.medium))
+                            Text(self.sourceTitle(engine))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .help(engine.executableURL.path)
+                        Spacer()
+                        if self.store.selectedTokscaleEngineID == engine.id {
+                            Label(
+                                self.store.localUsageEnabled ? L.localUsageEngineInUse : L.localUsageEngineSelected,
+                                systemImage: "checkmark.circle.fill"
+                            )
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        } else {
+                            Button(L.localUsageEngineUseVersion) {
+                                self.store.selectTokscaleEngine(id: engine.id)
+                            }
+                            .disabled(!self.store.localUsageEnabled || self.isBusy || !engine.isCompatible)
+                        }
+                    }
+                    if !engine.isCompatible {
+                        Text(L.localUsageEngineIncompatible)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+            }
+
+            if let error = self.store.tokscaleEngineError {
+                Text(error)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+            }
+
+            HStack {
+                Button(L.localUsageEngineCheck) {
+                    self.store.checkTokscaleEngines()
+                }
+                .disabled(self.isBusy)
+
+                if !self.hasCompatibleManagedEngine {
+                    Button(
+                        self.hasRequestedDownload && self.store.tokscaleEngineError != nil
+                            ? L.localUsageEngineRetryDownload
+                            : L.localUsageEngineDownload
+                    ) {
+                        self.hasRequestedDownload = true
+                        self.store.installManagedTokscaleEngine()
+                    }
+                    .disabled(!self.store.localUsageEnabled || self.isBusy)
+                }
+            }
+        } header: {
+            Text(L.localUsageEngineTitle)
+        } footer: {
+            Text(L.localUsageEngineHint)
+        }
+    }
+
+    private func sourceTitle(_ engine: TokscaleEngineDescriptor) -> String {
+        engine.source == .managed ? L.localUsageEngineManaged : L.localUsageEngineInstalled
+    }
+
+    private func progressRow(_ title: String) -> some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(title)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -583,7 +720,7 @@ private struct SettingsModelPricingSection: View {
                         SettingsModelPricingRow(
                             model: model,
                             pricing: Binding(
-                                get: { self.coordinator.draft.modelPricing[model] ?? .zero },
+                                get: { self.coordinator.draft.modelPricing[model] },
                                 set: { self.coordinator.updateModelPricing(for: model, pricing: $0) }
                             )
                         )
@@ -600,58 +737,111 @@ private struct SettingsModelPricingSection: View {
 
 private struct SettingsModelPricingRow: View {
     let model: String
-    @Binding var pricing: CodexPanelModelPricing
+    @Binding var pricing: CodexPanelModelPricing?
+    @State private var isEditingAutomatic = false
+    @State private var pendingPricing = CodexPanelModelPricing.zero
 
     private let fieldWidth: CGFloat = 120
     private let tokensPerUnit: Double = 1_000_000
     private let numberFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...6))
 
+    private var editingPricing: CodexPanelModelPricing {
+        get { self.pricing ?? self.pendingPricing }
+        nonmutating set {
+            if self.pricing != nil {
+                self.pricing = newValue
+            } else {
+                self.pendingPricing = newValue
+            }
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(self.model)
-                .font(.system(size: 11, weight: .medium))
-                .textSelection(.enabled)
+            HStack {
+                Text(self.model)
+                    .font(.system(size: 11, weight: .medium))
+                    .textSelection(.enabled)
+                Spacer()
+                Text(self.pricing == nil ? L.modelPricingAutomaticTitle : L.modelPricingCustomTitle)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                if self.pricing != nil {
+                    Button(L.modelPricingRestoreAutomatic) {
+                        self.pricing = nil
+                        self.isEditingAutomatic = false
+                    }
+                    .buttonStyle(.borderless)
+                } else if !self.isEditingAutomatic {
+                    Button(L.modelPricingCustomize) {
+                        self.pendingPricing = .zero
+                        self.isEditingAutomatic = true
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
 
-            HStack(alignment: .top, spacing: 10) {
-                self.priceField(
-                    title: L.modelPricingInputTitle,
-                    binding: Binding(
-                        get: { self.pricing.inputUSDPerToken * self.tokensPerUnit },
-                        set: {
-                            self.pricing = CodexPanelModelPricing(
-                                inputUSDPerToken: $0 / self.tokensPerUnit,
-                                cachedInputUSDPerToken: self.pricing.cachedInputUSDPerToken,
-                                outputUSDPerToken: self.pricing.outputUSDPerToken
-                            )
-                        }
+            if self.pricing != nil || self.isEditingAutomatic {
+                HStack(alignment: .top, spacing: 10) {
+                    self.priceField(
+                        title: L.modelPricingInputTitle,
+                        binding: Binding(
+                            get: { self.editingPricing.inputUSDPerToken * self.tokensPerUnit },
+                            set: {
+                                self.editingPricing = CodexPanelModelPricing(
+                                    inputUSDPerToken: $0 / self.tokensPerUnit,
+                                    cachedInputUSDPerToken: self.editingPricing.cachedInputUSDPerToken,
+                                    outputUSDPerToken: self.editingPricing.outputUSDPerToken
+                                )
+                            }
+                        )
                     )
-                )
-                self.priceField(
-                    title: L.modelPricingCachedInputTitle,
-                    binding: Binding(
-                        get: { self.pricing.cachedInputUSDPerToken * self.tokensPerUnit },
-                        set: {
-                            self.pricing = CodexPanelModelPricing(
-                                inputUSDPerToken: self.pricing.inputUSDPerToken,
-                                cachedInputUSDPerToken: $0 / self.tokensPerUnit,
-                                outputUSDPerToken: self.pricing.outputUSDPerToken
-                            )
-                        }
+                    self.priceField(
+                        title: L.modelPricingCachedInputTitle,
+                        binding: Binding(
+                            get: { self.editingPricing.cachedInputUSDPerToken * self.tokensPerUnit },
+                            set: {
+                                self.editingPricing = CodexPanelModelPricing(
+                                    inputUSDPerToken: self.editingPricing.inputUSDPerToken,
+                                    cachedInputUSDPerToken: $0 / self.tokensPerUnit,
+                                    outputUSDPerToken: self.editingPricing.outputUSDPerToken
+                                )
+                            }
+                        )
                     )
-                )
-                self.priceField(
-                    title: L.modelPricingOutputTitle,
-                    binding: Binding(
-                        get: { self.pricing.outputUSDPerToken * self.tokensPerUnit },
-                        set: {
-                            self.pricing = CodexPanelModelPricing(
-                                inputUSDPerToken: self.pricing.inputUSDPerToken,
-                                cachedInputUSDPerToken: self.pricing.cachedInputUSDPerToken,
-                                outputUSDPerToken: $0 / self.tokensPerUnit
-                            )
-                        }
+                    self.priceField(
+                        title: L.modelPricingOutputTitle,
+                        binding: Binding(
+                            get: { self.editingPricing.outputUSDPerToken * self.tokensPerUnit },
+                            set: {
+                                self.editingPricing = CodexPanelModelPricing(
+                                    inputUSDPerToken: self.editingPricing.inputUSDPerToken,
+                                    cachedInputUSDPerToken: self.editingPricing.cachedInputUSDPerToken,
+                                    outputUSDPerToken: $0 / self.tokensPerUnit
+                                )
+                            }
+                        )
                     )
-                )
+                }
+                if self.isEditingAutomatic && self.pricing == nil {
+                    Text(L.modelPricingCustomDraftHint)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        Button(L.modelPricingApplyCustom) {
+                            self.pricing = self.pendingPricing
+                            self.isEditingAutomatic = false
+                        }
+                        Button(L.modelPricingCancelCustom) {
+                            self.isEditingAutomatic = false
+                        }
+                    }
+                    .controlSize(.small)
+                }
+            } else {
+                Text(L.modelPricingAutomaticHint)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
         }
     }

@@ -66,18 +66,18 @@
 
 设置页包含账户设置、用量设置、诊断和关于。菜单栏展示成本、账号和 provider；模型、推理强度与服务档位请在 Codex 中配置。
 
-本地 usage / 成本统计来自对下面目录的扫描：
+本地 usage / 成本统计保留原生 Swift 界面，通过 **tokscale** 扫描以下目录：
 
 - `~/.codex/sessions`
 - `~/.codex/archived_sessions`
 
-因此你能直接在本地看到 token 用量和成本估算，而不需要手动翻 session 文件。
+在设置的用量页启用统计后，默认优先检查兼容的系统已安装引擎，再使用 App 管理目录中的已有副本。也可选择仅供 Codex Panel 使用的专用副本，手动下载固定版本 **4.20.0** 到当前 profile 的 `.codexpanel/engines/tokscale/`，选择会被记住。App 不捆绑引擎、不自动下载、不修改 `PATH`，也不进行全局安装。专用原生引擎无需 Node、Bun 或 Rust；系统已有安装的依赖由其安装方式决定。
 
-当前 token 统计只认本地 session，口径固定为：
+支持普通与压缩会话日志、会话内模型切换、Priority 计价和 fork 历史去重。统计可在没有账号时独立启用；关闭后隐藏菜单成本并停止扫描及价格更新，已有摘要保留。
 
-- `input + cached_input + output`
+token 总量采用 tokscale 的不重复计数口径，缓存输入、推理输出各计一次。日期按请求开始时间归属到系统时区；跨午夜时可能与旧版本不同。未知模型价格会明确提示不完整，扫描失败则保留上次结果。
 
-不会额外拉取或聚合任何远端 usage。
+只统计本地 session，不拉取远端 usage。价格表在后台独立更新，离线时使用本地价格快照。实现、迁移及构建依赖见 [用量统计后端说明](docs/tokscale-usage.md)。
 
 另外，当前界面还补上了几类更贴近真实日常切换的能力：
 
@@ -183,6 +183,8 @@ open codexpanel.xcodeproj
 
 1. 编辑 `Configs/Signing.local.xcconfig`，填入自己的 `CODEXPANEL_DEVELOPMENT_TEAM`
 2. 构建并运行 `codexpanel` target
+
+构建不下载或打包 tokscale，只复制下载清单、许可证和离线价格种子。需要运行真实引擎的隔离集成测试时，可显式运行 `python3 scripts/prepare_tokscale.py` 预取到 `.build/tokscale`，再设置 `CODEXPANEL_TEST_TOKSCALE_PATH` 指向该文件；此可选工具需要 Python 3 和 curl，不参与 App 构建。
 
 Debug 构建默认使用开发态隔离 profile，不会直接写真实 `~/.codex` / `~/.codexpanel`：
 

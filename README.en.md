@@ -64,12 +64,14 @@ That is the main value of the app: switching account or provider does not mean s
 
 Settings includes Accounts, Usage, Diagnostics, and About. Configure the model, reasoning effort, and service tier in Codex.
 
-Local usage and cost estimates are derived from:
+Local usage and cost estimates keep the native Swift UI and use **tokscale** to scan:
 
 - `~/.codex/sessions`
 - `~/.codex/archived_sessions`
 
-So you can inspect token usage and estimated cost directly from local session history.
+Enable statistics in Settings → Usage. The default source prefers a compatible existing system installation, then an existing app-managed copy. You can also select a dedicated copy and manually download pinned version **4.20.0** into the current profile’s `.codexpanel/engines/tokscale/` directory, exclusively for Codex Panel. The app remembers this preference. It bundles no engine, never downloads one automatically, and does not modify `PATH` or install globally. The dedicated native engine needs no Node, Bun, or Rust runtime; external installations retain their own dependencies.
+
+Statistics work without an account. Disabling them hides menu costs and stops scans and price updates while preserving the last summary. The engine supports compressed logs, model changes within a session, Priority pricing, and fork replay deduplication. Dates follow request start times in the system time zone. Missing prices are marked as incomplete, and scan failures preserve the last result. Public model prices update separately in the background; session usage remains local. See [the backend and migration notes](docs/tokscale-usage.md).
 
 The current UI also covers a few newer workflow details that the older README did not show clearly:
 
@@ -172,6 +174,8 @@ Then:
 
 1. Select your signing team in Xcode
 2. Build and run the `codexpanel` target
+
+The build copies only the download manifest, licenses, and offline pricing seed; it does not download or bundle tokscale. For optional real-engine integration tests, run `python3 scripts/prepare_tokscale.py` and set `CODEXPANEL_TEST_TOKSCALE_PATH` to the cached binary. Python 3 and curl are required only for this development tool.
 
 Architecture and development references:
 

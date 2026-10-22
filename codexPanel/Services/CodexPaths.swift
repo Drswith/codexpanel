@@ -4,11 +4,11 @@ enum CodexPaths {
     private static let stateSQLiteDefaultVersion = 5
     private static let logsSQLiteDefaultVersion = 2
 
-    static var runtimeProfile: CodexPanelRuntimeProfile {
+    nonisolated static var runtimeProfile: CodexPanelRuntimeProfile {
         CodexPanelRuntimeProfile.current
     }
 
-    static var realHome: URL {
+    nonisolated static var realHome: URL {
         self.runtimeProfile.homeRoot
     }
 
@@ -16,7 +16,7 @@ enum CodexPaths {
         self.realHome.appendingPathComponent(".codex", isDirectory: true)
     }
 
-    static var codexBarRoot: URL {
+    nonisolated static var codexBarRoot: URL {
         self.realHome.appendingPathComponent(".codexpanel", isDirectory: true)
     }
 

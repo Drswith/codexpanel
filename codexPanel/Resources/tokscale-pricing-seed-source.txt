@@ -1,0 +1,8 @@
+离线首次扫描价格种子
+
+来源：https://github.com/BerriAI/litellm/blob/f2118fc7670ba3fa736d9b8f4deef9077a45a720/model_prices_and_context_window.json
+固定 commit：f2118fc7670ba3fa736d9b8f4deef9077a45a720
+原文件 blob SHA：cb9bfa6ffe406ba4a36e86ddb3c0029d9187e2d8
+获取日期：2026-10-22
+筛选：litellm_provider 为 openai，模型 ID 匹配 GPT-4/5/6 或 o1/o3/o4；仅保留 tokscale 4.20.0 ModelPricing 支持的数值费率字段。
+费率值未修改。timestamp=0 表示过期快照；仅在独立价格缓存不存在时初始化，之后由官方 tokscale pricing 更新。缺失型号保持价格未知。

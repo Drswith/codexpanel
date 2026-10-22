@@ -872,6 +872,7 @@ struct CodexPanelConfig: Codable {
     var global: CodexPanelGlobalSettings
     var active: CodexPanelActiveSelection
     var desktop: CodexPanelDesktopSettings
+    var localUsage: CodexPanelLocalUsageSettings
     var modelPricing: [String: CodexPanelModelPricing]
     var openAI: CodexPanelOpenAISettings
     var providers: [CodexPanelProvider]
@@ -881,6 +882,7 @@ struct CodexPanelConfig: Codable {
         global: CodexPanelGlobalSettings = CodexPanelGlobalSettings(),
         active: CodexPanelActiveSelection = CodexPanelActiveSelection(),
         desktop: CodexPanelDesktopSettings = CodexPanelDesktopSettings(),
+        localUsage: CodexPanelLocalUsageSettings = CodexPanelLocalUsageSettings(),
         modelPricing: [String: CodexPanelModelPricing] = [:],
         openAI: CodexPanelOpenAISettings = CodexPanelOpenAISettings(),
         providers: [CodexPanelProvider] = []
@@ -889,6 +891,7 @@ struct CodexPanelConfig: Codable {
         self.global = global
         self.active = active
         self.desktop = desktop
+        self.localUsage = localUsage
         self.modelPricing = modelPricing
         self.openAI = openAI
         self.providers = providers
@@ -899,6 +902,7 @@ struct CodexPanelConfig: Codable {
         case global
         case active
         case desktop
+        case localUsage
         case modelPricing
         case openAI
         case providers
@@ -910,6 +914,7 @@ struct CodexPanelConfig: Codable {
         self.global = try container.decodeIfPresent(CodexPanelGlobalSettings.self, forKey: .global) ?? CodexPanelGlobalSettings()
         self.active = try container.decodeIfPresent(CodexPanelActiveSelection.self, forKey: .active) ?? CodexPanelActiveSelection()
         self.desktop = try container.decodeIfPresent(CodexPanelDesktopSettings.self, forKey: .desktop) ?? CodexPanelDesktopSettings()
+        self.localUsage = try container.decodeIfPresent(CodexPanelLocalUsageSettings.self, forKey: .localUsage) ?? CodexPanelLocalUsageSettings()
         self.modelPricing = try container.decodeIfPresent([String: CodexPanelModelPricing].self, forKey: .modelPricing) ?? [:]
         self.openAI = try container.decodeIfPresent(CodexPanelOpenAISettings.self, forKey: .openAI) ?? CodexPanelOpenAISettings()
         self.providers = (try container.decodeIfPresent(

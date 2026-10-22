@@ -282,6 +282,35 @@ enum L {
     static var usedQuotaDisplay: String { zh ? "已用额度" : "Used Quota" }
     static var remainingShort: String { zh ? "剩余" : "Remaining" }
     static var usedShort: String { zh ? "已用" : "Used" }
+    static var localUsageEngineTitle: String { zh ? "本地用量统计" : "Local Usage Statistics" }
+    static var localUsageEnabledTitle: String { zh ? "启用本地用量统计" : "Enable Local Usage Statistics" }
+    static var localUsageEngineHint: String {
+        zh
+            ? "使用 tokscale 读取本地会话并估算费用。默认关闭；启用时优先检测已安装版本，也可下载保存在 Codex Panel 数据目录中的专用副本。账号额度功能始终可用。"
+            : "Use tokscale to read local sessions and estimate costs. Disabled by default. Enabling first checks installed versions; you can also download a dedicated copy stored in Codex Panel’s data directory. Account quota features remain available."
+    }
+    static var localUsageDisabledHint: String {
+        zh ? "已关闭本地用量扫描。" : "Local usage scanning is disabled."
+    }
+    static var localUsageEngineChecking: String { zh ? "正在检测已安装的 tokscale…" : "Checking installed tokscale versions…" }
+    static var localUsageEngineDownloading: String { zh ? "正在下载并准备 tokscale…" : "Downloading and preparing tokscale…" }
+    static var localUsageEngineUnchecked: String { zh ? "尚未检查 tokscale。" : "tokscale has not been checked yet." }
+    static var localUsageEngineNotFound: String {
+        zh ? "未找到可用的 tokscale。可下载 Codex Panel 专用副本。" : "No usable tokscale version was found. You can download a dedicated copy for Codex Panel."
+    }
+    static var localUsageEngineInstalled: String { zh ? "已安装" : "Installed" }
+    static var localUsageEngineManaged: String { zh ? "Codex Panel 专用副本" : "Dedicated Codex Panel Copy" }
+    static var localUsageEngineCurrentVersion: String { zh ? "当前版本" : "Current Version" }
+    static var localUsageEngineSelectedVersion: String { zh ? "已选版本" : "Selected Version" }
+    static var localUsageEngineInUse: String { zh ? "正在使用" : "In Use" }
+    static var localUsageEngineSelected: String { zh ? "已选择" : "Selected" }
+    static var localUsageEngineUseVersion: String { zh ? "使用此版本" : "Use This Version" }
+    static var localUsageEngineIncompatible: String {
+        zh ? "需要 tokscale 4.20 及以上的 4.x 版本。" : "Requires tokscale 4.x, version 4.20 or later."
+    }
+    static var localUsageEngineCheck: String { zh ? "检查已安装版本" : "Check Installed Versions" }
+    static var localUsageEngineDownload: String { zh ? "下载专用副本" : "Download Dedicated Copy" }
+    static var localUsageEngineRetryDownload: String { zh ? "重试下载" : "Retry Download" }
     static var quotaSortSettingsTitle: String { zh ? "用量排序参数" : "Quota Sort Parameters" }
     static var quotaSortSettingsHint: String {
         zh
@@ -291,9 +320,19 @@ enum L {
     static var modelPricingSectionTitle: String { zh ? "历史模型价格" : "Historical Model Pricing" }
     static var modelPricingSectionHint: String {
         zh
-            ? "单价按每 1M tokens 美元计，只用于本地 session 成本估算。token 统计始终来自本地 session，口径固定为 input + output（cached input 是 input 的子集，仅用于成本折扣）；未配置价格的模型默认按 0 处理。"
-            : "Prices are in USD per 1M tokens and only used for local session cost estimates. Token counts always come from local sessions using input + output (cached input is a subset of input and only affects cost discounts), and models without pricing default to 0."
+            ? "默认使用统计引擎自动更新的价格；缺少价格会标记为未知。自定义单价以美元 / 1M tokens 计，并覆盖对应模型的自动价格。恢复自动会移除该模型的自定义价格。"
+            : "Prices are updated automatically by the usage engine; missing prices are marked unknown. Custom prices are in USD per 1M tokens and override automatic pricing for that model. Restore Automatic removes the custom price."
     }
+    static var modelPricingAutomaticTitle: String { zh ? "自动价格" : "Automatic" }
+    static var modelPricingCustomTitle: String { zh ? "自定义价格" : "Custom" }
+    static var modelPricingRestoreAutomatic: String { zh ? "恢复自动" : "Restore Automatic" }
+    static var modelPricingCustomize: String { zh ? "自定义…" : "Customize…" }
+    static var modelPricingAutomaticHint: String { zh ? "由统计引擎更新价格。" : "Pricing is updated by the usage engine." }
+    static var modelPricingCustomDraftHint: String {
+        zh ? "填好三项单价后应用。0 表示该项不计费；应用前继续使用自动价格。" : "Enter all three prices, then apply. Zero makes that component free. Automatic pricing remains active until applied."
+    }
+    static var modelPricingApplyCustom: String { zh ? "应用自定义价格" : "Apply Custom Prices" }
+    static var modelPricingCancelCustom: String { zh ? "取消" : "Cancel" }
     static var modelPricingSectionEmpty: String {
         zh ? "还没有从本地 session 里提取到历史模型。" : "No historical models have been extracted from local sessions yet."
     }

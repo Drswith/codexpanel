@@ -1,17 +1,17 @@
 import Foundation
 
-enum CodexPanelRuntimeChannel: String, Equatable {
+nonisolated enum CodexPanelRuntimeChannel: String, Equatable {
     case debug
     case release
 }
 
-enum CodexPanelHomeSource: String, Equatable {
+nonisolated enum CodexPanelHomeSource: String, Equatable {
     case environmentOverride
     case debugDefault
     case realHome
 }
 
-struct CodexPanelRuntimeNetworkConfiguration: Equatable {
+nonisolated struct CodexPanelRuntimeNetworkConfiguration: Equatable {
     var host: String
     var oauthCallbackPort: UInt16
     var openAIAccountGatewayPort: UInt16
@@ -36,7 +36,7 @@ struct CodexPanelRuntimeNetworkConfiguration: Equatable {
     }
 }
 
-struct CodexPanelRuntimeProfile: Equatable {
+nonisolated struct CodexPanelRuntimeProfile: Equatable {
     static let homeOverrideEnvironmentKey = "CODEXPANEL_HOME"
     static let allowRealHomeEnvironmentKey = "CODEXPANEL_ALLOW_REAL_HOME"
 

@@ -34,10 +34,6 @@ struct SettingsWindowDraft: Equatable {
     var aggregateGatewayProxyURL: String?
 
     init(config: CodexPanelConfig, accounts: [TokenAccount], historicalModels: [String]) {
-        let normalizedHistoricalModels = Self.settingsHistoricalModels(
-            config: config,
-            historicalModels: historicalModels
-        )
         self.accountOrder = Self.normalizedAccountOrder(
             config.openAI.accountOrder,
             availableAccountIDs: accounts.map(\.accountId)
@@ -49,10 +45,8 @@ struct SettingsWindowDraft: Equatable {
         self.plusRelativeWeight = config.openAI.quotaSort.plusRelativeWeight
         self.proRelativeToPlusMultiplier = config.openAI.quotaSort.proRelativeToPlusMultiplier
         self.teamRelativeToPlusMultiplier = config.openAI.quotaSort.teamRelativeToPlusMultiplier
-        self.modelPricing = Self.effectiveModelPricing(
-            config: config,
-            historicalModels: normalizedHistoricalModels
-        )
+        // 只保存用户显式设置的价格；缺少条目表示由统计引擎自动定价。
+        self.modelPricing = config.modelPricing
         self.preferredCodexAppPath = config.desktop.preferredCodexAppPath
         self.aggregateGatewayProxyURL = config.openAI.aggregateGatewayProxyURL
     }
@@ -110,21 +104,6 @@ struct SettingsWindowDraft: Equatable {
         self.normalizedHistoricalModels(
             preferredHistoricalModels + fallbackHistoricalModels
         )
-    }
-
-    static func effectiveModelPricing(
-        config: CodexPanelConfig,
-        historicalModels: [String]
-    ) -> [String: CodexPanelModelPricing] {
-        Dictionary(uniqueKeysWithValues: historicalModels.map { model in
-            (
-                model,
-                LocalCostPricing.effectivePricing(
-                    for: model,
-                    customPricingByModel: config.modelPricing
-                )
-            )
-        })
     }
 
     static func settingsHistoricalModels(
@@ -235,6 +214,7 @@ final class SettingsWindowCoordinator: ObservableObject {
     private var accounts: [TokenAccount]
     private var baseline: SettingsWindowDraft
     private var dirtyFields: Set<SettingsDirtyField> = []
+    private var editedModelPricing: Set<String> = []
 
     init(
         config: CodexPanelConfig,
@@ -301,8 +281,13 @@ final class SettingsWindowCoordinator: ObservableObject {
         self.dirtyFields.insert(field)
     }
 
-    func updateModelPricing(for model: String, pricing: CodexPanelModelPricing) {
+    func updateModelPricing(for model: String, pricing: CodexPanelModelPricing?) {
         self.draft.modelPricing[model] = pricing
+        self.editedModelPricing.insert(model)
+        self.historicalModels = SettingsWindowDraft.mergedHistoricalModels(
+            preferredHistoricalModels: self.historicalModels,
+            fallbackHistoricalModels: [model]
+        )
         self.dirtyFields.insert(.modelPricing)
     }
 
@@ -327,6 +312,7 @@ final class SettingsWindowCoordinator: ObservableObject {
         try sink.applySettingsSaveRequests(requests)
         self.baseline = self.draft
         self.dirtyFields.removeAll()
+        self.editedModelPricing.removeAll()
         self.validationMessage = nil
         return requests
     }
@@ -465,43 +451,33 @@ final class SettingsWindowCoordinator: ObservableObject {
                 preferredHistoricalModels: self.historicalModels,
                 fallbackHistoricalModels: externalHistoricalModels
             )
-            var mergedPricing = Dictionary(
-                uniqueKeysWithValues: mergedHistoricalModels.map { model in
-                    (model, externalValue[model] ?? self.draft.modelPricing[model] ?? .zero)
-                }
-            )
-
-            for model in mergedHistoricalModels where self.historicalModels.contains(model) {
-                if let editedPricing = self.draft.modelPricing[model] {
-                    mergedPricing[model] = editedPricing
-                }
+            var mergedPricing = externalValue
+            for model in self.editedModelPricing {
+                // nil 是用户明确恢复自动，不能被外部同步的旧自定义价格覆盖。
+                mergedPricing[model] = self.draft.modelPricing[model]
             }
 
             self.historicalModels = mergedHistoricalModels
             self.draft.modelPricing = mergedPricing
         }
 
-        self.baseline.modelPricing = Dictionary(
-            uniqueKeysWithValues: self.historicalModels.map { model in
-                (model, externalValue[model] ?? .zero)
-            }
-        )
+        self.baseline.modelPricing = externalValue
     }
 
     private func makeModelPricingUpdate() -> ModelPricingSettingsUpdate {
         var upserts: [String: CodexPanelModelPricing] = [:]
         var removals: [String] = []
 
-        for model in self.historicalModels {
-            let draftPricing = self.draft.modelPricing[model] ?? .zero
-            let baselinePricing = self.baseline.modelPricing[model] ?? .zero
+        let models = Set(self.draft.modelPricing.keys).union(self.baseline.modelPricing.keys)
+        for model in models.sorted() {
+            let draftPricing = self.draft.modelPricing[model]
+            let baselinePricing = self.baseline.modelPricing[model]
             guard draftPricing != baselinePricing else { continue }
 
-            let defaultPricing = LocalCostPricing.defaultPricing(for: model) ?? .zero
-            if draftPricing == defaultPricing {
-                removals.append(model)
-            } else {
+            if let draftPricing {
                 upserts[model] = draftPricing
+            } else {
+                removals.append(model)
             }
         }
 
