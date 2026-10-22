@@ -3,13 +3,6 @@ import Foundation
 
 protocol CodexSynchronizing {
     func synchronize(config: CodexPanelConfig) throws
-    func synchronize(config: CodexPanelConfig, modelCatalog: CodexModelCatalog?) throws
-}
-
-extension CodexSynchronizing {
-    func synchronize(config: CodexPanelConfig, modelCatalog: CodexModelCatalog?) throws {
-        try self.synchronize(config: config)
-    }
 }
 
 typealias CodexSyncError = CodexConfigurationSyncError
@@ -18,7 +11,6 @@ typealias CodexSyncError = CodexConfigurationSyncError
 struct CodexSyncService: CodexSynchronizing {
     private let synchronizer: CodexConfigurationSynchronizer
     private let networkConfiguration: CodexPanelRuntimeNetworkConfiguration
-    private let loadServiceTierCatalog: () -> CodexServiceTierCatalog?
 
     init(
         networkConfiguration: CodexPanelRuntimeNetworkConfiguration = CodexPanelRuntimeProfile.current.network,
@@ -41,9 +33,6 @@ struct CodexSyncService: CodexSynchronizing {
         removeFileIfPresent: @escaping (URL) throws -> Void = { url in
             guard FileManager.default.fileExists(atPath: url.path) else { return }
             try FileManager.default.removeItem(at: url)
-        },
-        loadServiceTierCatalog: @escaping () -> CodexServiceTierCatalog? = {
-            CodexServiceTierCatalog.load()
         }
     ) {
         let paths = CodexConfigurationPaths(
@@ -66,18 +55,14 @@ struct CodexSyncService: CodexSynchronizing {
             fileSystem: fileSystem
         )
         self.networkConfiguration = networkConfiguration
-        self.loadServiceTierCatalog = loadServiceTierCatalog
     }
 
     func synchronize(config: CodexPanelConfig) throws {
-        try self.synchronizer.synchronize(self.makeRequest(config: config, modelCatalog: self.loadServiceTierCatalog()))
+        try self.synchronizer.synchronize(self.makeRequest(config: config))
     }
 
-    func synchronize(config: CodexPanelConfig, modelCatalog: CodexModelCatalog?) throws {
-        try self.synchronizer.synchronize(self.makeRequest(config: config, modelCatalog: modelCatalog))
-    }
 
-    private func makeRequest(config: CodexPanelConfig, modelCatalog: CodexModelCatalog?) throws -> CodexConfigurationSyncRequest {
+    private func makeRequest(config: CodexPanelConfig) throws -> CodexConfigurationSyncRequest {
         guard let provider = config.activeProvider() else {
             throw CodexSyncError.missingActiveProvider
         }
@@ -86,37 +71,19 @@ struct CodexSyncService: CodexSynchronizing {
         }
 
         let providerKind: CodexProviderKind
-        let modelID: String?
-        let serviceTier: String?
         switch provider.kind {
         case .openAIOAuth:
             providerKind = .openAIOAuth
-            modelID = nil
-            serviceTier = config.global.codexConfigServiceTier(
-                for: config.global.defaultModel,
-                catalog: modelCatalog
-            )
         case .openAICompatible:
             providerKind = .openAICompatible
-            modelID = provider.compatibleEffectiveModelID
-            serviceTier = nil
         case .openRouter:
             providerKind = .openRouter
-            modelID = provider.openRouterEffectiveModelID
-            serviceTier = nil
         }
 
         return CodexConfigurationSyncRequest(
-            global: CodexGlobalConfiguration(
-                defaultModel: config.global.defaultModel,
-                reviewModel: config.global.reviewModel,
-                reasoningEffort: config.global.reasoningEffort,
-                serviceTier: serviceTier
-            ),
             provider: CodexProviderConfiguration(
                 kind: providerKind,
                 baseURL: provider.baseURL,
-                modelID: modelID,
                 wireAPI: provider.wireAPI == .chat ? .chat : .responses
             ),
             credentials: CodexAccountCredentials(

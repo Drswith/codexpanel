@@ -3,48 +3,12 @@ import Foundation
 enum SettingsSaveRequestApplier {
     static func apply(
         _ requests: SettingsSaveRequests,
-        to config: inout CodexPanelConfig,
-        modelCatalog: CodexModelCatalog? = nil
+        to config: inout CodexPanelConfig
     ) throws {
-        self.apply(requests.global, to: &config, modelCatalog: modelCatalog)
         self.apply(requests.openAIAccount, to: &config)
         self.apply(requests.openAIUsage, to: &config)
         self.apply(requests.modelPricing, to: &config)
         try self.apply(requests.desktop, to: &config)
-    }
-
-    static func apply(_ request: GlobalSettingsUpdate?, to config: inout CodexPanelConfig, modelCatalog: CodexModelCatalog? = nil) {
-        guard let request else { return }
-        let defaultModel = self.normalizedModel(request.defaultModel) ?? config.global.defaultModel
-        let reviewModel = self.normalizedModel(request.reviewModel) ?? defaultModel
-        let requestedReasoningEffort = self.normalizedReasoningEffort(request.reasoningEffort) ?? config.global.reasoningEffort
-        let reasoningModel = self.reasoningModel(for: config, defaultModel: defaultModel)
-        let preservesCurrent = defaultModel == config.global.defaultModel && requestedReasoningEffort == config.global.reasoningEffort
-        let reasoningEffort = preservesCurrent ? requestedReasoningEffort : CodexPanelGlobalSettings.compatibleReasoningEffort(
-            requestedReasoningEffort, for: reasoningModel, catalog: modelCatalog
-        )
-        let serviceTier = self.normalizedServiceTier(request.serviceTier) ?? config.global.serviceTier
-        config.global = CodexPanelGlobalSettings(
-            defaultModel: defaultModel,
-            reviewModel: reviewModel,
-            reasoningEffort: reasoningEffort,
-            serviceTier: serviceTier
-        )
-    }
-
-    private static func reasoningModel(
-        for config: CodexPanelConfig,
-        defaultModel: String
-    ) -> String {
-        guard let activeProvider = config.activeProvider() else { return defaultModel }
-        switch activeProvider.kind {
-        case .openRouter:
-            return activeProvider.openRouterEffectiveModelID ?? defaultModel
-        case .openAICompatible:
-            return activeProvider.compatibleEffectiveModelID ?? defaultModel
-        case .openAIOAuth:
-            return defaultModel
-        }
     }
 
     static func apply(_ request: OpenAIAccountSettingsUpdate?, to config: inout CodexPanelConfig) {
@@ -103,17 +67,4 @@ enum SettingsSaveRequestApplier {
         return validatedPath
     }
 
-    private static func normalizedModel(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private static func normalizedReasoningEffort(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private static func normalizedServiceTier(_ value: String) -> String? {
-        CodexPanelGlobalSettings.normalizedServiceTier(value)
-    }
 }

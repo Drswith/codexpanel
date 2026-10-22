@@ -60,28 +60,18 @@ struct DesktopSettingsUpdate: Equatable {
     var preferredCodexAppPath: String?
 }
 
-struct GlobalSettingsUpdate: Equatable {
-    var defaultModel: String
-    var reviewModel: String
-    var reasoningEffort: String
-    var serviceTier: String
-}
-
 struct SettingsSaveRequests: Equatable {
-    var global: GlobalSettingsUpdate?
     var openAIAccount: OpenAIAccountSettingsUpdate?
     var openAIUsage: OpenAIUsageSettingsUpdate?
     var modelPricing: ModelPricingSettingsUpdate?
     var desktop: DesktopSettingsUpdate?
 
     init(
-        global: GlobalSettingsUpdate? = nil,
         openAIAccount: OpenAIAccountSettingsUpdate? = nil,
         openAIUsage: OpenAIUsageSettingsUpdate? = nil,
         modelPricing: ModelPricingSettingsUpdate? = nil,
         desktop: DesktopSettingsUpdate? = nil
     ) {
-        self.global = global
         self.openAIAccount = openAIAccount
         self.openAIUsage = openAIUsage
         self.modelPricing = modelPricing
@@ -89,75 +79,10 @@ struct SettingsSaveRequests: Equatable {
     }
 
     var isEmpty: Bool {
-        self.global == nil &&
         self.openAIAccount == nil &&
         self.openAIUsage == nil &&
         self.modelPricing == nil &&
         self.desktop == nil
-    }
-}
-
-struct OpenRouterModelCatalogSnapshot: Equatable {
-    var models: [CodexPanelOpenRouterModel]
-    var fetchedAt: Date
-}
-
-protocol OpenRouterModelCatalogFetching {
-    func fetchCatalog(apiKey: String) async throws -> OpenRouterModelCatalogSnapshot
-}
-
-struct OpenRouterModelCatalogService: OpenRouterModelCatalogFetching {
-    private struct ModelsResponse: Decodable {
-        struct Model: Decodable {
-            let id: String
-            let name: String?
-        }
-
-        let data: [Model]
-    }
-
-    private let urlSession: URLSession
-    private let now: () -> Date
-
-    init(
-        urlSession: URLSession? = nil,
-        now: @escaping () -> Date = Date.init
-    ) {
-        self.urlSession = urlSession ?? URLSession(configuration: .ephemeral)
-        self.now = now
-    }
-
-    func fetchCatalog(apiKey: String) async throws -> OpenRouterModelCatalogSnapshot {
-        let trimmedAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedAPIKey.isEmpty == false else {
-            throw TokenStoreError.invalidInput
-        }
-
-        var request = URLRequest(url: URL(string: "https://openrouter.ai/api/v1/models")!)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(trimmedAPIKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        let (data, response) = try await self.urlSession.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw URLError(.badServerResponse)
-        }
-
-        let decoded = try JSONDecoder().decode(ModelsResponse.self, from: data)
-        let models = decoded.data
-            .map { CodexPanelOpenRouterModel(id: $0.id, name: $0.name) }
-            .filter { $0.id.isEmpty == false }
-            .sorted { lhs, rhs in
-                let left = lhs.name.lowercased()
-                let right = rhs.name.lowercased()
-                if left == right {
-                    return lhs.id.localizedCaseInsensitiveCompare(rhs.id) == .orderedAscending
-                }
-                return left.localizedCaseInsensitiveCompare(right) == .orderedAscending
-            }
-
-        return OpenRouterModelCatalogSnapshot(models: models, fetchedAt: self.now())
     }
 }
 
@@ -170,25 +95,14 @@ final class TokenStore: ObservableObject {
     @Published private(set) var localCostSummary: LocalCostSummary = .empty
     @Published private(set) var historicalModels: [String]
     @Published private(set) var aggregateRoutedAccountID: String?
-    @Published private(set) var codexServiceTierCatalog: CodexServiceTierCatalog?
-    @Published private(set) var isRefreshingCodexModels = false
-    @Published private(set) var codexModelRefreshError: String?
-    private let codexModelCatalogService: any CodexModelCatalogFetching
-    private let modelCatalogSnapshotStore: CodexModelCatalogSnapshotStore
-    private var catalogScope: String?
-    private var catalogGeneration = UUID()
-    private var lastCatalogAttempt: Date?
-    private var acceptsNativeCatalogUpdates = true
 
     private let configStore: CodexPanelConfigStore
-    private let loadServiceTierCatalog: () -> CodexServiceTierCatalog?
     private let syncService: any CodexSynchronizing
     private let switchJournalStore = SwitchJournalStore()
     private let costSummaryService: LocalCostSummaryService
     private let openAIAccountGatewayService: OpenAIAccountGatewayControlling
     private let openRouterGatewayService: OpenRouterGatewayControlling
     private let chatCompletionsGatewayService: ChatCompletionsGatewayControlling
-    private let openRouterModelCatalogService: any OpenRouterModelCatalogFetching
     private let openRouterGatewayLeaseStore: OpenRouterGatewayLeaseStoring
     private let aggregateGatewayLeaseStore: OpenAIAggregateGatewayLeaseStoring
     private let aggregateRouteJournalStore: OpenAIAggregateRouteJournalStoring
@@ -212,29 +126,19 @@ final class TokenStore: ObservableObject {
         openAIAccountGatewayService: OpenAIAccountGatewayControlling = OpenAIAccountGatewayService.shared,
         openRouterGatewayService: OpenRouterGatewayControlling = OpenRouterGatewayService(),
         chatCompletionsGatewayService: ChatCompletionsGatewayControlling = ChatCompletionsGatewayService(),
-        openRouterModelCatalogService: any OpenRouterModelCatalogFetching = OpenRouterModelCatalogService(),
         openRouterGatewayLeaseStore: OpenRouterGatewayLeaseStoring = OpenRouterGatewayLeaseStore(),
         aggregateGatewayLeaseStore: OpenAIAggregateGatewayLeaseStoring = OpenAIAggregateGatewayLeaseStore(),
         aggregateRouteJournalStore: OpenAIAggregateRouteJournalStoring = OpenAIAggregateRouteJournalStore(),
         codexRunningProcessIDs: @escaping () -> Set<pid_t> = {
             Set(NSRunningApplication.runningApplications(withBundleIdentifier: "com.openai.codex").map(\.processIdentifier))
-        },
-        loadServiceTierCatalog: @escaping () -> CodexServiceTierCatalog? = {
-            CodexServiceTierCatalog.load()
-        },
-        codexModelCatalogService: any CodexModelCatalogFetching = CodexModelCatalogService(),
-        modelCatalogSnapshotStore: CodexModelCatalogSnapshotStore = CodexModelCatalogSnapshotStore()
+        }
     ) {
-        self.codexModelCatalogService = codexModelCatalogService
-        self.modelCatalogSnapshotStore = modelCatalogSnapshotStore
         self.configStore = configStore
-        self.loadServiceTierCatalog = loadServiceTierCatalog
         self.syncService = syncService
         self.costSummaryService = costSummaryService
         self.openAIAccountGatewayService = openAIAccountGatewayService
         self.openRouterGatewayService = openRouterGatewayService
         self.chatCompletionsGatewayService = chatCompletionsGatewayService
-        self.openRouterModelCatalogService = openRouterModelCatalogService
         self.openRouterGatewayLeaseStore = openRouterGatewayLeaseStore
         self.aggregateGatewayLeaseStore = aggregateGatewayLeaseStore
         self.aggregateRouteJournalStore = aggregateRouteJournalStore
@@ -249,19 +153,11 @@ final class TokenStore: ObservableObject {
             initialConfig = CodexPanelConfig()
         }
         let clearedLegacySuspensions = initialConfig.clearLegacyUsageEndpointSuspensions()
-        let initialCatalog = self.loadServiceTierCatalog()
-        self.codexServiceTierCatalog = initialCatalog
-        let adjustedServiceTier = Self.normalizeLegacyServiceTier(in: &initialConfig)
         self.config = initialConfig
-        self.catalogScope = initialConfig.activeProvider()?.kind == .openAIOAuth ? initialConfig.active.accountId : nil
-        if let scope = self.catalogScope, let saved = modelCatalogSnapshotStore.load(accountID: scope) {
-            self.codexServiceTierCatalog = saved
-            self.acceptsNativeCatalogUpdates = false
-        }
         self.historicalModels = Self.normalizedHistoricalModels(Array(initialConfig.modelPricing.keys))
         self.lastPublishedOpenRouterSelected = self.config.activeProvider()?.kind == .openRouter
 
-        if clearedLegacySuspensions || adjustedServiceTier {
+        if clearedLegacySuspensions {
             try? self.configStore.save(initialConfig)
         }
 
@@ -283,7 +179,7 @@ final class TokenStore: ObservableObject {
         }
         self.refreshHistoricalModels()
         self.seedSwitchJournalIfNeeded()
-        try? self.syncService.synchronize(config: self.config, modelCatalog: self.oauthModelCatalog)
+        try? self.syncService.synchronize(config: self.config)
     }
 
     var customProviders: [CodexPanelProvider] {
@@ -302,37 +198,19 @@ final class TokenStore: ObservableObject {
         self.config.activeAccount()
     }
 
-    var activeModel: String {
-        if let activeProvider = self.config.activeProvider(),
-           activeProvider.kind == .openRouter,
-           let selectedModelID = activeProvider.openRouterEffectiveModelID {
-            return selectedModelID
-        }
-        if let activeProvider = self.config.activeProvider(),
-           activeProvider.kind == .openAICompatible,
-           let modelID = activeProvider.compatibleEffectiveModelID {
-            return modelID
-        }
-        return self.config.global.defaultModel
-    }
-
     var aggregateRoutedAccount: TokenAccount? {
         guard let aggregateRoutedAccountID else { return nil }
         return self.accounts.first(where: { $0.accountId == aggregateRoutedAccountID })
     }
 
     func load() {
-        self.reloadCodexServiceTierCatalog()
+
         if var loaded = try? self.configStore.loadOrMigrate() {
             let preservedNewerQuota = loaded.preserveNewerOAuthQuotaSnapshots(from: self.config)
-            let adjustedServiceTier = Self.normalizeLegacyServiceTier(in: &loaded)
             self.config = loaded
-            self.reloadCodexServiceTierCatalog()
-            if preservedNewerQuota || adjustedServiceTier {
+
+            if preservedNewerQuota {
                 try? self.configStore.save(loaded)
-            }
-            if adjustedServiceTier {
-                try? self.syncService.synchronize(config: loaded, modelCatalog: self.oauthModelCatalog)
             }
             let injectedDebugMockData = self.injectDebugMockDataIfNeeded()
             self.publishState()
@@ -436,8 +314,7 @@ final class TokenStore: ObservableObject {
             accountLabel: accountLabel,
             apiKey: apiKey,
             wireAPI: .responses,
-            presetID: nil,
-            model: nil
+            presetID: nil
         )
     }
 
@@ -447,22 +324,16 @@ final class TokenStore: ObservableObject {
         accountLabel: String,
         apiKey: String,
         wireAPI: CodexPanelWireAPI,
-        presetID: String?,
-        model: String?,
-        modelCatalog: [CodexPanelOpenRouterModel] = []
+        presetID: String?
     ) throws {
         let previousAccountID = self.config.active.accountId
         let trimmedLabel = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedBaseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAccountLabel = accountLabel.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedModel = model?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedLabel.isEmpty == false,
               trimmedBaseURL.isEmpty == false,
               trimmedAPIKey.isEmpty == false else {
-            throw TokenStoreError.invalidInput
-        }
-        if wireAPI == .chat, (trimmedModel?.isEmpty ?? true) {
             throw TokenStoreError.invalidInput
         }
 
@@ -481,10 +352,6 @@ final class TokenStore: ObservableObject {
             baseURL: trimmedBaseURL,
             wireAPI: wireAPI,
             presetID: presetID,
-            defaultModel: trimmedModel,
-            selectedModelID: trimmedModel,
-            cachedModelCatalog: modelCatalog,
-            modelCatalogFetchedAt: modelCatalog.isEmpty ? nil : Date(),
             activeAccountId: account.id,
             accounts: [account]
         )
@@ -500,101 +367,26 @@ final class TokenStore: ObservableObject {
 
     func addOpenRouterProvider(
         accountLabel: String = "",
-        apiKey: String,
-        selectedModelID: String? = nil,
-        pinnedModelIDs: [String] = [],
-        cachedModelCatalog: [CodexPanelOpenRouterModel] = [],
-        fetchedAt: Date? = nil
+        apiKey: String
     ) throws {
         _ = try self.config.upsertOpenRouterProvider(
             accountLabel: accountLabel,
             apiKey: apiKey,
             activate: false
         )
-        if selectedModelID != nil ||
-            pinnedModelIDs.isEmpty == false ||
-            cachedModelCatalog.isEmpty == false ||
-            fetchedAt != nil {
-            try self.config.setOpenRouterModelSelection(
-                selectedModelID: selectedModelID,
-                pinnedModelIDs: pinnedModelIDs,
-                cachedModelCatalog: cachedModelCatalog,
-                fetchedAt: fetchedAt
-            )
-        }
         try self.persist(syncCodex: false)
     }
 
     func addOpenRouterProviderAccount(
         label: String = "",
-        apiKey: String,
-        selectedModelID: String? = nil,
-        pinnedModelIDs: [String] = [],
-        cachedModelCatalog: [CodexPanelOpenRouterModel] = [],
-        fetchedAt: Date? = nil
+        apiKey: String
     ) throws {
         _ = try self.config.upsertOpenRouterProvider(
             accountLabel: label,
             apiKey: apiKey,
             activate: false
         )
-        if selectedModelID != nil ||
-            pinnedModelIDs.isEmpty == false ||
-            cachedModelCatalog.isEmpty == false ||
-            fetchedAt != nil {
-            try self.config.setOpenRouterModelSelection(
-                selectedModelID: selectedModelID,
-                pinnedModelIDs: pinnedModelIDs,
-                cachedModelCatalog: cachedModelCatalog,
-                fetchedAt: fetchedAt
-            )
-        }
         try self.persist(syncCodex: false)
-    }
-
-    func updateOpenRouterDefaultModel(_ value: String?) throws {
-        try self.updateOpenRouterSelectedModel(value)
-    }
-
-    func updateOpenRouterSelectedModel(_ value: String?) throws {
-        guard value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
-            throw TokenStoreError.invalidInput
-        }
-        try self.config.setOpenRouterSelectedModel(value)
-        let shouldSyncCodex = self.config.activeProvider()?.kind == .openRouter
-        try self.persist(syncCodex: shouldSyncCodex)
-    }
-
-    func updateOpenRouterModelSelection(
-        selectedModelID: String?,
-        pinnedModelIDs: [String],
-        cachedModelCatalog: [CodexPanelOpenRouterModel],
-        fetchedAt: Date?
-    ) throws {
-        try self.config.setOpenRouterModelSelection(
-            selectedModelID: selectedModelID,
-            pinnedModelIDs: pinnedModelIDs,
-            cachedModelCatalog: cachedModelCatalog,
-            fetchedAt: fetchedAt
-        )
-        let shouldSyncCodex = self.config.activeProvider()?.kind == .openRouter
-        try self.persist(syncCodex: shouldSyncCodex)
-    }
-
-    func refreshOpenRouterModelCatalog() async throws {
-        guard let provider = self.openRouterProvider,
-              let account = provider.activeAccount,
-              let apiKey = account.apiKey else {
-            throw TokenStoreError.accountNotFound
-        }
-
-        let snapshot = try await self.openRouterModelCatalogService.fetchCatalog(apiKey: apiKey)
-        try self.config.updateOpenRouterModelCatalog(snapshot.models, fetchedAt: snapshot.fetchedAt)
-        try self.persist(syncCodex: false)
-    }
-
-    func previewOpenRouterModelCatalog(apiKey: String) async throws -> OpenRouterModelCatalogSnapshot {
-        try await self.openRouterModelCatalogService.fetchCatalog(apiKey: apiKey)
     }
 
     func addCustomProviderAccount(providerID: String, label: String, apiKey: String) throws {
@@ -760,199 +552,12 @@ final class TokenStore: ObservableObject {
         )
     }
 
-    func saveGlobalSettings(_ request: GlobalSettingsUpdate) throws {
-        try self.saveSettings(
-            SettingsSaveRequests(global: request)
-        )
-    }
-
-    func updateRouteModel(_ modelID: String) throws {
-        let trimmedModelID = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedModelID.isEmpty == false else {
-            throw TokenStoreError.invalidInput
-        }
-
-        guard trimmedModelID != self.activeModel else { return }
-
-        if let activeProvider = self.config.activeProvider() {
-            let compatibleReasoningEffort = CodexPanelGlobalSettings.compatibleReasoningEffort(
-                self.config.global.reasoningEffort,
-                for: trimmedModelID,
-                catalog: self.oauthModelCatalog
-            )
-            let compatibleServiceTier = CodexPanelGlobalSettings.compatibleServiceTier(
-                self.config.global.serviceTier,
-                for: trimmedModelID,
-                catalog: self.oauthModelCatalog
-            )
-            switch activeProvider.kind {
-            case .openRouter:
-                try self.config.setOpenRouterSelectedModel(trimmedModelID)
-                self.config.global.reasoningEffort = compatibleReasoningEffort
-                try self.persist(syncCodex: true)
-            case .openAICompatible:
-                try self.updateProviderDefaultModel(
-                    providerID: activeProvider.id,
-                    modelID: trimmedModelID,
-                    reasoningEffort: compatibleReasoningEffort
-                )
-            case .openAIOAuth:
-                try self.saveGlobalSettings(
-                    GlobalSettingsUpdate(
-                        defaultModel: trimmedModelID,
-                        reviewModel: trimmedModelID,
-                        reasoningEffort: compatibleReasoningEffort,
-                        serviceTier: compatibleServiceTier
-                    )
-                )
-            }
-            return
-        }
-
-        try self.saveGlobalSettings(
-            GlobalSettingsUpdate(
-                defaultModel: trimmedModelID,
-                reviewModel: trimmedModelID,
-                reasoningEffort: CodexPanelGlobalSettings.compatibleReasoningEffort(
-                    self.config.global.reasoningEffort,
-                    for: trimmedModelID,
-                    catalog: self.oauthModelCatalog
-                ),
-                serviceTier: CodexPanelGlobalSettings.compatibleServiceTier(
-                    self.config.global.serviceTier,
-                    for: trimmedModelID,
-                    catalog: self.oauthModelCatalog
-                )
-            )
-        )
-    }
-
-    func updateReasoningEffort(_ effort: String) throws {
-        let trimmedEffort = effort.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedEffort.isEmpty == false else {
-            throw TokenStoreError.invalidInput
-        }
-        if trimmedEffort == self.config.global.reasoningEffort { return }
-        guard CodexPanelGlobalSettings.supportsReasoningEffort(
-            trimmedEffort,
-            for: self.activeModel,
-            catalog: self.oauthModelCatalog
-        ) else {
-            throw TokenStoreError.invalidInput
-        }
-
-        try self.saveGlobalSettings(
-            GlobalSettingsUpdate(
-                defaultModel: self.config.global.defaultModel,
-                reviewModel: self.config.global.reviewModel,
-                reasoningEffort: trimmedEffort,
-                serviceTier: self.config.global.serviceTier
-            )
-        )
-    }
-
-    func updateServiceTier(_ serviceTier: String) throws {
-        guard let normalizedServiceTier = CodexPanelGlobalSettings.normalizedServiceTier(serviceTier) else {
-            throw TokenStoreError.invalidInput
-        }
-        if normalizedServiceTier == CodexPanelGlobalSettings.normalizedServiceTier(self.config.global.serviceTier) { return }
-        guard CodexPanelGlobalSettings.supportsServiceTier(
-                  normalizedServiceTier,
-                  for: self.activeModel,
-                  catalog: self.oauthModelCatalog
-              ) else {
-            throw TokenStoreError.invalidInput
-        }
-
-        try self.saveGlobalSettings(
-            GlobalSettingsUpdate(
-                defaultModel: self.config.global.defaultModel,
-                reviewModel: self.config.global.reviewModel,
-                reasoningEffort: self.config.global.reasoningEffort,
-                serviceTier: normalizedServiceTier
-            )
-        )
-    }
-
-    func serviceTierOptions(for modelID: String, currentValue: String? = nil) -> [String] {
-        CodexModelCatalog.uniqueStrings(CodexPanelGlobalSettings.serviceTierOptions(
-            for: modelID, catalog: self.oauthModelCatalog
-        ) + [currentValue ?? ""])
-    }
-
-    var modelCatalogScope: String? {
-        self.config.activeProvider()?.kind == .openAIOAuth ? self.config.active.accountId : nil
-    }
-
-    var oauthModelCatalog: CodexModelCatalog? {
-        self.config.activeProvider()?.kind == .openAIOAuth ? self.codexServiceTierCatalog : nil
-    }
-
-    func reloadCodexServiceTierCatalog() {
-        let scope = self.modelCatalogScope
-        if scope != self.catalogScope {
-            self.catalogScope = scope
-            self.acceptsNativeCatalogUpdates = false
-            self.catalogGeneration = UUID()
-            self.lastCatalogAttempt = nil
-            self.isRefreshingCodexModels = false
-            self.codexModelRefreshError = nil
-            // 切账号时不沿用上个账号的内存目录。
-            self.codexServiceTierCatalog = scope.flatMap { self.modelCatalogSnapshotStore.load(accountID: $0) }
-            return
-        }
-        if let loaded = self.loadServiceTierCatalog(), !loaded.models.isEmpty,
-           self.acceptsNativeCatalogUpdates || (loaded.identity != nil && loaded.identity == self.codexServiceTierCatalog?.identity),
-           self.codexServiceTierCatalog == nil || (loaded.fetchedAt ?? .distantPast) >= (self.codexServiceTierCatalog?.fetchedAt ?? .distantPast) {
-            self.codexServiceTierCatalog = loaded
-        }
-    }
-
-    func refreshCodexModelCatalog(force: Bool = false, now: Date = Date()) async {
-        self.reloadCodexServiceTierCatalog()
-        guard let scope = self.modelCatalogScope, let account = self.config.activeAccount(),
-              let token = account.accessToken, !token.isEmpty,
-              let remoteID = account.openAIAccountId, !remoteID.isEmpty,
-              !self.isRefreshingCodexModels else { return }
-        if !force, let attempted = self.lastCatalogAttempt, now.timeIntervalSince(attempted) < 15 * 60 { return }
-        self.lastCatalogAttempt = now
-        self.isRefreshingCodexModels = true
-        self.codexModelRefreshError = nil
-        let generation = self.catalogGeneration
-        let request = CodexModelCatalogRequest(accessToken: token, accountID: remoteID,
-            planType: account.planType, preferredAppPath: self.config.desktop.preferredCodexAppPath)
-        defer {
-            if self.catalogGeneration == generation { self.isRefreshingCodexModels = false }
-        }
-        do {
-            let fetched = try await self.codexModelCatalogService.fetchCatalog(request)
-            guard !Task.isCancelled, generation == self.catalogGeneration, scope == self.modelCatalogScope else { return }
-            guard !fetched.models.isEmpty else { throw CodexModelCatalogError.emptyCatalog }
-            let catalog = fetched.mergingServiceTiers(from: self.codexServiceTierCatalog)
-            try self.modelCatalogSnapshotStore.save(catalog, accountID: scope)
-            self.codexServiceTierCatalog = catalog
-            self.acceptsNativeCatalogUpdates = false
-        } catch {
-            guard !Task.isCancelled, generation == self.catalogGeneration, scope == self.modelCatalogScope else { return }
-            // 不暴露 RPC 原始错误或凭据；失败不清空目录、不改配置。
-            self.codexModelRefreshError = (error as? CodexModelCatalogError)?.errorDescription
-                ?? "模型目录刷新失败，已保留原有目录。"
-        }
-    }
-
-    private static func normalizeLegacyServiceTier(in config: inout CodexPanelConfig) -> Bool {
-        guard config.activeProvider()?.kind == .openAIOAuth,
-              ["flex", "default", "priority"].contains(config.global.serviceTier) else { return false }
-        config.global.serviceTier = CodexPanelGlobalSettings.normalizedServiceTier(config.global.serviceTier) ?? "standard"
-        return true
-    }
-
     func saveSettings(_ requests: SettingsSaveRequests) throws {
         guard requests.isEmpty == false else { return }
 
         let previousUsageMode = self.config.openAI.accountUsageMode
         var updatedConfig = self.config
-        try SettingsSaveRequestApplier.apply(requests, to: &updatedConfig, modelCatalog: self.oauthModelCatalog)
+        try SettingsSaveRequestApplier.apply(requests, to: &updatedConfig)
 
         self.config = updatedConfig
         let shouldSyncCodex = self.shouldSyncCodexAfterSavingSettings(
@@ -968,31 +573,6 @@ final class TokenStore: ObservableObject {
         if requests.modelPricing != nil {
             self.refreshLocalCostSummary(force: true, minimumInterval: 0)
         }
-    }
-
-    private func updateProviderDefaultModel(
-        providerID: String,
-        modelID: String,
-        reasoningEffort: String? = nil
-    ) throws {
-        guard let providerIndex = self.config.providers.firstIndex(where: { $0.id == providerID }) else {
-            throw TokenStoreError.providerNotFound
-        }
-
-        if self.config.providers[providerIndex].kind == .openRouter {
-            try self.config.setOpenRouterSelectedModel(modelID)
-            try self.persist(syncCodex: true)
-            return
-        }
-
-        self.config.providers[providerIndex].defaultModel = modelID
-        self.config.providers[providerIndex].selectedModelID = modelID
-        self.config.global.defaultModel = modelID
-        self.config.global.reviewModel = modelID
-        if let reasoningEffort {
-            self.config.global.reasoningEffort = reasoningEffort
-        }
-        try self.persist(syncCodex: true)
     }
 
     func hasStaleOAuthUsageSnapshot(maxAge: TimeInterval, now: Date = Date()) -> Bool {
@@ -1112,7 +692,7 @@ final class TokenStore: ObservableObject {
         }
         try self.configStore.save(self.config)
         if syncCodex {
-            try self.syncService.synchronize(config: self.config, modelCatalog: self.oauthModelCatalog)
+            try self.syncService.synchronize(config: self.config)
         }
         self.publishState()
     }
@@ -1126,7 +706,7 @@ final class TokenStore: ObservableObject {
     }
 
     private func publishState() {
-        self.reloadCodexServiceTierCatalog()
+
         _ = self.refreshAggregateGatewayLeaseState()
         _ = self.refreshOpenRouterGatewayLeaseState()
         self.pushPublishedState()
@@ -1874,9 +1454,6 @@ final class TokenStore: ObservableObject {
         previousUsageMode: CodexPanelOpenAIAccountUsageMode,
         updatedConfig: CodexPanelConfig
     ) -> Bool {
-        if requests.global != nil {
-            return updatedConfig.activeProvider() != nil
-        }
         guard let openAIAccountRequest = requests.openAIAccount else { return false }
         let oauthProviderID = updatedConfig.oauthProvider()?.id
         let openAIIsSelected = updatedConfig.active.providerId == oauthProviderID

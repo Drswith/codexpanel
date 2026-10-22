@@ -61,7 +61,6 @@ struct CodexPanelProviderPreset: Identifiable, Equatable {
     let kind: CodexPanelProviderPresetKind
     let baseURL: String
     let wireAPI: CodexPanelWireAPI
-    let defaultModels: [CodexPanelOpenRouterModel]
     let quirks: CodexPanelChatQuirks
     /// Optional advisory shown in the UI (e.g. native protocol caveats).
     let note: String?
@@ -73,7 +72,6 @@ struct CodexPanelProviderPreset: Identifiable, Equatable {
         kind: CodexPanelProviderPresetKind = .openAICompatible,
         baseURL: String,
         wireAPI: CodexPanelWireAPI = .chat,
-        defaultModels: [(String, String)] = [],
         quirks: CodexPanelChatQuirks = .standard,
         note: String? = nil
     ) {
@@ -83,14 +81,10 @@ struct CodexPanelProviderPreset: Identifiable, Equatable {
         self.kind = kind
         self.baseURL = baseURL
         self.wireAPI = wireAPI
-        self.defaultModels = defaultModels.map { CodexPanelOpenRouterModel(id: $0.0, name: $0.1) }
         self.quirks = quirks
         self.note = note
     }
 
-    var defaultModelID: String? {
-        self.defaultModels.first?.id
-    }
 }
 
 enum CodexPanelProviderPresetCatalog {
@@ -101,22 +95,13 @@ enum CodexPanelProviderPresetCatalog {
             id: "deepseek",
             displayName: "DeepSeek",
             group: .domestic,
-            baseURL: "https://api.deepseek.com/v1",
-            defaultModels: [
-                ("deepseek-chat", "DeepSeek Chat"),
-                ("deepseek-reasoner", "DeepSeek Reasoner"),
-            ]
+            baseURL: "https://api.deepseek.com/v1"
         ),
         CodexPanelProviderPreset(
             id: "zhipu-glm",
             displayName: "智谱 GLM",
             group: .domestic,
             baseURL: "https://open.bigmodel.cn/api/paas/v4",
-            defaultModels: [
-                ("glm-4.6", "GLM-4.6"),
-                ("glm-4.5", "GLM-4.5"),
-                ("glm-4.5-air", "GLM-4.5 Air"),
-            ],
             quirks: CodexPanelChatQuirks(
                 flattenContent: true,
                 toolChoiceDowngradeToAuto: true
@@ -127,32 +112,19 @@ enum CodexPanelProviderPresetCatalog {
             displayName: "Kimi (月之暗面)",
             group: .domestic,
             baseURL: "https://api.moonshot.cn/v1",
-            defaultModels: [
-                ("kimi-k2-0905-preview", "Kimi K2"),
-                ("moonshot-v1-128k", "Moonshot v1 128k"),
-            ],
             quirks: CodexPanelChatQuirks(maxTokensField: "max_completion_tokens")
         ),
         CodexPanelProviderPreset(
             id: "qwen-dashscope",
             displayName: "通义千问 (百炼)",
             group: .domestic,
-            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            defaultModels: [
-                ("qwen3-coder-plus", "Qwen3 Coder Plus"),
-                ("qwen-max", "Qwen Max"),
-                ("qwen-plus", "Qwen Plus"),
-            ]
+            baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
         ),
         CodexPanelProviderPreset(
             id: "minimax",
             displayName: "MiniMax",
             group: .domestic,
             baseURL: "https://api.minimaxi.com/v1",
-            defaultModels: [
-                ("MiniMax-Text-01", "MiniMax Text 01"),
-                ("abab6.5s-chat", "abab6.5s"),
-            ],
             quirks: CodexPanelChatQuirks(maxTokensField: "max_completion_tokens")
         ),
         CodexPanelProviderPreset(
@@ -160,69 +132,43 @@ enum CodexPanelProviderPresetCatalog {
             displayName: "豆包 (火山方舟)",
             group: .domestic,
             baseURL: "https://ark.cn-beijing.volces.com/api/v3",
-            defaultModels: [
-                ("doubao-seed-1-6-250615", "Doubao Seed 1.6"),
-                ("doubao-pro-32k", "Doubao Pro 32k"),
-            ],
             note: L.providerPresetNoteArkEndpoint
         ),
         CodexPanelProviderPreset(
             id: "siliconflow",
             displayName: "硅基流动 SiliconFlow",
             group: .domestic,
-            baseURL: "https://api.siliconflow.cn/v1",
-            defaultModels: [
-                ("deepseek-ai/DeepSeek-V3", "DeepSeek V3"),
-                ("Qwen/Qwen2.5-Coder-32B-Instruct", "Qwen2.5 Coder 32B"),
-            ]
+            baseURL: "https://api.siliconflow.cn/v1"
         ),
         CodexPanelProviderPreset(
             id: "stepfun",
             displayName: "阶跃星辰 StepFun",
             group: .domestic,
-            baseURL: "https://api.stepfun.com/v1",
-            defaultModels: [
-                ("step-2-16k", "Step-2 16k"),
-            ]
+            baseURL: "https://api.stepfun.com/v1"
         ),
         CodexPanelProviderPreset(
             id: "lingyiwanwu",
             displayName: "零一万物 Yi",
             group: .domestic,
-            baseURL: "https://api.lingyiwanwu.com/v1",
-            defaultModels: [
-                ("yi-large", "Yi Large"),
-                ("yi-large-turbo", "Yi Large Turbo"),
-            ]
+            baseURL: "https://api.lingyiwanwu.com/v1"
         ),
         CodexPanelProviderPreset(
             id: "hunyuan",
             displayName: "腾讯混元",
             group: .domestic,
-            baseURL: "https://api.hunyuan.cloud.tencent.com/v1",
-            defaultModels: [
-                ("hunyuan-turbo", "Hunyuan Turbo"),
-                ("hunyuan-pro", "Hunyuan Pro"),
-            ]
+            baseURL: "https://api.hunyuan.cloud.tencent.com/v1"
         ),
         CodexPanelProviderPreset(
             id: "spark",
             displayName: "讯飞星火",
             group: .domestic,
-            baseURL: "https://spark-api-open.xf-yun.com/v1",
-            defaultModels: [
-                ("4.0Ultra", "Spark 4.0 Ultra"),
-                ("generalv3.5", "Spark v3.5"),
-            ]
+            baseURL: "https://spark-api-open.xf-yun.com/v1"
         ),
         CodexPanelProviderPreset(
             id: "baichuan",
             displayName: "百川 Baichuan",
             group: .domestic,
-            baseURL: "https://api.baichuan-ai.com/v1",
-            defaultModels: [
-                ("Baichuan4", "Baichuan4"),
-            ]
+            baseURL: "https://api.baichuan-ai.com/v1"
         ),
     ]
 
@@ -233,102 +179,62 @@ enum CodexPanelProviderPresetCatalog {
             group: .foreign,
             kind: .openRouter,
             baseURL: "https://openrouter.ai/api/v1",
-            wireAPI: .responses,
-            defaultModels: [
-                ("anthropic/claude-3.7-sonnet", "Claude 3.7 Sonnet"),
-                ("openai/gpt-4.1", "GPT-4.1"),
-                ("google/gemini-2.5-pro", "Gemini 2.5 Pro"),
-            ]
+            wireAPI: .responses
         ),
         CodexPanelProviderPreset(
             id: "openai-apikey",
             displayName: "OpenAI (API Key)",
             group: .foreign,
             baseURL: "https://api.openai.com/v1",
-            wireAPI: .responses,
-            defaultModels: [
-                ("gpt-5-codex", "GPT-5 Codex"),
-                ("gpt-5", "GPT-5"),
-                ("o4-mini", "o4-mini"),
-            ]
+            wireAPI: .responses
         ),
         CodexPanelProviderPreset(
             id: "groq",
             displayName: "Groq",
             group: .foreign,
-            baseURL: "https://api.groq.com/openai/v1",
-            defaultModels: [
-                ("llama-3.3-70b-versatile", "Llama 3.3 70B"),
-                ("deepseek-r1-distill-llama-70b", "DeepSeek R1 Distill 70B"),
-            ]
+            baseURL: "https://api.groq.com/openai/v1"
         ),
         CodexPanelProviderPreset(
             id: "xai",
             displayName: "xAI Grok",
             group: .foreign,
-            baseURL: "https://api.x.ai/v1",
-            defaultModels: [
-                ("grok-2-latest", "Grok 2"),
-                ("grok-beta", "Grok Beta"),
-            ]
+            baseURL: "https://api.x.ai/v1"
         ),
         CodexPanelProviderPreset(
             id: "mistral",
             displayName: "Mistral",
             group: .foreign,
-            baseURL: "https://api.mistral.ai/v1",
-            defaultModels: [
-                ("codestral-latest", "Codestral"),
-                ("mistral-large-latest", "Mistral Large"),
-            ]
+            baseURL: "https://api.mistral.ai/v1"
         ),
         CodexPanelProviderPreset(
             id: "together",
             displayName: "Together AI",
             group: .foreign,
-            baseURL: "https://api.together.xyz/v1",
-            defaultModels: [
-                ("deepseek-ai/DeepSeek-V3", "DeepSeek V3"),
-                ("Qwen/Qwen2.5-Coder-32B-Instruct", "Qwen2.5 Coder 32B"),
-            ]
+            baseURL: "https://api.together.xyz/v1"
         ),
         CodexPanelProviderPreset(
             id: "fireworks",
             displayName: "Fireworks AI",
             group: .foreign,
-            baseURL: "https://api.fireworks.ai/inference/v1",
-            defaultModels: [
-                ("accounts/fireworks/models/deepseek-v3", "DeepSeek V3"),
-            ]
+            baseURL: "https://api.fireworks.ai/inference/v1"
         ),
         CodexPanelProviderPreset(
             id: "deepinfra",
             displayName: "DeepInfra",
             group: .foreign,
-            baseURL: "https://api.deepinfra.com/v1/openai",
-            defaultModels: [
-                ("deepseek-ai/DeepSeek-V3", "DeepSeek V3"),
-            ]
+            baseURL: "https://api.deepinfra.com/v1/openai"
         ),
         CodexPanelProviderPreset(
             id: "perplexity",
             displayName: "Perplexity",
             group: .foreign,
-            baseURL: "https://api.perplexity.ai",
-            defaultModels: [
-                ("sonar-pro", "Sonar Pro"),
-                ("sonar", "Sonar"),
-            ]
+            baseURL: "https://api.perplexity.ai"
         ),
         CodexPanelProviderPreset(
             id: "gemini-openai",
             displayName: "Gemini (OpenAI 兼容)",
             group: .foreign,
             baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
-            defaultModels: [
-                ("gemini-2.5-pro", "Gemini 2.5 Pro"),
-                ("gemini-2.0-flash", "Gemini 2.0 Flash"),
-            ],
             note: L.providerPresetNoteGeminiCompat
         ),
     ]

@@ -8,7 +8,7 @@ struct CompatibleProviderRowView: View {
     let onActivate: (CodexPanelProviderAccount) -> Void
     let onAddAccount: () -> Void
     let onDeleteAccount: (CodexPanelProviderAccount) -> Void
-    let onDeleteProvider: () -> Void
+    var onDeleteProvider: (() -> Void)? = nil
 
     private var displayedAccounts: [CodexPanelProviderAccount] {
         self.visibleAccounts ?? self.provider.accounts
@@ -47,12 +47,14 @@ struct CompatibleProviderRowView: View {
                 }
                 .buttonStyle(.borderless)
 
-                Button(action: onDeleteProvider) {
-                    Image(systemName: "trash")
-                        .font(.system(size: 10))
+                if let onDeleteProvider {
+                    Button(action: onDeleteProvider) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 10))
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundColor(.secondary)
                 }
-                .buttonStyle(.borderless)
-                .foregroundColor(.secondary)
             }
 
             ForEach(self.displayedAccounts) { account in

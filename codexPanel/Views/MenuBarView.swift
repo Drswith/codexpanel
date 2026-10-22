@@ -390,8 +390,6 @@ private final class AdaptiveMenuScrollHost: NSView {
 private struct APIProviderListRow: Identifiable {
     let provider: CodexPanelProvider
     let visibleAccounts: [CodexPanelProviderAccount]
-    let visiblePinnedModelIDs: [String]
-    let showsNoModelFallback: Bool
 
     var id: String {
         self.provider.id
@@ -415,8 +413,6 @@ struct MenuBarView: View {
     private let openAIAccountCSVService = OpenAIAccountCSVService()
     private let openAIAccountCSVPanelService = OpenAIAccountCSVPanelService()
     private let codexAppPathPanelService = CodexAppPathPanelService.shared
-    static let codexModelOptions = CodexModelCatalog.fallbackModelIDs
-    static let defaultCodexReasoningEffortOptions = CodexPanelGlobalSettings.baseReasoningEffortOptions
 
     @State private var isRefreshing = false
     @State private var errorBanner: MenuBarErrorBannerState?
@@ -632,9 +628,6 @@ struct MenuBarView: View {
                 showResetCreditsPanel()
             }
         }
-        .onChange(of: self.store.modelCatalogScope) { _ in
-            Task { await self.store.refreshCodexModelCatalog() }
-        }
         .onChange(of: self.resetCreditItems.map(\.id)) { _ in
             self.syncResetCreditsPanelAfterItemsChange()
         }
@@ -782,27 +775,6 @@ struct MenuBarView: View {
     @ViewBuilder
     private var scrollableMenuBody: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let activeProvider = store.activeProvider,
-               let activeAccount = store.activeProviderAccount {
-                Divider()
-                    .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(self.activeProviderSummaryTitle(activeProvider: activeProvider, activeAccount: activeAccount))
-                            .font(.system(size: 11, weight: .medium))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .layoutPriority(1)
-
-                        Spacer(minLength: 0)
-                    }
-
-                    self.modelSelectionRow(currentModel: store.activeModel)
-                }
-                .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
-                .padding(.vertical, 8)
-            }
-
             Divider()
                 .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
 
@@ -867,169 +839,6 @@ struct MenuBarView: View {
                 .padding(.vertical, 8)
             }
         }
-    }
-
-    private func modelSelectionRow(currentModel: String) -> some View {
-        let currentModelValue = self.modelSelectionValue(currentModel: currentModel)
-        let displayedCurrentModel = self.modelSelectionDisplayValue(currentModel: currentModel)
-        let effectiveServiceTier = CodexPanelGlobalSettings.normalizedServiceTier(self.store.config.global.serviceTier)
-            ?? self.store.config.global.serviceTier
-
-        return HStack(alignment: .center, spacing: 8) {
-            self.compactSelectionMenu(
-                title: displayedCurrentModel,
-                options: self.modelSelectionOptions(currentModel: currentModel),
-                currentValue: currentModelValue,
-                displayValue: self.modelSelectionOptionDisplayValue,
-                refreshModels: self.store.activeProvider?.kind == .openAIOAuth
-            ) { modelID in
-                Task { await self.updateSelectedRouteModel(modelID) }
-            }
-
-            self.compactSelectionMenu(
-                title: self.store.config.global.reasoningEffort,
-                options: CodexPanelGlobalSettings.reasoningEffortOptions(
-                    for: currentModel,
-                    currentValue: self.store.config.global.reasoningEffort,
-                    catalog: self.store.oauthModelCatalog
-                ),
-                currentValue: self.store.config.global.reasoningEffort
-            ) { effort in
-                Task { await self.updateSelectedReasoningEffort(effort) }
-            }
-
-            self.compactSelectionMenu(
-                title: effectiveServiceTier,
-                options: self.store.serviceTierOptions(for: currentModel, currentValue: effectiveServiceTier),
-                currentValue: effectiveServiceTier
-            ) { serviceTier in
-                Task { await self.updateSelectedServiceTier(serviceTier) }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .lineLimit(1)
-    }
-
-    private func compactSelectionMenu(
-        title: String,
-        options: [String],
-        currentValue: String,
-        displayValue: @escaping (String) -> String = { $0 },
-        refreshModels: Bool = false,
-        onSelect: @escaping (String) -> Void
-    ) -> some View {
-        Menu {
-            ForEach(options, id: \.self) { value in
-                Button {
-                    onSelect(value)
-                } label: {
-                    HStack {
-                        Text(displayValue(value))
-                        if value == currentValue { Image(systemName: "checkmark") }
-                    }
-                }
-            }
-            if refreshModels {
-                Divider()
-                Button(L.zh ? "刷新模型列表" : "Refresh models") {
-                    Task {
-                        let previousRefreshError = self.store.codexModelRefreshError
-                        await self.store.refreshCodexModelCatalog(force: true)
-                        if let message = self.store.codexModelRefreshError {
-                            self.setGenericError(message)
-                        } else if let previousRefreshError,
-                                  self.errorBanner?.source == .generic,
-                                  self.errorBanner?.message == previousRefreshError {
-                            // 只移除这次模型刷新修复的提示，保留其他操作的错误。
-                            self.clearError()
-                        }
-                    }
-                }
-                .disabled(self.store.isRefreshingCodexModels)
-                if let fetchedAt = self.store.oauthModelCatalog?.fetchedAt {
-                    Text((L.zh ? "更新于 " : "Updated ") + fetchedAt.formatted(date: .abbreviated, time: .shortened))
-                }
-            }
-        } label: {
-            Text(title)
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .foregroundColor(.primary.opacity(0.86))
-                .padding(.horizontal, 7)
-                .padding(.vertical, 2)
-                .background(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color.primary.opacity(0.07))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-                )
-        }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func modelSelectionOptions(currentModel: String) -> [String] {
-        if let openRouterProvider = self.modelSelectionOpenRouterProvider {
-            var candidates = [currentModel]
-            candidates.append(contentsOf: openRouterProvider.pinnedModelIDs)
-            candidates.append(contentsOf: openRouterProvider.cachedModelCatalog.prefix(10).map(\.id))
-            return Self.uniqueTrimmedModelOptions(candidates)
-        }
-
-        return Self.codexModelSelectionOptions(currentModel: currentModel, catalog: self.store.oauthModelCatalog)
-    }
-
-    private func modelSelectionDisplayValue(currentModel: String) -> String {
-        self.modelSelectionOptionDisplayValue(
-            self.modelSelectionValue(currentModel: currentModel)
-        )
-    }
-
-    private func modelSelectionValue(currentModel: String) -> String {
-        guard self.modelSelectionOpenRouterProvider == nil else { return currentModel }
-        return currentModel
-    }
-
-    private func modelSelectionOptionDisplayValue(_ modelID: String) -> String {
-        guard self.modelSelectionOpenRouterProvider == nil else { return modelID }
-        return Self.codexModelDisplayName(for: modelID, catalog: self.store.oauthModelCatalog)
-    }
-
-    static func codexModelSelectionOptions(currentModel: String, catalog: CodexModelCatalog? = nil) -> [String] {
-        (catalog ?? CodexModelCatalog(models: [], fetchedAt: nil)).selectionOptions(currentModel: currentModel)
-    }
-
-    static func codexModelDisplayName(for modelID: String, catalog: CodexModelCatalog? = nil) -> String {
-        catalog?.displayName(for: modelID) ?? CodexModelCatalog.fallbackDisplayName(for: modelID)
-    }
-
-    static func codexReasoningEffortOptions(for modelID: String, catalog: CodexModelCatalog? = nil) -> [String] {
-        CodexPanelGlobalSettings.reasoningEffortOptions(for: modelID, catalog: catalog)
-    }
-
-    private static func uniqueTrimmedModelOptions(_ candidates: [String]) -> [String] {
-        var seen: Set<String> = []
-        return candidates.compactMap { modelID in
-            let trimmed = modelID.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard trimmed.isEmpty == false,
-                  seen.insert(trimmed).inserted else {
-                return nil
-            }
-            return trimmed
-        }
-    }
-
-    private var modelSelectionOpenRouterProvider: CodexPanelProvider? {
-        if let activeProvider = self.store.activeProvider,
-           activeProvider.kind == .openRouter {
-            return activeProvider
-        }
-        return nil
     }
 
     private var menuFooter: some View {
@@ -1336,18 +1145,7 @@ struct MenuBarView: View {
     }
 
     private func apiEntryCount(for provider: CodexPanelProvider) -> Int {
-        let providerHeaderEntry = 1
-        guard provider.kind == .openRouter else {
-            return providerHeaderEntry + provider.accounts.count
-        }
-
-        let pinnedModelCount = orderedPinnedOpenRouterModelIDs(
-            selectedModelIDs: Set(provider.pinnedModelIDs),
-            cachedModels: provider.cachedModelCatalog,
-            manualModelID: provider.openRouterEffectiveModelID ?? ""
-        ).count
-        let noModelFallbackCount = pinnedModelCount == 0 && provider.openRouterEffectiveModelID == nil ? 1 : 0
-        return providerHeaderEntry + pinnedModelCount + noModelFallbackCount + provider.accounts.count
+        1 + provider.accounts.count
     }
 
     private func apiProviderRows(limit: Int?) -> [APIProviderListRow] {
@@ -1372,92 +1170,38 @@ struct MenuBarView: View {
         remaining: inout Int
     ) -> APIProviderListRow {
         remaining = max(remaining - 1, 0)
-
-        if provider.kind == .openRouter {
-            let pinnedModelIDs = orderedPinnedOpenRouterModelIDs(
-                selectedModelIDs: Set(provider.pinnedModelIDs),
-                cachedModels: provider.cachedModelCatalog,
-                manualModelID: provider.openRouterEffectiveModelID ?? ""
-            )
-            let visiblePinnedModelIDs = Array(pinnedModelIDs.prefix(remaining))
-            remaining = max(remaining - visiblePinnedModelIDs.count, 0)
-
-            let showsNoModelFallback =
-                pinnedModelIDs.isEmpty &&
-                provider.openRouterEffectiveModelID == nil &&
-                remaining > 0
-            if showsNoModelFallback {
-                remaining -= 1
-            }
-
-            let visibleAccounts = Array(provider.accounts.prefix(remaining))
-            remaining = max(remaining - visibleAccounts.count, 0)
-
-            return APIProviderListRow(
-                provider: provider,
-                visibleAccounts: visibleAccounts,
-                visiblePinnedModelIDs: visiblePinnedModelIDs,
-                showsNoModelFallback: showsNoModelFallback
-            )
-        }
-
         let visibleAccounts = Array(provider.accounts.prefix(remaining))
         remaining = max(remaining - visibleAccounts.count, 0)
-        return APIProviderListRow(
-            provider: provider,
-            visibleAccounts: visibleAccounts,
-            visiblePinnedModelIDs: [],
-            showsNoModelFallback: false
-        )
+        return APIProviderListRow(provider: provider, visibleAccounts: visibleAccounts)
     }
 
     @ViewBuilder
     private func apiProviderRowsView(_ rows: [APIProviderListRow]) -> some View {
         ForEach(rows) { row in
-            if row.provider.kind == .openRouter {
-                OpenRouterProviderRowView(
-                    provider: row.provider,
-                    isActiveProvider: store.activeProvider?.id == row.provider.id,
-                    activeAccountId: row.provider.activeAccountId,
-                    visibleAccounts: row.visibleAccounts,
-                    visiblePinnedModelIDs: row.visiblePinnedModelIDs,
-                    showsNoModelFallback: row.showsNoModelFallback
-                ) { account in
+            CompatibleProviderRowView(
+                provider: row.provider,
+                isActiveProvider: store.activeProvider?.id == row.provider.id,
+                activeAccountId: row.provider.activeAccountId,
+                visibleAccounts: row.visibleAccounts,
+                onActivate: { account in
                     Task {
-                        await activateOpenRouterProvider(accountID: account.id)
+                        if row.provider.kind == .openRouter {
+                            await activateOpenRouterProvider(accountID: account.id)
+                        } else {
+                            await activateCompatibleProvider(providerID: row.provider.id, accountID: account.id)
+                        }
                     }
-                } onSelectModel: { modelID in
-                    Task {
-                        await selectOpenRouterModel(modelID)
+                },
+                onAddAccount: { openAddProviderAccountWindow(provider: row.provider) },
+                onDeleteAccount: { account in
+                    if row.provider.kind == .openRouter {
+                        deleteOpenRouterAccount(accountID: account.id)
+                    } else {
+                        deleteCompatibleAccount(providerID: row.provider.id, accountID: account.id)
                     }
-                } onAddAccount: {
-                    openAddOpenRouterAccountWindow(provider: row.provider)
-                } onEditModel: {
-                    openEditOpenRouterWindow(provider: row.provider)
-                } onDeleteAccount: { account in
-                    deleteOpenRouterAccount(accountID: account.id)
-                }
-            } else {
-                CompatibleProviderRowView(
-                    provider: row.provider,
-                    isActiveProvider: store.activeProvider?.id == row.provider.id,
-                    activeAccountId: row.provider.activeAccountId,
-                    visibleAccounts: row.visibleAccounts
-                ) { account in
-                    Task {
-                        await activateCompatibleProvider(
-                            providerID: row.provider.id,
-                            accountID: account.id
-                        )
-                    }
-                } onAddAccount: {
-                    openAddProviderAccountWindow(provider: row.provider)
-                } onDeleteAccount: { account in
-                    deleteCompatibleAccount(providerID: row.provider.id, accountID: account.id)
-                } onDeleteProvider: {
-                    deleteProvider(providerID: row.provider.id)
-                }
-            }
+                },
+                onDeleteProvider: row.provider.kind == .openRouter ? nil : { deleteProvider(providerID: row.provider.id) }
+            )
         }
     }
 
@@ -2146,48 +1890,6 @@ struct MenuBarView: View {
         }
     }
 
-    private func selectOpenRouterModel(_ modelID: String) async {
-        do {
-            try self.store.updateOpenRouterSelectedModel(modelID)
-            if let provider = self.store.openRouterProvider,
-               self.store.activeProvider?.id != provider.id,
-               let accountID = provider.activeAccountId {
-                await self.activateOpenRouterProvider(accountID: accountID)
-                return
-            }
-            self.clearError()
-        } catch {
-            self.setGenericError(error.localizedDescription)
-        }
-    }
-
-    private func updateSelectedRouteModel(_ modelID: String) async {
-        do {
-            try self.store.updateRouteModel(modelID)
-            self.clearError()
-        } catch {
-            self.setGenericError(error.localizedDescription)
-        }
-    }
-
-    private func updateSelectedReasoningEffort(_ effort: String) async {
-        do {
-            try self.store.updateReasoningEffort(effort)
-            self.clearError()
-        } catch {
-            self.setGenericError(error.localizedDescription)
-        }
-    }
-
-    private func updateSelectedServiceTier(_ serviceTier: String) async {
-        do {
-            try self.store.updateServiceTier(serviceTier)
-            self.clearError()
-        } catch {
-            self.setGenericError(error.localizedDescription)
-        }
-    }
-
     private func setOpenAIAccountUsageMode(_ mode: CodexPanelOpenAIAccountUsageMode) async {
         let previousMode = self.store.config.openAI.accountUsageMode
         let previousActiveProviderID = self.store.config.active.providerId
@@ -2230,23 +1932,6 @@ struct MenuBarView: View {
         guard self.store.clearStaleAggregateSticky(using: snapshot) else { return }
         self.clearError()
         self.refreshRunningThreadAttribution()
-    }
-
-    private func activeProviderSummaryTitle(
-        activeProvider: CodexPanelProvider,
-        activeAccount: CodexPanelProviderAccount
-    ) -> String {
-        if activeProvider.kind == .openAIOAuth &&
-            self.store.config.openAI.accountUsageMode == .aggregateGateway {
-            let routedAccount = self.store.aggregateRoutedAccount ??
-                activeAccount.asTokenAccount(isActive: false)
-            return OpenAIAccountPresentation.aggregateSummaryTitle(
-                providerLabel: activeProvider.label,
-                routedAccount: routedAccount,
-                usageDisplayMode: self.store.config.openAI.usageDisplayMode
-            )
-        }
-        return "\(activeProvider.label) · \(activeAccount.label)"
     }
 
     private func deleteCompatibleAccount(providerID: String, accountID: String) {
@@ -2336,28 +2021,17 @@ struct MenuBarView: View {
         DetachedWindowPresenter.shared.show(
             id: "add-provider",
             title: "Add Provider",
-            size: CGSize(width: 520, height: 620)
+            size: CGSize(width: 520, height: 420)
         ) {
-            AddProviderSheet(store: store, defaultPreset: defaultPreset) { result in
+            AddProviderSheet(defaultPreset: defaultPreset) { result in
                 do {
-                    if let openRouterSelection = result.openRouterSelection {
-                        try store.addOpenRouterProvider(
-                            apiKey: openRouterSelection.apiKey,
-                            selectedModelID: openRouterSelection.selectedModelID,
-                            pinnedModelIDs: openRouterSelection.pinnedModelIDs,
-                            cachedModelCatalog: openRouterSelection.cachedModelCatalog,
-                            fetchedAt: openRouterSelection.fetchedAt
-                        )
+                    if result.isOpenRouter {
+                        try store.addOpenRouterProvider(accountLabel: result.accountLabel, apiKey: result.apiKey)
                     } else {
                         try store.addCompatibleProvider(
-                            label: result.label,
-                            baseURL: result.baseURL,
-                            accountLabel: result.accountLabel,
-                            apiKey: result.apiKey,
-                            wireAPI: result.wireAPI,
-                            presetID: result.presetID,
-                            model: result.model,
-                            modelCatalog: result.modelCatalog
+                            label: result.label, baseURL: result.baseURL,
+                            accountLabel: result.accountLabel, apiKey: result.apiKey,
+                            wireAPI: result.wireAPI, presetID: result.presetID
                         )
                     }
                     self.clearError()
@@ -2380,7 +2054,11 @@ struct MenuBarView: View {
         ) {
             AddProviderAccountSheet(provider: provider) { label, apiKey in
                 do {
-                    try store.addCustomProviderAccount(providerID: provider.id, label: label, apiKey: apiKey)
+                    if provider.kind == .openRouter {
+                        try store.addOpenRouterProviderAccount(label: label, apiKey: apiKey)
+                    } else {
+                        try store.addCustomProviderAccount(providerID: provider.id, label: label, apiKey: apiKey)
+                    }
                     self.clearError()
                     DetachedWindowPresenter.shared.close(id: "add-provider-account-\(provider.id)")
                 } catch {
@@ -2388,51 +2066,6 @@ struct MenuBarView: View {
                 }
             } onCancel: {
                 DetachedWindowPresenter.shared.close(id: "add-provider-account-\(provider.id)")
-            }
-        }
-    }
-
-    private func openAddOpenRouterAccountWindow(provider: CodexPanelProvider) {
-        self.requestCloseStatusItemMenu()
-        DetachedWindowPresenter.shared.show(
-            id: "add-openrouter-account",
-            title: "Add OpenRouter Account",
-            size: CGSize(width: 520, height: 620)
-        ) {
-            AddOpenRouterAccountSheet(provider: provider, store: store) { selection in
-                do {
-                    try store.addOpenRouterProviderAccount(
-                        apiKey: selection.apiKey,
-                        selectedModelID: selection.selectedModelID,
-                        pinnedModelIDs: selection.pinnedModelIDs,
-                        cachedModelCatalog: selection.cachedModelCatalog,
-                        fetchedAt: selection.fetchedAt
-                    )
-                    self.clearError()
-                    DetachedWindowPresenter.shared.close(id: "add-openrouter-account")
-                } catch {
-                    self.setGenericError(error.localizedDescription)
-                }
-            } onCancel: {
-                DetachedWindowPresenter.shared.close(id: "add-openrouter-account")
-            }
-        }
-    }
-
-    private func openEditOpenRouterWindow(provider: CodexPanelProvider) {
-        self.requestCloseStatusItemMenu()
-        DetachedWindowPresenter.shared.show(
-            id: "edit-openrouter-model",
-            title: "OpenRouter Models",
-            size: CGSize(width: 480, height: 460)
-        ) {
-            EditOpenRouterModelSheet(
-                provider: provider,
-                store: store
-            ) { message in
-                self.setGenericError(message)
-            } onClose: {
-                DetachedWindowPresenter.shared.close(id: "edit-openrouter-model")
             }
         }
     }
@@ -2544,7 +2177,6 @@ struct MenuBarView: View {
             )
         }
 
-        Task { await self.store.refreshCodexModelCatalog() }
         self.scheduleBackgroundUsageBackfill(excluding: activeAccount?.id)
         self.recordMenuDiagnostic(type: "refresh_on_open_finished")
     }
@@ -2585,7 +2217,6 @@ struct MenuBarView: View {
         }
         let outcomes = await WhamService.shared.refreshAll(store: store)
         store.load()
-        Task { await self.store.refreshCodexModelCatalog(force: force) }
         now = Date()
         if didRequestLocalCostRefresh == false {
             store.refreshLocalCostSummary(
@@ -2835,283 +2466,41 @@ private enum AddProviderPreset: String, CaseIterable, Identifiable {
 }
 
 private struct AddProviderResult {
-    let preset: AddProviderPreset
     let label: String
     let baseURL: String
     let accountLabel: String
     let apiKey: String
     let wireAPI: CodexPanelWireAPI
     let presetID: String?
-    let model: String?
-    let modelCatalog: [CodexPanelOpenRouterModel]
-    let openRouterSelection: OpenRouterSelectionPayload?
-}
-
-private struct OpenRouterSelectionPayload: Equatable {
-    let apiKey: String
-    let selectedModelID: String
-    let pinnedModelIDs: [String]
-    let cachedModelCatalog: [CodexPanelOpenRouterModel]
-    let fetchedAt: Date?
-}
-
-private enum OpenRouterModelPickerRefreshMode {
-    case previewEnteredAPIKey
-    case refreshExistingProvider(fallbackProvider: CodexPanelProvider)
-}
-
-private func normalizedOpenRouterModelID(_ value: String) -> String? {
-    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? nil : trimmed
-}
-
-private func orderedPinnedOpenRouterModelIDs(
-    selectedModelIDs: Set<String>,
-    cachedModels: [CodexPanelOpenRouterModel],
-    manualModelID: String
-) -> [String] {
-    let normalizedManualModelID = normalizedOpenRouterModelID(manualModelID)
-    let orderedFromCatalog = cachedModels.map(\.id).filter { selectedModelIDs.contains($0) }
-    let remaining = selectedModelIDs.subtracting(orderedFromCatalog).sorted()
-    var ordered = orderedFromCatalog + remaining
-    if let normalizedManualModelID,
-       ordered.contains(normalizedManualModelID) == false {
-        ordered.append(normalizedManualModelID)
-    }
-    return ordered
-}
-
-private func makeOpenRouterSelectionPayload(
-    apiKey: String,
-    selectedModelIDs: Set<String>,
-    manualModelID: String,
-    cachedModels: [CodexPanelOpenRouterModel],
-    fetchedAt: Date?
-) -> OpenRouterSelectionPayload? {
-    guard let normalizedAPIKey = normalizedOpenRouterModelID(apiKey) else {
-        return nil
-    }
-
-    let orderedPinnedModelIDs = orderedPinnedOpenRouterModelIDs(
-        selectedModelIDs: selectedModelIDs,
-        cachedModels: cachedModels,
-        manualModelID: manualModelID
-    )
-    guard let selectedModelID = normalizedOpenRouterModelID(manualModelID) ?? orderedPinnedModelIDs.first else {
-        return nil
-    }
-
-    return OpenRouterSelectionPayload(
-        apiKey: normalizedAPIKey,
-        selectedModelID: selectedModelID,
-        pinnedModelIDs: orderedPinnedModelIDs,
-        cachedModelCatalog: cachedModels,
-        fetchedAt: fetchedAt
-    )
-}
-
-private struct OpenRouterModelPickerSection: View {
-    @ObservedObject var store: TokenStore
-    @Binding var apiKey: String
-    @Binding var selectedModelIDs: Set<String>
-    @Binding var manualModelID: String
-    @Binding var cachedModels: [CodexPanelOpenRouterModel]
-    @Binding var fetchedAt: Date?
-
-    let refreshMode: OpenRouterModelPickerRefreshMode
-    let helperText: String
-
-    @State private var searchText = ""
-    @State private var isRefreshing = false
-    @State private var note: String?
-
-    private var filteredModels: [CodexPanelOpenRouterModel] {
-        let trimmedSearch = self.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedSearch.isEmpty == false else { return self.cachedModels }
-        return self.cachedModels.filter { model in
-            model.id.localizedCaseInsensitiveContains(trimmedSearch) ||
-                model.name.localizedCaseInsensitiveContains(trimmedSearch)
-        }
-    }
-
-    private var statusText: String {
-        if let fetchedAt {
-            return "\(cachedModels.count) cached models · updated \(fetchedAt.formatted(date: .abbreviated, time: .shortened))"
-        }
-        if cachedModels.isEmpty == false {
-            return "\(cachedModels.count) cached models"
-        }
-        return "No cached models yet"
-    }
-
-    private var selectedCountText: String {
-        "\(self.selectedModelIDs.count) selected"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Text(self.statusText)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-
-                Spacer()
-
-                Button(isRefreshing ? "Refreshing..." : "Refresh Models") {
-                    Task {
-                        await self.refreshModels()
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(isRefreshing || apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-
-            if cachedModels.isEmpty == false {
-                HStack(spacing: 8) {
-                    TextField("Search Models", text: $searchText)
-                    Text(self.selectedCountText)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
-                }
-
-                List {
-                    ForEach(self.filteredModels) { model in
-                        Toggle(isOn: self.bindingForModel(model.id)) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(model.name)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.primary)
-                                Text(model.id)
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                            .padding(.vertical, 2)
-                        }
-                        .toggleStyle(.checkbox)
-                    }
-
-                    if self.filteredModels.isEmpty {
-                        Text("No models match the current search.")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .listStyle(.inset)
-                .frame(minHeight: 220, maxHeight: 260)
-            }
-
-            TextField("Manual model ID fallback (optional)", text: $manualModelID)
-            Text(helperText)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-
-            if let note {
-                Text(note)
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-
-    private func toggleModel(_ modelID: String) {
-        if self.selectedModelIDs.contains(modelID) {
-            self.selectedModelIDs.remove(modelID)
-        } else {
-            self.selectedModelIDs.insert(modelID)
-        }
-    }
-
-    private func bindingForModel(_ modelID: String) -> Binding<Bool> {
-        Binding(
-            get: { self.selectedModelIDs.contains(modelID) },
-            set: { isSelected in
-                if isSelected {
-                    self.selectedModelIDs.insert(modelID)
-                } else {
-                    self.selectedModelIDs.remove(modelID)
-                }
-            }
-        )
-    }
-
-    private func refreshModels() async {
-        self.isRefreshing = true
-        self.note = nil
-        defer {
-            self.isRefreshing = false
-        }
-
-        do {
-            let snapshot: OpenRouterModelCatalogSnapshot
-            switch self.refreshMode {
-            case .previewEnteredAPIKey:
-                snapshot = try await self.store.previewOpenRouterModelCatalog(apiKey: self.apiKey)
-            case .refreshExistingProvider(let fallbackProvider):
-                try await self.store.refreshOpenRouterModelCatalog()
-                let refreshedProvider = self.store.openRouterProvider ?? fallbackProvider
-                snapshot = OpenRouterModelCatalogSnapshot(
-                    models: refreshedProvider.cachedModelCatalog,
-                    fetchedAt: refreshedProvider.modelCatalogFetchedAt ?? Date()
-                )
-            }
-            self.cachedModels = snapshot.models
-            self.fetchedAt = snapshot.fetchedAt
-            self.note = "Refreshed \(snapshot.models.count) models. Checked models will be available directly after saving."
-        } catch {
-            self.note = "Refresh failed. Keeping the current selection and cached models."
-        }
-    }
+    let isOpenRouter: Bool
 }
 
 private struct AddProviderSheet: View {
-    @ObservedObject var store: TokenStore
-
     @State private var preset: AddProviderPreset
     @State private var label = ""
     @State private var baseURL = ""
     @State private var accountLabel = ""
     @State private var apiKey = ""
     @State private var customWireAPI: CodexPanelWireAPI = .chat
-    @State private var customModel = ""
     @State private var selectedPresetID: String
-    @State private var presetModelID = ""
-    @State private var openRouterSelectedModelIDs: Set<String>
-    @State private var openRouterManualModelID: String
-    @State private var openRouterCachedModels: [CodexPanelOpenRouterModel]
-    @State private var openRouterFetchedAt: Date?
 
     let onSave: (AddProviderResult) -> Void
     let onCancel: () -> Void
 
     init(
-        store: TokenStore,
         defaultPreset: AddProviderPreset = .preset,
         onSave: @escaping (AddProviderResult) -> Void,
         onCancel: @escaping () -> Void
     ) {
-        let existingProvider = store.openRouterProvider
         self._preset = State(initialValue: defaultPreset)
-        self.store = store
         self.onSave = onSave
         self.onCancel = onCancel
         let firstPreset = CodexPanelProviderPresetCatalog.all.first
         self._selectedPresetID = State(initialValue: firstPreset?.id ?? "")
-        self._presetModelID = State(initialValue: firstPreset?.defaultModelID ?? "")
-        self._openRouterSelectedModelIDs = State(initialValue: Set(existingProvider?.pinnedModelIDs ?? []))
-        self._openRouterManualModelID = State(initialValue: existingProvider?.openRouterEffectiveModelID ?? "")
-        self._openRouterCachedModels = State(initialValue: existingProvider?.cachedModelCatalog ?? [])
-        self._openRouterFetchedAt = State(initialValue: existingProvider?.modelCatalogFetchedAt)
     }
 
     private var selectedPreset: CodexPanelProviderPreset? {
         CodexPanelProviderPresetCatalog.preset(id: self.selectedPresetID)
-    }
-
-    private var selectedPresetIsOpenRouter: Bool {
-        self.selectedPreset?.kind == .openRouter
     }
 
     private var canSave: Bool {
@@ -3120,29 +2509,11 @@ private struct AddProviderSheet: View {
 
         switch self.preset {
         case .preset:
-            if self.selectedPresetIsOpenRouter {
-                return self.openRouterSelectionPayload != nil
-            }
-            return self.selectedPreset != nil &&
-                self.presetModelID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            return self.selectedPreset != nil
         case .custom:
-            let hasBasics = self.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
+            return self.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
                 self.baseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            if self.customWireAPI == .chat {
-                return hasBasics && self.customModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            }
-            return hasBasics
         }
-    }
-
-    private var openRouterSelectionPayload: OpenRouterSelectionPayload? {
-        makeOpenRouterSelectionPayload(
-            apiKey: self.apiKey,
-            selectedModelIDs: self.openRouterSelectedModelIDs,
-            manualModelID: self.openRouterManualModelID,
-            cachedModels: self.openRouterCachedModels,
-            fetchedAt: self.openRouterFetchedAt
-        )
     }
 
     var body: some View {
@@ -3176,9 +2547,6 @@ private struct AddProviderSheet: View {
         }
         .padding(16)
         .frame(width: self.preset == .custom ? 380 : 460)
-        .onChange(of: selectedPresetID) { _ in
-            self.presetModelID = self.selectedPreset?.defaultModelID ?? ""
-        }
     }
 
     @ViewBuilder private var presetSection: some View {
@@ -3188,31 +2556,6 @@ private struct AddProviderSheet: View {
                     ForEach(CodexPanelProviderPresetCatalog.all.filter { $0.group == group }) { preset in
                         Text(preset.displayName).tag(preset.id)
                     }
-                }
-            }
-        }
-
-        if self.selectedPresetIsOpenRouter {
-            OpenRouterModelPickerSection(
-                store: self.store,
-                apiKey: $apiKey,
-                selectedModelIDs: $openRouterSelectedModelIDs,
-                manualModelID: $openRouterManualModelID,
-                cachedModels: $openRouterCachedModels,
-                fetchedAt: $openRouterFetchedAt,
-                refreshMode: .previewEnteredAPIKey,
-                helperText: "Pick one or more models here. The first checked model becomes the current model by default, and all checked models will appear in the OpenRouter section for direct switching."
-            )
-        } else {
-            HStack(spacing: 8) {
-                TextField(L.addProviderModel, text: $presetModelID)
-                if let models = selectedPreset?.defaultModels, models.isEmpty == false {
-                    Menu(L.addProviderModel) {
-                        ForEach(models) { model in
-                            Button(model.name) { self.presetModelID = model.id }
-                        }
-                    }
-                    .fixedSize()
                 }
             }
         }
@@ -3237,7 +2580,6 @@ private struct AddProviderSheet: View {
         }
         .pickerStyle(.segmented)
         if customWireAPI == .chat {
-            TextField(L.addProviderModel, text: $customModel)
             Text(L.addProviderWireAPIChatHint)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -3252,42 +2594,33 @@ private struct AddProviderSheet: View {
             let selected = self.selectedPreset
             if selected?.kind == .openRouter {
                 return AddProviderResult(
-                    preset: .preset,
                     label: "OpenRouter",
                     baseURL: "",
                     accountLabel: accountLabel,
                     apiKey: apiKey,
                     wireAPI: .responses,
                     presetID: selected?.id,
-                    model: nil,
-                    modelCatalog: [],
-                    openRouterSelection: self.openRouterSelectionPayload
+                    isOpenRouter: true
                 )
             }
             return AddProviderResult(
-                preset: .preset,
                 label: selected?.displayName ?? self.selectedPresetID,
                 baseURL: selected?.baseURL ?? "",
                 accountLabel: accountLabel,
                 apiKey: apiKey,
                 wireAPI: selected?.wireAPI ?? .chat,
                 presetID: selected?.id,
-                model: presetModelID,
-                modelCatalog: selected?.defaultModels ?? [],
-                openRouterSelection: nil
+                isOpenRouter: false
             )
         case .custom:
             return AddProviderResult(
-                preset: .custom,
                 label: label,
                 baseURL: baseURL,
                 accountLabel: accountLabel,
                 apiKey: apiKey,
                 wireAPI: customWireAPI,
                 presetID: nil,
-                model: customWireAPI == .chat ? customModel : nil,
-                modelCatalog: [],
-                openRouterSelection: nil
+                isOpenRouter: false
             )
         }
     }
@@ -3320,355 +2653,5 @@ private struct AddProviderAccountSheet: View {
         }
         .padding(16)
         .frame(width: 340)
-    }
-}
-
-private struct AddOpenRouterAccountSheet: View {
-    let provider: CodexPanelProvider
-    @ObservedObject var store: TokenStore
-    let onSave: (OpenRouterSelectionPayload) -> Void
-    let onCancel: () -> Void
-
-    @State private var apiKey = ""
-    @State private var selectedModelIDs: Set<String>
-    @State private var manualModelID: String
-    @State private var cachedModels: [CodexPanelOpenRouterModel]
-    @State private var fetchedAt: Date?
-
-    init(
-        provider: CodexPanelProvider,
-        store: TokenStore,
-        onSave: @escaping (OpenRouterSelectionPayload) -> Void,
-        onCancel: @escaping () -> Void
-    ) {
-        self.provider = provider
-        self.store = store
-        self.onSave = onSave
-        self.onCancel = onCancel
-        self._selectedModelIDs = State(initialValue: Set(provider.pinnedModelIDs))
-        self._manualModelID = State(initialValue: provider.openRouterEffectiveModelID ?? "")
-        self._cachedModels = State(initialValue: provider.cachedModelCatalog)
-        self._fetchedAt = State(initialValue: provider.modelCatalogFetchedAt)
-    }
-
-    private var canSave: Bool {
-        self.selectionPayload != nil
-    }
-
-    private var selectionPayload: OpenRouterSelectionPayload? {
-        makeOpenRouterSelectionPayload(
-            apiKey: self.apiKey,
-            selectedModelIDs: self.selectedModelIDs,
-            manualModelID: self.manualModelID,
-            cachedModels: self.cachedModels,
-            fetchedAt: self.fetchedAt
-        )
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Add Account · \(provider.label)")
-                .font(.headline)
-
-            SecureField("API key", text: $apiKey)
-            OpenRouterModelPickerSection(
-                store: self.store,
-                apiKey: $apiKey,
-                selectedModelIDs: $selectedModelIDs,
-                manualModelID: $manualModelID,
-                cachedModels: $cachedModels,
-                fetchedAt: $fetchedAt,
-                refreshMode: .previewEnteredAPIKey,
-                helperText: "Account labels are auto-generated for OpenRouter. Pick the models here; after saving, these checked models will appear directly in the OpenRouter section."
-            )
-
-            HStack {
-                Spacer()
-                Button("Cancel", action: onCancel)
-                Button("Save") {
-                    if let selectionPayload {
-                        onSave(selectionPayload)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(canSave == false)
-            }
-        }
-        .padding(16)
-        .frame(width: 460)
-    }
-}
-
-private struct EditOpenRouterModelSheet: View {
-    let provider: CodexPanelProvider
-    @ObservedObject var store: TokenStore
-    let onError: (String?) -> Void
-    let onClose: () -> Void
-
-    @State private var manualModelID: String
-    @State private var selectedModelIDs: Set<String>
-    @State private var cachedModels: [CodexPanelOpenRouterModel]
-    @State private var fetchedAt: Date?
-
-    init(
-        provider: CodexPanelProvider,
-        store: TokenStore,
-        onError: @escaping (String?) -> Void,
-        onClose: @escaping () -> Void
-    ) {
-        self.provider = provider
-        self.store = store
-        self.onError = onError
-        self.onClose = onClose
-        self._manualModelID = State(initialValue: provider.openRouterEffectiveModelID ?? "")
-        self._selectedModelIDs = State(initialValue: Set(provider.pinnedModelIDs))
-        self._cachedModels = State(initialValue: provider.cachedModelCatalog)
-        self._fetchedAt = State(initialValue: provider.modelCatalogFetchedAt)
-    }
-
-    private var canSave: Bool {
-        self.selectionPayload != nil
-    }
-
-    private var currentProvider: CodexPanelProvider {
-        self.store.openRouterProvider ?? self.provider
-    }
-
-    private var selectionPayload: OpenRouterSelectionPayload? {
-        makeOpenRouterSelectionPayload(
-            apiKey: self.currentProvider.activeAccount?.apiKey ?? "",
-            selectedModelIDs: self.selectedModelIDs,
-            manualModelID: self.manualModelID,
-            cachedModels: self.cachedModels,
-            fetchedAt: self.fetchedAt
-        )
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("OpenRouter Models")
-                .font(.headline)
-
-            Text("Checked models will stay visible in the OpenRouter section. The current model defaults to the first checked model unless you enter a manual fallback below.")
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
-
-            OpenRouterModelPickerSection(
-                store: self.store,
-                apiKey: .constant(self.currentProvider.activeAccount?.apiKey ?? ""),
-                selectedModelIDs: $selectedModelIDs,
-                manualModelID: $manualModelID,
-                cachedModels: $cachedModels,
-                fetchedAt: $fetchedAt,
-                refreshMode: .refreshExistingProvider(fallbackProvider: self.currentProvider),
-                helperText: "You can still enter an exact OpenRouter model ID manually. Checked models become your direct-use list in the main menu."
-            )
-
-            HStack {
-                Spacer()
-                Button("Cancel", action: onClose)
-                Button("Save") {
-                    guard let selectionPayload else {
-                        self.onError("请选择至少一个模型，或输入一个手动模型 ID")
-                        return
-                    }
-                    do {
-                        try self.store.updateOpenRouterModelSelection(
-                            selectedModelID: selectionPayload.selectedModelID,
-                            pinnedModelIDs: selectionPayload.pinnedModelIDs,
-                            cachedModelCatalog: selectionPayload.cachedModelCatalog,
-                            fetchedAt: selectionPayload.fetchedAt
-                        )
-                        self.onError(nil)
-                        self.onClose()
-                    } catch {
-                        self.onError(error.localizedDescription)
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(canSave == false)
-            }
-        }
-        .padding(16)
-        .frame(width: 440)
-    }
-}
-
-private struct OpenRouterProviderRowView: View {
-    let provider: CodexPanelProvider
-    let isActiveProvider: Bool
-    let activeAccountId: String?
-    var visibleAccounts: [CodexPanelProviderAccount]? = nil
-    var visiblePinnedModelIDs: [String]? = nil
-    var showsNoModelFallback = true
-    let onActivate: (CodexPanelProviderAccount) -> Void
-    let onSelectModel: (String) -> Void
-    let onAddAccount: () -> Void
-    let onEditModel: () -> Void
-    let onDeleteAccount: (CodexPanelProviderAccount) -> Void
-
-    private var orderedPinnedModelIDs: [String] {
-        orderedPinnedOpenRouterModelIDs(
-            selectedModelIDs: Set(self.provider.pinnedModelIDs),
-            cachedModels: self.provider.cachedModelCatalog,
-            manualModelID: self.provider.openRouterEffectiveModelID ?? ""
-        )
-    }
-
-    private var displayedPinnedModelIDs: [String] {
-        self.visiblePinnedModelIDs ?? self.orderedPinnedModelIDs
-    }
-
-    private var displayedAccounts: [CodexPanelProviderAccount] {
-        self.visibleAccounts ?? self.provider.accounts
-    }
-
-    private func displayName(for modelID: String) -> String {
-        self.provider.cachedModelCatalog.first(where: { $0.id == modelID })?.name ?? modelID
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(isActiveProvider ? Color.accentColor : Color.secondary.opacity(0.5))
-                    .frame(width: 7, height: 7)
-
-                Text(provider.label)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(isActiveProvider ? .accentColor : .primary)
-
-                Text(provider.openRouterEffectiveModelID ?? "No model selected")
-                    .font(.system(size: 9))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Color.secondary.opacity(0.12))
-                    .foregroundColor(provider.openRouterEffectiveModelID == nil ? .orange : .secondary)
-                    .cornerRadius(3)
-
-                Spacer()
-
-                Button(action: onAddAccount) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(.borderless)
-
-                Button(action: onEditModel) {
-                    Image(systemName: "pencil")
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(.borderless)
-            }
-
-            Text(
-                provider.modelCatalogFetchedAt.map {
-                    "\(provider.cachedModelCatalog.count) cached models · \($0.formatted(date: .abbreviated, time: .shortened))"
-                } ?? (
-                    provider.cachedModelCatalog.isEmpty
-                        ? "No cached models. Refresh the catalog or enter a model ID manually."
-                        : "\(provider.cachedModelCatalog.count) cached models"
-                )
-            )
-            .font(.system(size: 9))
-            .foregroundColor(.secondary)
-            .padding(.leading, 14)
-
-            if self.displayedPinnedModelIDs.isEmpty == false {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(self.displayedPinnedModelIDs, id: \.self) { modelID in
-                        HStack(spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(self.displayName(for: modelID))
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(.primary)
-                                Text(modelID)
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                            }
-
-                            Spacer()
-
-                            if modelID == self.provider.openRouterEffectiveModelID {
-                                Text("Current")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(.accentColor)
-                            } else {
-                                Button("Use") {
-                                    self.onSelectModel(modelID)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.mini)
-                                .font(.system(size: 9, weight: .medium))
-                            }
-                        }
-                        .padding(.leading, 14)
-                    }
-                }
-            } else if self.provider.openRouterEffectiveModelID == nil && self.showsNoModelFallback {
-                HStack(spacing: 8) {
-                    Text("No model configured yet.")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.orange)
-
-                    Spacer()
-
-                    Button("Set Model") {
-                        self.onEditModel()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.mini)
-                    .font(.system(size: 9, weight: .semibold))
-                }
-                .padding(.leading, 14)
-            }
-
-            ForEach(self.displayedAccounts) { account in
-                HStack(spacing: 6) {
-                    Text(account.label)
-                        .font(.system(size: 11, weight: account.id == activeAccountId ? .semibold : .regular))
-
-                    if account.id == activeAccountId {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(.accentColor)
-                    }
-
-                    Spacer()
-
-                    Text(account.maskedAPIKey)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-
-                    if account.id != activeAccountId || isActiveProvider == false {
-                        Button("Use") {
-                            onActivate(account)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.mini)
-                        .font(.system(size: 10, weight: .medium))
-                        .disabled(provider.openRouterEffectiveModelID == nil)
-                    }
-
-                    Button {
-                        onDeleteAccount(account)
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.system(size: 10))
-                    }
-                    .buttonStyle(.borderless)
-                    .foregroundColor(.secondary)
-                }
-                .padding(.leading, 14)
-            }
-        }
-        .padding(.vertical, 5)
-        .padding(.horizontal, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isActiveProvider ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.05))
-        )
     }
 }

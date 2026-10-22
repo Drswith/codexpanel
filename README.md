@@ -26,33 +26,13 @@
 
 `codexpanel` 解决的不是“再造一个 Codex”，而是把这条切换链路变成一个更稳、更快、更少丢上下文的菜单栏工作流。
 
-## 界面截图
+## 界面与设置
 
-下面是当前版本 README 使用的界面截图。它们反映的是现在这版产品的实际界面形态，文案说明只补充你在图里可以直接完成什么。
+菜单栏展示成本、OpenAI 账号用量和 provider 账号列表；设置窗口包含账户设置、用量设置、诊断和关于。设置修改自动保存。
 
-### OpenAI 账号视图
+菜单栏图标随应用运行常驻；应用不再保存或读取图标的隐藏状态。从 Finder 或 Spotlight 再次打开应用会显示面板。
 
-主菜单里直接看到当前模式、模型、当日与 30 天成本、账号可用量，以及 5 小时 / 7 天窗口里真正决定恢复可用性的时间信息。
-
-<p align="center">
-  <img src="./docs/assets/readme-openai-accounts-view.png" alt="codexpanel OpenAI accounts view" width="652" />
-</p>
-
-### Provider 管理视图
-
-同一菜单里展开 provider 列表后，可以直接维护多套 OpenAI 兼容后端，并在每个 provider 下管理多组 API key、默认目标和当前激活状态。
-
-<p align="center">
-  <img src="./docs/assets/readme-provider-management-view.png" alt="codexpanel providers view" width="652" />
-</p>
-
-### 设置页
-
-设置页把账户模式、排序方式、手动激活行为、Codex Desktop 路径、诊断导出和更新相关入口整合在一个独立窗口里，不需要再手改配置文件。
-
-<p align="center">
-  <img src="./docs/assets/readme-settings-window.png" alt="codexpanel settings window" width="1120" />
-</p>
+模型、审核模型、推理强度和服务档位均由 Codex 管理。启动、切换账号/provider 或切换聚合模式时，Codex Panel 只同步认证与路由配置，保留现有模型相关配置；未设置的键也保持缺省。第三方网关使用 Codex 请求中的模型，不用面板中的旧模型值替换。
 
 ## 不拆 `~/.codex`，保留同一个会话池
 
@@ -80,14 +60,11 @@
 - OpenAI 账号的 **手动切换 / 聚合网关** 双模式
 - OpenAI 账号 CSV 导入 / 导出
 - OpenAI 账号支持按用量排序 / 按手动顺序排序
-- 设置页里配置手动激活策略与 Codex.app 路径
 - 一键导出诊断信息 / 最近匹配的崩溃日志
 - 本地 usage / 成本统计
 - GitHub Releases 运行时版本检测与手动“检查更新”
 
-OpenAI OAuth 的模型菜单优先读取 Codex 的 `models_cache.json`，同时读取模型名称、推理强度与服务档位。打开菜单或切换账号时会通过 Codex App Server 的 `model/list` 刷新目录（自动刷新间隔为 15 分钟）；模型菜单中的“刷新模型列表”可立即刷新。
-
-刷新结果按账号保存在 `~/.codexpanel/model-catalogs/`。目录更新不自动改写当前模型、推理强度或服务档位；隐藏模型默认不显示，但当前配置仍保留在选项中。查询失败保留最近成功目录，无可用目录时使用内置兜底。刷新在临时 `CODEX_HOME` 中完成，令牌只经 stdin 传入，不创建对话、不复制或修改共享历史池的 auth/config；旧版本 Codex 不支持相关协议时继续使用缓存。Debug 的所有路径仍遵守开发态隔离。
+设置页包含账户设置、用量设置、诊断和关于。菜单栏展示成本、账号和 provider；模型、推理强度与服务档位请在 Codex 中配置。
 
 本地 usage / 成本统计来自对下面目录的扫描：
 
@@ -107,8 +84,6 @@ OpenAI OAuth 的模型菜单优先读取 Codex 的 `models_cache.json`，同时�
 - OpenAI 账号支持 **手动切换 / 聚合网关** 两种使用模式
 - 支持导入 / 导出 OpenAI 账号数据文件，与 Sub2API 格式互通，方便迁移和批量整理
 - 支持在设置页里切换 OpenAI 账号排序方式：按当前用量排序，或按手动顺序展示
-- 支持设置手动激活行为：只改配置，或直接拉起新的 Codex 实例；已在运行的实例会继续保留
-- 当选择“拉起新实例”时，可以在设置页指定 Codex.app 的本地路径；路径失效时会自动回退系统探测
 - 支持在设置页里导出适合附到 GitHub issue 的诊断包，并自动带上最近匹配的崩溃日志与运行期事件日志
 
 ## 版本检测与更新
@@ -246,4 +221,4 @@ Debug 构建默认使用开发态隔离 profile，不会直接写真实 `~/.code
 
 本仓库默认按 Apache License 2.0 授权，详见 [LICENSE](LICENSE)。
 
-上游 MIT 许可声明保留在 [LICENSE.MIT](LICENSE.MIT)。项目来源、第三方归属和许可边界见 [NOTICE](NOTICE) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+上游 MIT 许可声明保留在 [LICENSE.MIT](LICENSE.MIT)。项目来源、第三方归属和许可边界见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -5,31 +5,22 @@ import SwiftUI
 struct SettingsWindowView: View {
     @ObservedObject private var store: TokenStore
     @ObservedObject private var updateCoordinator: UpdateCoordinator
-    private let codexAppPathPanelService: CodexAppPathPanelService
 
     @StateObject private var coordinator: SettingsWindowCoordinator
-    @StateObject private var recordsModel: SettingsRecordsModel
     @State private var autoSaveTask: Task<Void, Never>?
 
     @MainActor
     init(
         store: TokenStore,
-        updateCoordinator: UpdateCoordinator? = nil,
-        codexAppPathPanelService: CodexAppPathPanelService
+        updateCoordinator: UpdateCoordinator? = nil
     ) {
         self._store = ObservedObject(wrappedValue: store)
         self._updateCoordinator = ObservedObject(wrappedValue: updateCoordinator ?? .shared)
-        self.codexAppPathPanelService = codexAppPathPanelService
         self._coordinator = StateObject(
             wrappedValue: SettingsWindowCoordinator(
                 config: store.config,
                 accounts: store.accounts,
                 historicalModels: store.historicalModels
-            )
-        )
-        self._recordsModel = StateObject(
-            wrappedValue: SettingsRecordsModel(
-                service: RecordsSnapshotService()
             )
         )
     }
@@ -119,15 +110,10 @@ struct SettingsWindowView: View {
                 switch self.coordinator.selectedPage {
                 case .accounts:
                     SettingsAccountsPage(
-                        coordinator: self.coordinator,
-                        codexAppPathPanelService: self.codexAppPathPanelService
+                        coordinator: self.coordinator
                     )
                 case .usage:
                     SettingsUsagePage(coordinator: self.coordinator)
-                case .records:
-                    SettingsRecordsPage(recordsModel: self.recordsModel) {
-                        SettingsSidebarSelectionAdapter.apply(.usage, to: self.coordinator)
-                    }
                 case .diagnostics:
                     SettingsDiagnosticsPage()
                 case .about:
@@ -168,7 +154,7 @@ private struct SettingsSidebarGroup: Identifiable {
         SettingsSidebarGroup(
             id: "primary",
             title: nil,
-            pages: [SettingsPage.accounts, SettingsPage.records, SettingsPage.usage, SettingsPage.diagnostics]
+            pages: [SettingsPage.accounts, SettingsPage.usage, SettingsPage.diagnostics]
         ),
         SettingsSidebarGroup(
             id: "product",
@@ -180,7 +166,6 @@ private struct SettingsSidebarGroup: Identifiable {
 
 private struct SettingsAccountsPage: View {
     @ObservedObject var coordinator: SettingsWindowCoordinator
-    let codexAppPathPanelService: CodexAppPathPanelService
 
     var body: some View {
         Form {
@@ -204,22 +189,6 @@ private struct SettingsAccountsPage: View {
                     set: { self.coordinator.update(\.accountOrderingMode, to: $0, field: .accountOrderingMode) }
                 )
             )
-
-            if self.coordinator.showsManualActivationBehaviorSection {
-                SettingsManualActivationBehaviorSection(
-                    behavior: Binding(
-                        get: { self.coordinator.draft.manualActivationBehavior },
-                        set: { self.coordinator.update(\.manualActivationBehavior, to: $0, field: .manualActivationBehavior) }
-                    ),
-                    preferredCodexAppPath: Binding(
-                        get: { self.coordinator.draft.preferredCodexAppPath },
-                        set: { self.coordinator.update(\.preferredCodexAppPath, to: $0, field: .preferredCodexAppPath) }
-                    ),
-                    validationMessage: self.$coordinator.validationMessage,
-                    codexAppPathPanelService: self.codexAppPathPanelService,
-                    showsCodexAppPathSection: self.coordinator.showsCodexAppPathSection
-                )
-            }
 
             if self.coordinator.showsManualAccountOrderSection {
                 SettingsAccountOrderSection(coordinator: self.coordinator)
@@ -428,41 +397,6 @@ private struct SettingsAggregateGatewayProxySection: View {
     }
 }
 
-private struct SettingsManualActivationBehaviorSection: View {
-    @Binding var behavior: CodexPanelOpenAIManualActivationBehavior
-    @Binding var preferredCodexAppPath: String?
-    @Binding var validationMessage: String?
-
-    let codexAppPathPanelService: CodexAppPathPanelService
-    let showsCodexAppPathSection: Bool
-
-    var body: some View {
-        Section {
-            Picker(L.manualActivationBehaviorTitle, selection: self.$behavior) {
-                ForEach(CodexPanelOpenAIManualActivationBehavior.allCases) { option in
-                    Text(option.title).tag(option).help(option.detail)
-                }
-            }
-            .pickerStyle(.menu)
-            Text(self.behavior.detail)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-
-            if self.showsCodexAppPathSection {
-                SettingsCodexAppPathSection(
-                    preferredCodexAppPath: self.$preferredCodexAppPath,
-                    validationMessage: self.$validationMessage,
-                    codexAppPathPanelService: self.codexAppPathPanelService
-                )
-            }
-        } header: {
-            Text(L.manualActivationBehaviorTitle)
-        } footer: {
-            Text(L.manualActivationBehaviorHint)
-        }
-    }
-}
-
 private struct SettingsAccountOrderingModeSection: View {
     @Binding var mode: CodexPanelOpenAIAccountOrderingMode
 
@@ -531,91 +465,6 @@ private struct SettingsAccountOrderSection: View {
         } footer: {
             Text(L.accountOrderHint)
         }
-    }
-}
-
-private struct SettingsCodexAppPathSection: View {
-    @Binding var preferredCodexAppPath: String?
-    @Binding var validationMessage: String?
-
-    let codexAppPathPanelService: CodexAppPathPanelService
-
-    private var status: CodexDesktopPreferredAppPathStatus {
-        CodexDesktopLaunchProbeService.preferredAppPathStatus(for: self.preferredCodexAppPath)
-    }
-
-    private var displayedValue: String {
-        switch self.status {
-        case .automatic:
-            return L.codexAppPathAutomaticStatus
-        case .manualValid(let path), .manualInvalid(let path):
-            return path
-        }
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Text(L.codexAppPathTitle)
-                .font(.system(size: 11, weight: .medium))
-                .frame(width: 72, alignment: .leading)
-
-            Group {
-                switch self.status {
-                case .automatic:
-                    Text(self.displayedValue)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                case .manualValid, .manualInvalid:
-                    Text(self.displayedValue)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundColor(self.statusColor)
-                }
-            }
-            .lineLimit(1)
-            .truncationMode(.middle)
-
-            Spacer(minLength: 0)
-
-            Button(L.codexAppPathChooseAction) {
-                self.chooseCodexApp()
-            }
-
-            if (self.preferredCodexAppPath ?? "").isEmpty == false {
-                Button(L.codexAppPathResetAction) {
-                    self.preferredCodexAppPath = nil
-                    self.validationMessage = nil
-                }
-            }
-        }
-    }
-
-    private var statusColor: Color {
-        switch self.status {
-        case .automatic:
-            return .secondary
-        case .manualValid:
-            return .primary
-        case .manualInvalid:
-            return .orange
-        }
-    }
-
-    private func chooseCodexApp() {
-        guard let selectedURL = self.codexAppPathPanelService.requestCodexAppURL(
-            currentPath: self.preferredCodexAppPath
-        ) else {
-            return
-        }
-
-        guard let validatedURL = CodexDesktopLaunchProbeService.validatedPreferredCodexAppURL(
-            from: selectedURL.path
-        ) else {
-            self.validationMessage = L.codexAppPathInvalidSelection
-            return
-        }
-
-        self.preferredCodexAppPath = validatedURL.path
-        self.validationMessage = nil
     }
 }
 
@@ -827,8 +676,6 @@ private extension SettingsPage {
         switch self {
         case .accounts:
             return L.settingsAccountsPageTitle
-        case .records:
-            return L.settingsRecordsPageTitle
         case .usage:
             return L.settingsUsagePageTitle
         case .diagnostics:
@@ -842,8 +689,6 @@ private extension SettingsPage {
         switch self {
         case .accounts:
             return "person.crop.circle"
-        case .records:
-            return "clock.arrow.circlepath"
         case .usage:
             return "chart.bar"
         case .diagnostics:

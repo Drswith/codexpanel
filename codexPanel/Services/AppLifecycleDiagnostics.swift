@@ -140,14 +140,20 @@ final class AppLifecycleDiagnostics {
 @MainActor
 final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
     private let runtimeController: SingleProcessAppRuntimeController
+    private let reopenMenu: @MainActor () -> Void
 
     override init() {
         self.runtimeController = .live()
+        self.reopenMenu = { MenuBarStatusItemController.shared.reopenMenu() }
         super.init()
     }
 
-    init(runtimeController: SingleProcessAppRuntimeController) {
+    init(
+        runtimeController: SingleProcessAppRuntimeController,
+        reopenMenu: @escaping @MainActor () -> Void = { MenuBarStatusItemController.shared.reopenMenu() }
+    ) {
         self.runtimeController = runtimeController
+        self.reopenMenu = reopenMenu
         super.init()
     }
 
@@ -192,6 +198,13 @@ final class AppLifecycleObserver: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         self.runtimeController.stop()
         AppLifecycleDiagnostics.shared.markTermination(reason: "applicationWillTerminate")
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // Finder / Spotlight 再次打开应用时显示面板，已打开的面板保持打开。
+        AppLifecycleDiagnostics.shared.recordEvent(type: "application_reopen_requested", fields: ["pid": getpid()])
+        self.reopenMenu()
+        return false
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

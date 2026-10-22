@@ -1,12 +1,11 @@
 import Foundation
 
-/// Core 与宿主层之间的首版同步契约。未来若切换为 sidecar，字段应通过版本迁移演进，
+/// Core 与宿主层之间的版本化同步契约。未来若切换为 sidecar，字段应通过版本迁移演进，
 /// 而不是让 UI 直接依赖 Core 内部实现。
 public struct CodexConfigurationSyncRequest: Codable, Equatable, Sendable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public var schemaVersion: Int
-    public var global: CodexGlobalConfiguration
     public var provider: CodexProviderConfiguration
     public var credentials: CodexAccountCredentials
     public var accountUsageMode: CodexAccountUsageMode
@@ -14,14 +13,12 @@ public struct CodexConfigurationSyncRequest: Codable, Equatable, Sendable {
 
     public init(
         schemaVersion: Int = Self.currentSchemaVersion,
-        global: CodexGlobalConfiguration,
         provider: CodexProviderConfiguration,
         credentials: CodexAccountCredentials,
         accountUsageMode: CodexAccountUsageMode,
         network: CodexNetworkConfiguration
     ) {
         self.schemaVersion = schemaVersion
-        self.global = global
         self.provider = provider
         self.credentials = credentials
         self.accountUsageMode = accountUsageMode
@@ -29,40 +26,18 @@ public struct CodexConfigurationSyncRequest: Codable, Equatable, Sendable {
     }
 }
 
-public struct CodexGlobalConfiguration: Codable, Equatable, Sendable {
-    public var defaultModel: String
-    public var reviewModel: String
-    public var reasoningEffort: String
-    public var serviceTier: String?
-
-    public init(
-        defaultModel: String,
-        reviewModel: String,
-        reasoningEffort: String,
-        serviceTier: String?
-    ) {
-        self.defaultModel = defaultModel
-        self.reviewModel = reviewModel
-        self.reasoningEffort = reasoningEffort
-        self.serviceTier = serviceTier
-    }
-}
-
 public struct CodexProviderConfiguration: Codable, Equatable, Sendable {
     public var kind: CodexProviderKind
     public var baseURL: String?
-    public var modelID: String?
     public var wireAPI: CodexWireAPI
 
     public init(
         kind: CodexProviderKind,
         baseURL: String? = nil,
-        modelID: String? = nil,
         wireAPI: CodexWireAPI = .responses
     ) {
         self.kind = kind
         self.baseURL = baseURL
-        self.modelID = modelID
         self.wireAPI = wireAPI
     }
 }
@@ -146,7 +121,6 @@ public enum CodexConfigurationSyncError: String, Codable, Error, Equatable, Loca
     case missingActiveAccount = "missing_active_account"
     case missingOAuthTokens = "missing_oauth_tokens"
     case missingAPIKey = "missing_api_key"
-    case missingOpenRouterModel = "missing_openrouter_model"
 
     public var errorDescription: String? {
         switch self {
@@ -155,7 +129,6 @@ public enum CodexConfigurationSyncError: String, Codable, Error, Equatable, Loca
         case .missingActiveAccount: return "未找到当前激活的账号"
         case .missingOAuthTokens: return "当前 OAuth 账号缺少必要 token"
         case .missingAPIKey: return "当前 API Key 账号缺少密钥"
-        case .missingOpenRouterModel: return "OpenRouter 需要先选择或输入模型 ID"
         }
     }
 }

@@ -181,33 +181,6 @@ final class OpenAIAccountPresentationTests: XCTestCase {
         XCTAssertFalse(state.showsUseAction)
     }
 
-    func testAggregateSummaryTitleUsesQuotaInsteadOfAggregateWord() {
-        let account = self.makeAccount(
-            accountId: "acct_pool",
-            isActive: false,
-            primaryUsedPercent: 20,
-            secondaryUsedPercent: 60
-        )
-
-        let title = OpenAIAccountPresentation.aggregateSummaryTitle(
-            providerLabel: "OpenAI",
-            routedAccount: account,
-            usageDisplayMode: .remaining
-        )
-
-        XCTAssertEqual(title, "OpenAI · ~5h 80% · 7d 40%")
-    }
-
-    func testAggregateSummaryTitleFallsBackToProviderLabelWhenRouteIsUnknown() {
-        let title = OpenAIAccountPresentation.aggregateSummaryTitle(
-            providerLabel: "OpenAI",
-            routedAccount: nil,
-            usageDisplayMode: .remaining
-        )
-
-        XCTAssertEqual(title, "OpenAI")
-    }
-
     func testHeaderAvailabilityBadgeTitleShowsWheneverOpenAIAccountsExist() {
         XCTAssertEqual(
             OpenAIAccountPresentation.headerAvailabilityBadgeTitle(

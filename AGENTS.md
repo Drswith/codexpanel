@@ -53,6 +53,8 @@ Use the menu bar app directly for user-facing operations.
 
 ## Safety rules
 
+- 模型、审核模型、推理强度、服务档位及模型目录由 Codex 管理；启动、账号/provider 切换与网关模式切换只更新认证和路由，保留这些配置的原值与缺省状态。网关不得用面板旧配置覆盖请求模型。
+
 - Do not manually edit `~/.codex/auth.json` or `~/.codex/config.toml` when Codex Panel can perform the operation.
 - Do not print `access_token`, `refresh_token`, or `id_token` in logs, output, or summaries.
 - If low-level repair is explicitly required, mention that the normal path is the Codex Panel app before editing auth/config files directly.
@@ -72,6 +74,8 @@ Use the menu bar app directly for user-facing operations.
 - 项目级通用 skill 源文件统一放在 `.agents/skills/<skill-name>/SKILL.md`。
 - `.codex/skills/<skill-name>` 与 `.cursor/skills/<skill-name>` 可以作为 symlink 指向 `.agents/skills/<skill-name>`，让 Codex 与 Cursor 开发者共用同一份说明。
 - 修改共享 skill 时，优先编辑 `.agents/skills/...` 下的源文件，不要分别维护 `.codex` 与 `.cursor` 两份拷贝。
+
+本仓库独立维护，不再执行上游仓库同步或按上游版本映射发布。项目来源与许可证归属继续保留。
 
 本仓库常用示例：
 

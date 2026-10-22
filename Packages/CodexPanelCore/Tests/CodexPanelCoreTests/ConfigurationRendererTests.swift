@@ -42,33 +42,13 @@ final class ConfigurationRendererTests: XCTestCase {
         XCTAssertEqual(tokens["account_id"] as? String, "account-1")
 
         let toml = String(decoding: rendered.configTOML, as: UTF8.self)
-        XCTAssertTrue(toml.contains(#"model = "gpt-5.5""#))
-        XCTAssertTrue(toml.contains(#"service_tier = "fast""#))
+        XCTAssertTrue(toml.contains(#"model = "old-model""#))
+        XCTAssertFalse(toml.contains("service_tier"))
         XCTAssertTrue(toml.contains(#"openai_base_url = "http://localhost:1456/v1""#))
         XCTAssertFalse(toml.contains("preferred_auth_method"))
         XCTAssertFalse(toml.contains("model_providers.OpenAI"))
     }
 
-    func testRendersOAuthStandardRoutingWithoutServiceTierKey() throws {
-        var request = self.makeRequest(
-            kind: .openAIOAuth,
-            credentials: CodexAccountCredentials(
-                accessToken: "access-token",
-                refreshToken: "refresh-token",
-                idToken: "id-token",
-                accountID: "account-1"
-            )
-        )
-        request.global.serviceTier = nil
-
-        let rendered = try CodexConfigurationRenderer().render(
-            request: request,
-            existingConfigTOML: "service_tier = \"flex\"\n"
-        )
-
-        let toml = String(decoding: rendered.configTOML, as: UTF8.self)
-        XCTAssertFalse(toml.contains("service_tier"), toml)
-    }
 
     func testRendersChatCompletionsGatewayForCompatibleProvider() throws {
         var request = self.makeRequest(
@@ -78,7 +58,6 @@ final class ConfigurationRendererTests: XCTestCase {
         request.provider = CodexProviderConfiguration(
             kind: .openAICompatible,
             baseURL: "https://api.example.com/v1",
-            modelID: "example-chat",
             wireAPI: .chat
         )
 
@@ -93,9 +72,9 @@ final class ConfigurationRendererTests: XCTestCase {
         XCTAssertEqual(authObject["OPENAI_API_KEY"] as? String, "provider-key")
 
         let toml = String(decoding: rendered.configTOML, as: UTF8.self)
-        XCTAssertTrue(toml.contains(#"model = "example-chat""#))
+        XCTAssertFalse(toml.contains("model ="))
         XCTAssertTrue(toml.contains(#"openai_base_url = "http://localhost:1458/v1""#))
-        XCTAssertFalse(toml.contains("service_tier"))
+        XCTAssertTrue(toml.contains(#"service_tier = "fast""#))
     }
 
     func testRejectsUnsupportedContractVersion() {
@@ -126,7 +105,54 @@ final class ConfigurationRendererTests: XCTestCase {
         let data = try JSONEncoder().encode(request)
         let decoded = try JSONDecoder().decode(CodexConfigurationSyncRequest.self, from: data)
         XCTAssertEqual(decoded, request)
-        XCTAssertEqual(decoded.schemaVersion, 1)
+        XCTAssertEqual(decoded.schemaVersion, 2)
+    }
+
+    func testAllProviderModesPreserveCodexOwnedSettingsAndProfiles() throws {
+        let existing = """
+        # Codex owns these values, including future options.
+        model = "user-selected-model" # keep comment
+        review_model = "review-only-model"
+        model_reasoning_effort = "future-effort"
+        model_reasoning_summary = "detailed"
+        service_tier = "future-tier"
+        model_catalog_json = "/tmp/user-models.json"
+        # Whitespace inside user strings must survive routing updates.
+        user_note = '''first
+
+
+        last'''
+        [profiles.work]
+        model = "profile-model"
+        model_reasoning_effort = "profile-effort"
+        service_tier = "profile-tier"
+        """
+        for kind in [CodexProviderKind.openAIOAuth, .openAICompatible, .openRouter] {
+            for mode in [CodexAccountUsageMode.direct, .aggregateGateway] {
+                for wire in [CodexWireAPI.responses, .chat] {
+                    var request = self.makeRequest(kind: kind, credentials: CodexAccountCredentials(
+                        accessToken: "access", refreshToken: "refresh", idToken: "id", accountID: "account", apiKey: "key"
+                    ), usageMode: mode)
+                    request.provider.wireAPI = wire
+                    let output = try CodexConfigurationRenderer().render(request: request, existingConfigTOML: existing)
+                    let toml = String(decoding: output.configTOML, as: UTF8.self)
+                    XCTAssertTrue(toml.contains(existing), "\(kind) / \(mode) / \(wire): \(toml)")
+                    let empty = try CodexConfigurationRenderer().render(request: request, existingConfigTOML: "")
+                    let emptyTOML = String(decoding: empty.configTOML, as: UTF8.self)
+                    for key in ["model", "review_model", "model_reasoning_effort", "service_tier", "model_catalog_json"] {
+                        XCTAssertFalse(emptyTOML.contains("\(key) ="), emptyTOML)
+                    }
+                }
+            }
+        }
+    }
+
+    func testLegacyContractIsRejectedBeforeRendering() {
+        var request = self.makeRequest(kind: .openAICompatible, credentials: CodexAccountCredentials(apiKey: "key"))
+        request.schemaVersion = 1
+        XCTAssertThrowsError(try CodexConfigurationRenderer().render(request: request, existingConfigTOML: "")) {
+            XCTAssertEqual($0 as? CodexConfigurationSyncError, .unsupportedSchemaVersion)
+        }
     }
 
     private func makeRequest(
@@ -135,16 +161,9 @@ final class ConfigurationRendererTests: XCTestCase {
         usageMode: CodexAccountUsageMode = .direct
     ) -> CodexConfigurationSyncRequest {
         CodexConfigurationSyncRequest(
-            global: CodexGlobalConfiguration(
-                defaultModel: "gpt-5.5",
-                reviewModel: "gpt-5.5",
-                reasoningEffort: "high",
-                serviceTier: "fast"
-            ),
             provider: CodexProviderConfiguration(
                 kind: kind,
-                baseURL: "https://api.example.com/v1",
-                modelID: kind == .openRouter ? "anthropic/claude-sonnet" : nil
+                baseURL: "https://api.example.com/v1"
             ),
             credentials: credentials,
             accountUsageMode: usageMode,

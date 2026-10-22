@@ -2,6 +2,8 @@
 
 Date: 2026-04-02
 
+> 历史设计：本文保留当时的方案。当前模型、审核模型、推理强度、服务档位及模型目录均由 Codex 管理，面板仅同步认证与路由。现行规则见 [Core + UI 分层边界](../architecture/core-ui-boundary.md)。
+
 ## Summary
 
 This document defines the next-generation Codex Panel menu bar app built on top of the current internal Codex Panel codebase.

@@ -59,7 +59,6 @@ private struct OpenRouterWebSocketFragmentState {
 
 private struct OpenRouterGatewayAccountState {
     let account: CodexPanelProviderAccount
-    let modelID: String
 }
 
 final class OpenRouterGatewayService: OpenRouterGatewayControlling {
@@ -363,8 +362,7 @@ final class OpenRouterGatewayService: OpenRouterGatewayControlling {
     ) async throws -> (response: HTTPURLResponse, bytes: URLSession.AsyncBytes) {
         let normalizedBody = self.normalizeRequestBody(
             body,
-            route: route,
-            selectedModelID: accountState.modelID
+            route: route
         )
         var upstreamRequest = URLRequest(url: self.runtimeConfiguration.upstreamResponsesURL)
         upstreamRequest.httpMethod = "POST"
@@ -395,21 +393,19 @@ final class OpenRouterGatewayService: OpenRouterGatewayControlling {
         return (httpResponse, bytes)
     }
 
-    private func normalizeRequestBody(_ body: Data, route: String, selectedModelID: String) -> Data {
+    private func normalizeRequestBody(_ body: Data, route: String) -> Data {
         let object = try? JSONSerialization.jsonObject(with: body)
         let normalizedObject: [String: Any]
 
         if let json = object as? [String: Any] {
             normalizedObject = self.normalizeRequestObject(
                 json,
-                route: route,
-                selectedModelID: selectedModelID
+                route: route
             )
         } else if let inputArray = object as? [Any] {
             normalizedObject = self.normalizeRequestObject(
                 ["input": inputArray],
-                route: route,
-                selectedModelID: selectedModelID
+                route: route
             )
         } else {
             return body
@@ -424,11 +420,9 @@ final class OpenRouterGatewayService: OpenRouterGatewayControlling {
 
     private func normalizeRequestObject(
         _ original: [String: Any],
-        route: String,
-        selectedModelID: String
+        route: String
     ) -> [String: Any] {
         var json = self.unwrapResponseCreateEnvelopeIfNeeded(original)
-        json["model"] = selectedModelID
         if let normalizedInput = self.normalizeOpenRouterInput(json["input"]) {
             json["input"] = normalizedInput
         }
@@ -976,7 +970,7 @@ final class OpenRouterGatewayService: OpenRouterGatewayControlling {
 
     private func currentAccountState() -> OpenRouterGatewayAccountState? {
         self.stateQueue.sync {
-            // Keep serving requests as long as a persisted OpenRouter account/model exists.
+            // Keep serving requests as long as a persisted OpenRouter account exists.
             // Desktop can still hit the stable localhost gateway during request-boundary
             // transitions even after the menu selection has moved away from OpenRouter.
             guard let provider = self.provider,
@@ -984,8 +978,7 @@ final class OpenRouterGatewayService: OpenRouterGatewayControlling {
                 return nil
             }
             return OpenRouterGatewayAccountState(
-                account: selection.account,
-                modelID: selection.modelID
+                account: selection
             )
         }
     }

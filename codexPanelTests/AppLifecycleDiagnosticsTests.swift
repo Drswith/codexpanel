@@ -16,6 +16,29 @@ final class AppLifecycleDiagnosticsTests: XCTestCase {
         XCTAssertFalse(delegate.applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared))
     }
 
+    func testReopeningApplicationAlwaysRequestsMenuWithoutRestartingServices() {
+        let host = LifecycleSpy()
+        let usage = LifecycleSpy()
+        let runtime = SingleProcessAppRuntimeController(
+            statusItemHost: host,
+            usagePolling: usage,
+            oauthRefresh: OAuthRefreshSpy(),
+            updateCoordinator: LifecycleSpy(),
+            tokenStore: TokenStoreSpy(),
+            legacyMenuHostCleaner: MenuHostCleanerSpy()
+        ) { _, _ in }
+        var requests = 0
+        let delegate = AppLifecycleObserver(runtimeController: runtime, reopenMenu: { requests += 1 })
+
+        for hasVisibleWindows in [false, true] {
+            XCTAssertFalse(delegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: hasVisibleWindows))
+        }
+
+        XCTAssertEqual(requests, 2)
+        XCTAssertEqual(host.startCount, 0)
+        XCTAssertEqual(usage.startCount, 0)
+    }
+
     private final class LifecycleSpy: LifecycleControlling {
         private(set) var startCount = 0
         private(set) var stopCount = 0

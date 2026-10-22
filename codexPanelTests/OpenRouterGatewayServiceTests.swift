@@ -2,11 +2,12 @@ import Foundation
 import XCTest
 
 final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
-    func testPostResponsesProbeUsesOpenRouterAccountAndSelectedModel() async throws {
+    func testPostResponsesProbeUsesAccountAndPreservesClientModel() async throws {
         let service = self.makeService()
-        let provider = self.makeOpenRouterProvider(selectedModelID: "anthropic/claude-3.7-sonnet")
+        var provider = self.makeOpenRouterProvider(selectedModelID: "legacy-panel-model")
+        provider.selectedModelID = nil
         service.updateState(provider: provider, isActiveProvider: true)
-        let requestBody = #"{"model":"gpt-5.5","input":"hello","store":true}"#
+        let requestBody = #"{"model":"gpt-5.5","reasoning":{"effort":"deep"},"service_tier":"future-tier","input":"hello","store":true}"#
 
         var capturedAuthorization: String?
         var capturedURL: URL?
@@ -55,7 +56,9 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
         XCTAssertEqual(response.statusCode, 200)
         XCTAssertEqual(capturedAuthorization, "Bearer sk-or-v1-primary")
         XCTAssertEqual(capturedURL?.absoluteString, "https://example.invalid/v1/responses")
-        XCTAssertEqual(normalized["model"] as? String, "anthropic/claude-3.7-sonnet")
+        XCTAssertEqual(normalized["model"] as? String, "gpt-5.5")
+        XCTAssertEqual((normalized["reasoning"] as? [String: Any])?["effort"] as? String, "deep")
+        XCTAssertEqual(normalized["service_tier"] as? String, "future-tier")
         XCTAssertEqual(normalized["stream"] as? Bool, true)
         XCTAssertEqual(normalized["store"] as? Bool, false)
     }
@@ -136,7 +139,7 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
         )
 
         XCTAssertEqual(capturedURL?.absoluteString, "https://example.invalid/v1/responses")
-        XCTAssertEqual(normalized["model"] as? String, "openai/gpt-4.1")
+        XCTAssertEqual(normalized["model"] as? String, "gpt-5.5")
         XCTAssertNil(normalized["include"])
         XCTAssertNil(normalized["stream"])
     }
@@ -176,7 +179,7 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
         }
 
         let result = try await service.bridgeWebSocketTextMessageForTesting(
-            #"{"input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}"#
+            #"{"model":"gpt-5.5","input":[{"role":"user","content":[{"type":"input_text","text":"hi"}]}]}"#
         )
 
         XCTAssertEqual(
@@ -193,7 +196,7 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
         )
         let input = try XCTUnwrap(normalized["input"] as? [[String: Any]])
         XCTAssertEqual(capturedContentType, "application/json")
-        XCTAssertEqual(normalized["model"] as? String, "openai/gpt-4.1")
+        XCTAssertEqual(normalized["model"] as? String, "gpt-5.5")
         XCTAssertEqual((input.first?["type"] as? String), "message")
     }
 
@@ -220,7 +223,7 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
         }
 
         _ = try await service.bridgeWebSocketTextMessageForTesting(
-            #"{"type":"response.create","response":{"input":[{"role":"assistant","content":[{"type":"output_text","text":"Earlier reply","annotations":[]}]}]}}"#
+            #"{"type":"response.create","response":{"model":"gpt-5.5","input":[{"role":"assistant","content":[{"type":"output_text","text":"Earlier reply","annotations":[]}]}]}}"#
         )
 
         let normalized = try XCTUnwrap(
@@ -229,7 +232,7 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
         let input = try XCTUnwrap(normalized["input"] as? [[String: Any]])
         let assistant = try XCTUnwrap(input.first)
 
-        XCTAssertEqual(normalized["model"] as? String, "openai/gpt-4.1")
+        XCTAssertEqual(normalized["model"] as? String, "gpt-5.5")
         XCTAssertEqual(assistant["type"] as? String, "message")
         XCTAssertEqual(assistant["role"] as? String, "assistant")
         XCTAssertEqual(assistant["status"] as? String, "completed")
@@ -264,10 +267,10 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
         XCTAssertEqual(result.closeCode, 1011)
     }
 
-    func testModelSwitchAppliesAtNextRequestBoundary() async throws {
+    func testProviderModelChangesDoNotOverrideClientModelAtNextRequestBoundary() async throws {
         let service = self.makeService()
         var capturedModels: [String] = []
-        let firstRequestBody = #"{"input":"first"}"#
+        let firstRequestBody = #"{"model":"client-selected-model","input":"first"}"#
 
         MockURLProtocol.handler = { request in
             if let body = URLProtocol.property(
@@ -318,13 +321,13 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
 
         XCTAssertEqual(
             capturedModels,
-            ["anthropic/claude-3.7-sonnet", "google/gemini-2.5-pro"]
+            ["client-selected-model", "client-selected-model"]
         )
     }
 
     func testInFlightRequestKeepsOriginalModelAfterProviderStateChanges() async throws {
         let service = self.makeService()
-        let requestBody = #"{"input":"streaming"}"#
+        let requestBody = #"{"model":"client-sticky-model","input":"streaming"}"#
         let requestStarted = DispatchSemaphore(value: 0)
         let allowResponse = DispatchSemaphore(value: 0)
         var capturedModels: [String] = []
@@ -384,13 +387,13 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
         let response = try await responseTask.value
 
         XCTAssertEqual(response.statusCode, 200)
-        XCTAssertEqual(capturedModels, ["anthropic/claude-3.7-sonnet"])
+        XCTAssertEqual(capturedModels, ["client-sticky-model"])
     }
 
     func testPostResponsesProbeStillUsesPersistedOpenRouterStateAfterProviderStopsBeingActive() async throws {
         let service = self.makeService()
         let provider = self.makeOpenRouterProvider(selectedModelID: "openrouter/elephant-alpha")
-        let requestBody = #"{"input":"hello"}"#
+        let requestBody = #"{"model":"client-inactive-model","input":"hello"}"#
 
         var capturedAuthorization: String?
         var capturedBody = Data()
@@ -437,7 +440,7 @@ final class OpenRouterGatewayServiceTests: CodexPanelTestCase {
 
         XCTAssertEqual(response.statusCode, 200)
         XCTAssertEqual(capturedAuthorization, "Bearer sk-or-v1-primary")
-        XCTAssertEqual(normalized["model"] as? String, "openrouter/elephant-alpha")
+        XCTAssertEqual(normalized["model"] as? String, "client-inactive-model")
     }
 
     func testPostResponsesProbeNormalizesNestedFunctionToolsAndRawOpenRouterAliases() async throws {

@@ -88,12 +88,6 @@ final class ConfigurationSynchronizerTests: XCTestCase {
 
     private func makeOAuthRequest() -> CodexConfigurationSyncRequest {
         CodexConfigurationSyncRequest(
-            global: CodexGlobalConfiguration(
-                defaultModel: "gpt-5.5",
-                reviewModel: "gpt-5.5",
-                reasoningEffort: "medium",
-                serviceTier: "standard"
-            ),
             provider: CodexProviderConfiguration(kind: .openAIOAuth),
             credentials: CodexAccountCredentials(
                 accessToken: "access",
