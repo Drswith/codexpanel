@@ -2,25 +2,25 @@
   "schemaVersion": 1,
   "channel": "stable",
   "release": {
-    "version": "1.5.21",
-    "publishedAt": "2026-10-14T05:44:30Z",
-    "summary": "v1.5.21",
-    "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.21",
-    "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.21",
+    "version": "1.5.23",
+    "publishedAt": "2026-10-22T12:44:56Z",
+    "summary": "清理模型控制与记录页，保留 Codex 模型配置并修复菜单栏入口。",
+    "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.23",
+    "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.23",
     "deliveryMode": "guidedDownload",
     "minimumAutomaticUpdateVersion": null,
     "artifacts": [
       {
         "architecture": "universal",
         "format": "dmg",
-        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.21/codexpanel-1.5.21-macOS.dmg",
-        "sha256": "2efd03f787a270e25a5f6cbe6eddb63897758365ef84cd8a8d220a5cef5dc185"
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.23/codexpanel-1.5.23-macOS.dmg",
+        "sha256": "0824db8e95e98d83c83a9fb4fb5ec9ef76fe89f29f246299c26b2643073481e5"
       },
       {
         "architecture": "universal",
         "format": "zip",
-        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.21/codexpanel-1.5.21-macOS.zip",
-        "sha256": "d0d20ccc881e50092e0c209fa38ce42a9c919743dbcc7b70cf5f4c9343223b04"
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.23/codexpanel-1.5.23-macOS.zip",
+        "sha256": "37d9e4226afa78a57ffacf562097a48c197432d40ff0db66ec349461d0e3b86a"
       }
     ]
   }
