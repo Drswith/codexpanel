@@ -46,6 +46,17 @@ main_archs="$(lipo -archs "$MAIN_BINARY" 2>/dev/null || true)"
 
 [[ -n "$main_archs" ]] || fail "Unable to read app executable architectures: $MAIN_BINARY"
 
+bundled_tokscale="$(/usr/bin/find "$APP_PATH/Contents" \( -type f -o -type l \) -name tokscale -print -quit)"
+[[ -z "$bundled_tokscale" ]] || fail "tokscale binary must not be bundled: $bundled_tokscale"
+
+TOKSCALE_LICENSE="$APP_PATH/Contents/Resources/tokscale-LICENSE.txt"
+TOKSCALE_RESOURCE_MANIFEST="$APP_PATH/Contents/Resources/tokscale-manifest.json"
+TOKSCALE_MANIFEST="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/ThirdParty/tokscale/tokscale-manifest.json"
+[[ -s "$TOKSCALE_LICENSE" ]] || fail "tokscale license missing: $TOKSCALE_LICENSE"
+[[ -s "$APP_PATH/Contents/Resources/litellm-LICENSE.txt" ]] || fail "LiteLLM pricing license missing"
+[[ -s "$TOKSCALE_RESOURCE_MANIFEST" ]] || fail "tokscale download manifest missing: $TOKSCALE_RESOURCE_MANIFEST"
+/usr/bin/cmp -s "$TOKSCALE_MANIFEST" "$TOKSCALE_RESOURCE_MANIFEST" || fail "tokscale download manifest does not match pinned manifest"
+
 extract_raw() {
   local key_path="$1"
   local output

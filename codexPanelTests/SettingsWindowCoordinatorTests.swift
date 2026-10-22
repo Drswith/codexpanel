@@ -153,6 +153,138 @@ final class SettingsWindowCoordinatorTests: XCTestCase {
         )
     }
 
+    func testAutomaticModelPricingDoesNotMaterializeLegacyOrUnknownPrices() {
+        let config = self.makeConfig()
+        let coordinator = SettingsWindowCoordinator(
+            config: config,
+            accounts: [],
+            historicalModels: ["gpt-5.5", "unknown-model"]
+        )
+        let sink = TestSettingsSaveSink(config: config)
+
+        XCTAssertEqual(Set(coordinator.historicalModels), ["gpt-5.5", "unknown-model"])
+        XCTAssertTrue(coordinator.draft.modelPricing.isEmpty)
+        XCTAssertNil(coordinator.makeSaveRequests().modelPricing)
+        coordinator.saveAutomatically(using: sink)
+        XCTAssertTrue(sink.appliedRequests.isEmpty)
+        XCTAssertTrue(sink.config.modelPricing.isEmpty)
+    }
+
+    func testExplicitCustomPriceMatchingLegacyDefaultRemainsAnOverride() throws {
+        let config = self.makeConfig()
+        let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: ["gpt-5.5"])
+        let sink = TestSettingsSaveSink(config: config)
+        // 曾经的 Swift 默认价仍可能是用户选择的固定覆盖，不能据此恢复自动。
+        let pricing = CodexPanelModelPricing(
+            inputUSDPerToken: 5e-6,
+            cachedInputUSDPerToken: 5e-7,
+            outputUSDPerToken: 3e-5
+        )
+        coordinator.updateModelPricing(for: "gpt-5.5", pricing: pricing)
+
+        let requests = try coordinator.save(using: sink)
+
+        XCTAssertEqual(requests.modelPricing, ModelPricingSettingsUpdate(upserts: ["gpt-5.5": pricing], removals: []))
+        XCTAssertEqual(sink.config.modelPricing["gpt-5.5"], pricing)
+        let reopened = SettingsWindowCoordinator(config: sink.config, accounts: [], historicalModels: ["gpt-5.5"])
+        XCTAssertEqual(reopened.draft.modelPricing["gpt-5.5"], pricing)
+    }
+
+    func testExplicitZeroPriceIsDistinctFromAutomaticPricing() throws {
+        let config = self.makeConfig()
+        let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: ["unknown-model"])
+        let sink = TestSettingsSaveSink(config: config)
+        coordinator.updateModelPricing(for: "unknown-model", pricing: .zero)
+
+        let requests = try coordinator.save(using: sink)
+
+        XCTAssertEqual(requests.modelPricing, ModelPricingSettingsUpdate(upserts: ["unknown-model": .zero], removals: []))
+        XCTAssertEqual(sink.config.modelPricing["unknown-model"], .zero)
+        XCTAssertFalse(coordinator.hasChanges)
+    }
+
+    func testRestoreAutomaticRemovesOnlySelectedOverrideAndPersistsAfterReopen() throws {
+        let config = self.makeConfig(modelPricing: ["gpt-5.5": .zero, "other-model": .zero])
+        let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: ["gpt-5.5"])
+        let sink = TestSettingsSaveSink(config: config)
+        coordinator.updateModelPricing(for: "gpt-5.5", pricing: nil)
+
+        let requests = try coordinator.save(using: sink)
+
+        XCTAssertEqual(requests.modelPricing, ModelPricingSettingsUpdate(upserts: [:], removals: ["gpt-5.5"]))
+        XCTAssertNil(sink.config.modelPricing["gpt-5.5"])
+        XCTAssertEqual(sink.config.modelPricing["other-model"], .zero)
+        let reopened = SettingsWindowCoordinator(config: sink.config, accounts: [], historicalModels: ["gpt-5.5"])
+        XCTAssertNil(reopened.draft.modelPricing["gpt-5.5"])
+        XCTAssertFalse(reopened.hasChanges)
+    }
+
+    func testFailedRestoreAutomaticRetainsRemovalThroughExternalRefreshAndRetry() {
+        let config = self.makeConfig(modelPricing: ["gpt-5.5": .zero])
+        let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: ["gpt-5.5"])
+        coordinator.updateModelPricing(for: "gpt-5.5", pricing: nil)
+        coordinator.saveAutomatically(using: FailingSettingsSaveSink())
+
+        var externalConfig = config
+        externalConfig.modelPricing["gpt-5.5"] = CodexPanelModelPricing(
+            inputUSDPerToken: 1e-6, cachedInputUSDPerToken: 0.1e-6, outputUSDPerToken: 2e-6
+        )
+        coordinator.reconcileExternalState(config: externalConfig, accounts: [], historicalModels: ["gpt-5.5"])
+
+        XCTAssertNil(coordinator.draft.modelPricing["gpt-5.5"])
+        XCTAssertEqual(coordinator.validationMessage, "save failed")
+        XCTAssertEqual(coordinator.makeSaveRequests().modelPricing, ModelPricingSettingsUpdate(upserts: [:], removals: ["gpt-5.5"]))
+        let sink = TestSettingsSaveSink(config: externalConfig)
+        coordinator.saveAutomatically(using: sink)
+        XCTAssertNil(sink.config.modelPricing["gpt-5.5"])
+        XCTAssertFalse(coordinator.hasChanges)
+        XCTAssertNil(coordinator.validationMessage)
+    }
+
+    func testExternalModelPricingMergesUneditedModelsWithoutOverwritingLocalDraft() throws {
+        let config = self.makeConfig(modelPricing: ["local-model": .zero, "external-model": .zero])
+        let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: [])
+        let localPricing = CodexPanelModelPricing(
+            inputUSDPerToken: 1e-6, cachedInputUSDPerToken: 0.1e-6, outputUSDPerToken: 2e-6
+        )
+        let externalPricing = CodexPanelModelPricing(
+            inputUSDPerToken: 3e-6, cachedInputUSDPerToken: 0.3e-6, outputUSDPerToken: 4e-6
+        )
+        coordinator.updateModelPricing(for: "local-model", pricing: localPricing)
+        var externalConfig = config
+        externalConfig.modelPricing = [
+            "local-model": externalPricing,
+            "external-model": externalPricing,
+            "new-model": .zero,
+        ]
+
+        coordinator.reconcileExternalState(config: externalConfig, accounts: [], historicalModels: ["automatic-model"])
+
+        XCTAssertEqual(coordinator.draft.modelPricing["local-model"], localPricing)
+        XCTAssertEqual(coordinator.draft.modelPricing["external-model"], externalPricing)
+        XCTAssertEqual(coordinator.draft.modelPricing["new-model"], .zero)
+        XCTAssertNil(coordinator.draft.modelPricing["automatic-model"])
+        XCTAssertTrue(coordinator.historicalModels.contains("automatic-model"))
+        XCTAssertTrue(coordinator.historicalModels.contains("new-model"))
+        let sink = TestSettingsSaveSink(config: externalConfig)
+        let requests = try coordinator.save(using: sink)
+        XCTAssertEqual(requests.modelPricing, ModelPricingSettingsUpdate(upserts: ["local-model": localPricing], removals: []))
+        XCTAssertEqual(sink.config.modelPricing["external-model"], externalPricing)
+    }
+
+    func testExternalRestoreAutomaticIsAcceptedForUneditedModelDuringAnotherPriceEdit() {
+        let config = self.makeConfig(modelPricing: ["external-model": .zero])
+        let coordinator = SettingsWindowCoordinator(config: config, accounts: [], historicalModels: ["local-model"])
+        coordinator.updateModelPricing(for: "local-model", pricing: .zero)
+        var externalConfig = config
+        externalConfig.modelPricing.removeValue(forKey: "external-model")
+
+        coordinator.reconcileExternalState(config: externalConfig, accounts: [], historicalModels: ["local-model", "external-model"])
+
+        XCTAssertNil(coordinator.draft.modelPricing["external-model"])
+        XCTAssertEqual(coordinator.makeSaveRequests().modelPricing, ModelPricingSettingsUpdate(upserts: ["local-model": .zero], removals: []))
+    }
+
     func testManualAccountOrderSectionVisibilityFollowsOrderingMode() {
         let accounts = [
             self.makeAccount(email: "alpha@example.com", accountId: "acct_alpha"),

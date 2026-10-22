@@ -93,13 +93,23 @@ final class TokenStore: ObservableObject {
     @Published var accounts: [TokenAccount] = []
     @Published private(set) var config: CodexPanelConfig
     @Published private(set) var localCostSummary: LocalCostSummary = .empty
-    @Published private(set) var historicalModels: [String]
+    @Published private(set) var localCostRefreshError: String?
+    @Published private(set) var isRefreshingLocalCostSummary = false
+    @Published private(set) var tokscaleEngines: [TokscaleEngineDescriptor] = []
+    @Published private(set) var selectedTokscaleEngineID: String?
+    @Published private(set) var isCheckingTokscaleEngines = false
+    @Published private(set) var isInstallingTokscaleEngine = false
+    @Published private(set) var hasCheckedTokscaleEngines = false
+    @Published private(set) var tokscaleEngineError: String?
     @Published private(set) var aggregateRoutedAccountID: String?
 
     private let configStore: CodexPanelConfigStore
     private let syncService: any CodexSynchronizing
     private let switchJournalStore = SwitchJournalStore()
-    private let costSummaryService: LocalCostSummaryService
+    private let costSummaryService: any LocalCostSummaryProviding
+    private let tokscaleEngineManager: any TokscaleEngineManaging
+    private let engineManagementQueue = DispatchQueue(label: "com.codexpanel.engine-management", qos: .utility)
+    private var localUsageGeneration = 0
     private let openAIAccountGatewayService: OpenAIAccountGatewayControlling
     private let openRouterGatewayService: OpenRouterGatewayControlling
     private let chatCompletionsGatewayService: ChatCompletionsGatewayControlling
@@ -107,9 +117,8 @@ final class TokenStore: ObservableObject {
     private let aggregateGatewayLeaseStore: OpenAIAggregateGatewayLeaseStoring
     private let aggregateRouteJournalStore: OpenAIAggregateRouteJournalStoring
     private let codexRunningProcessIDs: () -> Set<pid_t>
-    private let refreshStateQueue = DispatchQueue(label: "com.codexpanel.refresh-state")
     private let usageRefreshStateQueue = DispatchQueue(label: "com.codexpanel.usage-refresh-state")
-    private var isRefreshingLocalCostSummary = false
+    private var pendingLocalCostRefresh = false
     private var isRefreshingAllUsage = false
     private var refreshingUsageAccountIDs: Set<String> = []
     private var cancellables: Set<AnyCancellable> = []
@@ -122,7 +131,8 @@ final class TokenStore: ObservableObject {
     init(
         configStore: CodexPanelConfigStore = CodexPanelConfigStore(),
         syncService: any CodexSynchronizing = CodexSyncService(),
-        costSummaryService: LocalCostSummaryService = LocalCostSummaryService(),
+        costSummaryService: any LocalCostSummaryProviding = TokscaleCostSummaryService(),
+        tokscaleEngineManager: any TokscaleEngineManaging = TokscaleEngineManager(),
         openAIAccountGatewayService: OpenAIAccountGatewayControlling = OpenAIAccountGatewayService.shared,
         openRouterGatewayService: OpenRouterGatewayControlling = OpenRouterGatewayService(),
         chatCompletionsGatewayService: ChatCompletionsGatewayControlling = ChatCompletionsGatewayService(),
@@ -136,6 +146,7 @@ final class TokenStore: ObservableObject {
         self.configStore = configStore
         self.syncService = syncService
         self.costSummaryService = costSummaryService
+        self.tokscaleEngineManager = tokscaleEngineManager
         self.openAIAccountGatewayService = openAIAccountGatewayService
         self.openRouterGatewayService = openRouterGatewayService
         self.chatCompletionsGatewayService = chatCompletionsGatewayService
@@ -154,7 +165,6 @@ final class TokenStore: ObservableObject {
         }
         let clearedLegacySuspensions = initialConfig.clearLegacyUsageEndpointSuspensions()
         self.config = initialConfig
-        self.historicalModels = Self.normalizedHistoricalModels(Array(initialConfig.modelPricing.keys))
         self.lastPublishedOpenRouterSelected = self.config.activeProvider()?.kind == .openRouter
 
         if clearedLegacySuspensions {
@@ -174,10 +184,9 @@ final class TokenStore: ObservableObject {
         if injectedDebugMockData == false {
             self.localCostSummary = self.loadCachedLocalCostSummary()
             if self.ensureDebugMockLocalCostSummaryIfNeeded() == false {
-                self.refreshLocalCostSummaryIfNeeded()
+                self.prepareLocalUsage()
             }
         }
-        self.refreshHistoricalModels()
         self.seedSwitchJournalIfNeeded()
         try? self.syncService.synchronize(config: self.config)
     }
@@ -206,6 +215,7 @@ final class TokenStore: ObservableObject {
     func load() {
 
         if var loaded = try? self.configStore.loadOrMigrate() {
+            let previousLocalUsage = self.config.localUsage
             let preservedNewerQuota = loaded.preserveNewerOAuthQuotaSnapshots(from: self.config)
             self.config = loaded
 
@@ -215,15 +225,13 @@ final class TokenStore: ObservableObject {
             let injectedDebugMockData = self.injectDebugMockDataIfNeeded()
             self.publishState()
             self.localCostSummary = injectedDebugMockData ? self.localCostSummary : self.loadCachedLocalCostSummary()
-            self.historicalModels = Self.mergedHistoricalModels(
-                preferredHistoricalModels: self.historicalModels,
-                fallbackHistoricalModels: Array(self.config.modelPricing.keys)
-            )
             if injectedDebugMockData == false,
                self.ensureDebugMockLocalCostSummaryIfNeeded() == false {
-                self.refreshLocalCostSummaryIfNeeded()
+                if previousLocalUsage != self.config.localUsage {
+                    self.invalidateLocalUsageEngine()
+                }
+                self.prepareLocalUsage()
             }
-            self.refreshHistoricalModels()
         }
     }
 
@@ -566,10 +574,6 @@ final class TokenStore: ObservableObject {
             updatedConfig: updatedConfig
         )
         try self.persist(syncCodex: shouldSyncCodex)
-        self.historicalModels = Self.mergedHistoricalModels(
-            preferredHistoricalModels: self.historicalModels,
-            fallbackHistoricalModels: Array(self.config.modelPricing.keys)
-        )
         if requests.modelPricing != nil {
             self.refreshLocalCostSummary(force: true, minimumInterval: 0)
         }
@@ -998,78 +1002,244 @@ final class TokenStore: ObservableObject {
         force || updatedAt.map { now.timeIntervalSince($0) >= minimumInterval } ?? true
     }
 
+    var localUsageEnabled: Bool { self.config.localUsage.enabled }
+
+    var historicalModels: [String] {
+        Self.normalizedHistoricalModels((self.localCostSummary.historicalModels ?? []) + Array(self.config.modelPricing.keys))
+    }
+
+    var activeTokscaleEngine: TokscaleEngineDescriptor? {
+        self.tokscaleEngines.first { $0.id == self.selectedTokscaleEngineID }
+    }
+
+    func setLocalUsageEnabled(_ enabled: Bool) {
+        guard enabled != self.localUsageEnabled else { return }
+        var settings = self.config.localUsage
+        settings.enabled = enabled
+        guard self.persistLocalUsageSettings(settings) else { return }
+        self.invalidateLocalUsageEngine()
+        if enabled { self.prepareLocalUsage() }
+    }
+
+    private func persistLocalUsageSettings(_ settings: CodexPanelLocalUsageSettings) -> Bool {
+        var updated = self.config
+        updated.localUsage = settings
+        do {
+            // 用量引擎设置不触发认证、路由或网关同步。
+            try self.configStore.save(updated)
+            self.config = updated
+            return true
+        } catch {
+            self.tokscaleEngineError = error.localizedDescription
+            return false
+        }
+    }
+
+    private func invalidateLocalUsageEngine() {
+        self.localUsageGeneration += 1
+        self.pendingLocalCostRefresh = false
+        self.selectedTokscaleEngineID = nil
+        self.costSummaryService.setEngine(nil)
+        self.localCostRefreshError = nil
+    }
+
+    private func prepareLocalUsage() {
+        guard self.localUsageEnabled else {
+            self.invalidateLocalUsageEngine()
+            return
+        }
+        if self.activeTokscaleEngine == nil {
+            self.checkTokscaleEngines()
+        } else {
+            self.refreshLocalCostSummaryIfNeeded()
+        }
+    }
+
+    func checkTokscaleEngines(preservingError: String? = nil) {
+        guard !self.isCheckingTokscaleEngines, !self.isInstallingTokscaleEngine else { return }
+        self.isCheckingTokscaleEngines = true
+        self.tokscaleEngineError = nil
+        let manager = self.tokscaleEngineManager
+        let home = CodexPaths.codexBarRoot
+        self.engineManagementQueue.async { [weak self] in
+            let result = Result { try manager.discover() }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.isCheckingTokscaleEngines = false
+                guard home == CodexPaths.codexBarRoot else { return }
+                self.hasCheckedTokscaleEngines = true
+                switch result {
+                case .success(let engines):
+                    self.tokscaleEngines = engines
+                    if self.localUsageEnabled { self.activatePreferredTokscaleEngine() }
+                case .failure(let error):
+                    self.tokscaleEngineError = error.localizedDescription
+                    if self.localUsageEnabled, self.activeTokscaleEngine == nil {
+                        self.localCostRefreshError = error.localizedDescription
+                    }
+                }
+                if let preservingError { self.tokscaleEngineError = preservingError }
+            }
+        }
+    }
+
+    private func activatePreferredTokscaleEngine() {
+        guard self.localUsageEnabled else { return }
+        let settings = self.config.localUsage
+        let compatible = self.tokscaleEngines.filter(\.isCompatible)
+        let selected: TokscaleEngineDescriptor?
+        if settings.preferredSource == .managed {
+            selected = compatible.first { $0.source == .managed }
+        } else if let path = settings.installedExecutablePath {
+            selected = compatible.first { $0.source == .installed && $0.executableURL.path == path }
+        } else {
+            selected = compatible.first { $0.source == .installed } ?? compatible.first { $0.source == .managed }
+        }
+        self.invalidateLocalUsageEngine()
+        guard let selected else {
+            let message = self.tokscaleEngines.isEmpty
+                ? "未找到可用的 tokscale，请下载安装 Codex Panel 专用副本。"
+                : "所选用量引擎不可用；请选择兼容的 tokscale 4.20 及以上 4.x 版本，或下载专用副本。"
+            self.tokscaleEngineError = message
+            self.localCostRefreshError = message
+            return
+        }
+        self.selectedTokscaleEngineID = selected.id
+        self.costSummaryService.setEngine(selected)
+        self.tokscaleEngineError = nil
+        self.refreshLocalCostSummary(force: true, minimumInterval: 0)
+    }
+
+    func selectTokscaleEngine(id: String) {
+        guard self.localUsageEnabled, !self.isCheckingTokscaleEngines, !self.isInstallingTokscaleEngine,
+              let engine = self.tokscaleEngines.first(where: { $0.id == id }), engine.isCompatible else { return }
+        var settings = self.config.localUsage
+        settings.preferredSource = engine.source
+        settings.installedExecutablePath = engine.source == .installed ? engine.executableURL.path : nil
+        guard self.persistLocalUsageSettings(settings) else { return }
+        self.activatePreferredTokscaleEngine()
+    }
+
+    func installManagedTokscaleEngine() {
+        guard self.localUsageEnabled, !self.isCheckingTokscaleEngines, !self.isInstallingTokscaleEngine else { return }
+        self.isInstallingTokscaleEngine = true
+        self.tokscaleEngineError = nil
+        let manager = self.tokscaleEngineManager
+        let generation = self.localUsageGeneration
+        let home = CodexPaths.codexBarRoot
+        self.engineManagementQueue.async { [weak self] in
+            let result = Result { try manager.installManaged() }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.isInstallingTokscaleEngine = false
+                guard home == CodexPaths.codexBarRoot else { return }
+                switch result {
+                case .success(let engine):
+                    self.tokscaleEngines.removeAll { $0.source == .managed }
+                    self.tokscaleEngines.append(engine)
+                    self.hasCheckedTokscaleEngines = true
+                    // 下载期间关闭或切换过设置时，只保留下载结果，不自动重新启用。
+                    guard self.localUsageEnabled else { return }
+                    guard self.localUsageGeneration == generation else {
+                        self.checkTokscaleEngines()
+                        return
+                    }
+                    self.selectTokscaleEngine(id: engine.id)
+                case .failure(let error):
+                    if self.localUsageEnabled, self.activeTokscaleEngine == nil,
+                       self.localUsageGeneration != generation {
+                        self.checkTokscaleEngines(preservingError: error.localizedDescription)
+                    }
+                    self.tokscaleEngineError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    static func isLocalCostSummaryScopeStale(
+        _ summary: LocalCostSummary,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> Bool {
+        if summary.source != TokscaleCostSummaryService.cacheSource { return true }
+        if summary.bucketTimeZoneIdentifier != calendar.timeZone.identifier { return true }
+        return summary.updatedAt.map { !calendar.isDate($0, inSameDayAs: now) } ?? true
+    }
+
     func refreshLocalCostSummary(
         force: Bool = false,
-        minimumInterval: TimeInterval = 5 * 60,
-        refreshSessionCache: Bool = false
+        minimumInterval: TimeInterval = 5 * 60
     ) {
+        guard self.localUsageEnabled, self.activeTokscaleEngine != nil else { return }
         #if DEBUG
         guard self.isDebugMockDataActive == false else { return }
         #endif
 
-        guard Self.shouldRefreshLocalCostSummary(
+        guard Self.isLocalCostSummaryScopeStale(self.localCostSummary) || Self.shouldRefreshLocalCostSummary(
             updatedAt: self.localCostSummary.updatedAt,
             force: force,
             minimumInterval: minimumInterval,
             now: Date()
         ) else { return }
 
-        let service = self.costSummaryService
-        let modelPricing = self.config.modelPricing
-        let shouldStart = self.refreshStateQueue.sync { () -> Bool in
-            guard self.isRefreshingLocalCostSummary == false else { return false }
-            self.isRefreshingLocalCostSummary = true
-            return true
+        if self.isRefreshingLocalCostSummary {
+            // 价格设置在扫描期间变更时，保留一次使用最新配置的后续刷新。
+            self.pendingLocalCostRefresh = true
+            return
         }
-        guard shouldStart else { return }
 
-        DispatchQueue.global(qos: .utility).async {
-            var summary = service.load(
-                modelPricingOverrides: modelPricing,
-                refreshSessionCache: refreshSessionCache
-            )
-            if refreshSessionCache == false,
-               self.isEffectivelyEmptyLocalCostSummary(summary) {
-                summary = service.load(
-                    modelPricingOverrides: modelPricing,
-                    refreshSessionCache: true
+        let service = self.costSummaryService
+        let generation = self.localUsageGeneration
+        let modelPricing = self.config.modelPricing
+        let home = CodexPaths.codexRoot
+        let timeZone = TimeZone.current.identifier
+        self.isRefreshingLocalCostSummary = true
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let result = Result {
+                try service.load(
+                    now: Date(),
+                    modelPricingOverrides: modelPricing
                 )
             }
-            DispatchQueue.main.async {
-                self.localCostSummary = summary
-                self.saveCachedLocalCostSummary(summary)
-                self.refreshStateQueue.async {
-                    self.isRefreshingLocalCostSummary = false
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                if self.localUsageEnabled,
+                   self.localUsageGeneration == generation,
+                   self.config.modelPricing == modelPricing,
+                   CodexPaths.codexRoot == home,
+                   TimeZone.current.identifier == timeZone {
+                    switch result {
+                    case .success(let summary):
+                        self.localCostSummary = summary
+                        self.localCostRefreshError = nil
+                        self.saveCachedLocalCostSummary(summary)
+                    case .failure(let error):
+                        // 缓存仍然可见；失败不能伪装成零用量或触发旧引擎回退。
+                        self.localCostRefreshError = error.localizedDescription
+                    }
+                } else if self.localUsageEnabled {
+                    self.pendingLocalCostRefresh = true
+                }
+                self.isRefreshingLocalCostSummary = false
+                if self.pendingLocalCostRefresh {
+                    self.pendingLocalCostRefresh = false
+                    self.refreshLocalCostSummary(force: true, minimumInterval: 0)
                 }
             }
         }
     }
 
     private func refreshLocalCostSummaryIfNeeded() {
-        guard self.localCostSummary.updatedAt == nil else { return }
+        guard Self.isLocalCostSummaryScopeStale(self.localCostSummary) || Self.shouldRefreshLocalCostSummary(
+            updatedAt: self.localCostSummary.updatedAt,
+            force: false,
+            minimumInterval: 5 * 60,
+            now: Date()
+        ) else { return }
         self.refreshLocalCostSummary(
             force: true,
-            minimumInterval: 0,
-            refreshSessionCache: false
+            minimumInterval: 0
         )
-    }
-
-    private func refreshHistoricalModels() {
-        let service = self.costSummaryService
-        let fallbackHistoricalModels = Array(self.config.modelPricing.keys)
-
-        DispatchQueue.global(qos: .utility).async {
-            // 独立刷新会话缓存，避免依赖并行用量汇总任务的执行顺序。
-            let fetchedHistoricalModels = service.historicalModels(refreshSessionCache: true)
-            let mergedHistoricalModels = Self.mergedHistoricalModels(
-                preferredHistoricalModels: fetchedHistoricalModels,
-                fallbackHistoricalModels: fallbackHistoricalModels
-            )
-
-            DispatchQueue.main.async {
-                self.historicalModels = mergedHistoricalModels
-            }
-        }
     }
 
     private static func normalizedHistoricalModels(_ historicalModels: [String]) -> [String] {
@@ -1088,15 +1258,6 @@ final class TokenStore: ObservableObject {
         return normalized.sorted {
             $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
         }
-    }
-
-    private static func mergedHistoricalModels(
-        preferredHistoricalModels: [String],
-        fallbackHistoricalModels: [String]
-    ) -> [String] {
-        self.normalizedHistoricalModels(
-            preferredHistoricalModels + fallbackHistoricalModels
-        )
     }
 
     private func appendSwitchJournal() throws {
@@ -1153,6 +1314,10 @@ final class TokenStore: ObservableObject {
     }
 
     private func shouldInvalidateCachedLocalCostSummary(_ summary: LocalCostSummary) -> Bool {
+        // tokscale 的空结果也有效；旧 Swift 账本不参与新引擎的缓存判定。
+        if summary.source == TokscaleCostSummaryService.cacheSource {
+            return false
+        }
         guard summary.updatedAt != nil,
               self.isEffectivelyEmptyLocalCostSummary(summary) else {
             return false
@@ -1426,7 +1591,8 @@ final class TokenStore: ObservableObject {
             lifetimeCostUSD: 8_942.61,
             lifetimeTokens: 24_700_000_000,
             dailyEntries: entries,
-            updatedAt: now
+            updatedAt: now,
+            source: "preview"
         )
     }
 

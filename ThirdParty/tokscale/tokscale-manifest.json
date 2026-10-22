@@ -1,0 +1,19 @@
+{
+  "version": "4.20.0",
+  "repository": "https://github.com/junhoyeo/tokscale",
+  "commit": "c1973901fc2f7ba0d134252bfd923c714cc123db",
+  "platforms": {
+    "arm64": {
+      "package": "@tokscale/cli-darwin-arm64",
+      "url": "https://registry.npmjs.org/@tokscale/cli-darwin-arm64/-/cli-darwin-arm64-4.20.0.tgz",
+      "integrity": "sha512-9FQjSubJRDF9eKA/+bMg5pgEseo2dZFcbBVZWKEuTRQDJg+rUD4nrtvQZ1pR8XAhes3gS7BNb0gxdvuodTEKBg==",
+      "binarySHA256": "89394fbe0bc4c060b7aac9e171e89538a4689301d3b67871249d4ef15a50aedc"
+    },
+    "x86_64": {
+      "package": "@tokscale/cli-darwin-x64",
+      "url": "https://registry.npmjs.org/@tokscale/cli-darwin-x64/-/cli-darwin-x64-4.20.0.tgz",
+      "integrity": "sha512-UGa+GakljqaeyMgz+0P9UBSi5Z5SWzuFrUs21DT2TBWabN1e6ETDNXKKn2bu15X+2f/HkPT81HK9K4/GbQ1hHg==",
+      "binarySHA256": "f787264aaf4ec2cb2577c985f1160938ab57d5bfa652131eeb7936bd45efca16"
+    }
+  }
+}

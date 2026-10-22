@@ -7,11 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A62A20020000000000000001 /* tokscale-manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = A62A20010000000000000001 /* tokscale-manifest.json */; };
+		A62A20020000000000000002 /* tokscale-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A62A20010000000000000002 /* tokscale-LICENSE.txt */; };
+		A62A20020000000000000003 /* litellm-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A62A20010000000000000003 /* litellm-LICENSE.txt */; };
 		E55E00040000000000000001 /* CodexPanelCore in Frameworks */ = {isa = PBXBuildFile; productRef = E55E00020000000000000001 /* CodexPanelCore */; };
 		E55E00050000000000000001 /* CodexPanelCore in Frameworks */ = {isa = PBXBuildFile; productRef = E55E00030000000000000001 /* CodexPanelCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A62A20010000000000000001 /* tokscale-manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "tokscale-manifest.json"; path = "ThirdParty/tokscale/tokscale-manifest.json"; sourceTree = SOURCE_ROOT; };
+		A62A20010000000000000002 /* tokscale-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "tokscale-LICENSE.txt"; path = "ThirdParty/tokscale/tokscale-LICENSE.txt"; sourceTree = SOURCE_ROOT; };
+		A62A20010000000000000003 /* litellm-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = "litellm-LICENSE.txt"; path = "ThirdParty/litellm/litellm-LICENSE.txt"; sourceTree = SOURCE_ROOT; };
 		9F23A0013C5A4B7200A00001 /* Signing.local.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.local.example.xcconfig; sourceTree = "<group>"; };
 		9F23A0023C5A4B7200A00001 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		C0C16B462F7423BE00A2A16F /* Codex Panel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Codex Panel.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -94,6 +100,9 @@
 			isa = PBXGroup;
 			children = (
 				9F23A0033C5A4B7200A00001 /* Configs */,
+				A62A20010000000000000001 /* tokscale-manifest.json */,
+				A62A20010000000000000002 /* tokscale-LICENSE.txt */,
+				A62A20010000000000000003 /* litellm-LICENSE.txt */,
 				C0C16B482F7423BE00A2A16F /* codexPanel */,
 				C0C16B6F2F7428A100A2A16F /* codexPanelTests */,
 				C0C16B472F7423BE00A2A16F /* Products */,
@@ -205,6 +214,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A62A20020000000000000001 /* tokscale-manifest.json in Resources */,
+				A62A20020000000000000002 /* tokscale-LICENSE.txt in Resources */,
+				A62A20020000000000000003 /* litellm-LICENSE.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

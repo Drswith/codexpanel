@@ -53,6 +53,68 @@ final class ReleaseArtifactVerificationScriptTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("App executable missing"))
     }
 
+    func testVerificationScriptFailsWhenTokscaleHelperIsBundled() throws {
+        let fixture = try self.makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try FileManager.default.copyItem(
+            at: URL(fileURLWithPath: "/bin/ls"),
+            to: fixture.appBundleURL.appendingPathComponent("Contents/Helpers/tokscale")
+        )
+
+        let result = try self.runVerificationScript(appURL: fixture.appBundleURL, distURL: fixture.distURL)
+        XCTAssertNotEqual(result.status, 0)
+        XCTAssertTrue(result.stderr.contains("tokscale binary must not be bundled"))
+    }
+
+    func testVerificationScriptFailsWhenTokscaleSymlinkIsBundledInResources() throws {
+        let fixture = try self.makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try FileManager.default.createSymbolicLink(
+            atPath: fixture.appBundleURL.appendingPathComponent("Contents/Resources/tokscale").path,
+            withDestinationPath: "/nonexistent/tokscale"
+        )
+
+        let result = try self.runVerificationScript(appURL: fixture.appBundleURL, distURL: fixture.distURL)
+        XCTAssertNotEqual(result.status, 0)
+        XCTAssertTrue(result.stderr.contains("tokscale binary must not be bundled"))
+    }
+
+    func testVerificationScriptFailsWhenTokscaleLicenseMissing() throws {
+        let fixture = try self.makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try FileManager.default.removeItem(at: fixture.appBundleURL.appendingPathComponent("Contents/Resources/tokscale-LICENSE.txt"))
+
+        let result = try self.runVerificationScript(appURL: fixture.appBundleURL, distURL: fixture.distURL)
+        XCTAssertNotEqual(result.status, 0)
+        XCTAssertTrue(result.stderr.contains("tokscale license missing"))
+    }
+
+    func testVerificationScriptFailsWhenTokscaleDownloadManifestDiffers() throws {
+        let fixture = try self.makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let manifestURL = fixture.appBundleURL.appendingPathComponent("Contents/Resources/tokscale-manifest.json")
+        var manifest = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: manifestURL)) as? [String: Any])
+        // 版本相同也不能接受下载来源或校验值被更改的清单。
+        manifest["platforms"] = [:]
+        try JSONSerialization.data(withJSONObject: manifest).write(to: manifestURL)
+
+        let result = try self.runVerificationScript(appURL: fixture.appBundleURL, distURL: fixture.distURL)
+        XCTAssertNotEqual(result.status, 0)
+        XCTAssertTrue(result.stderr.contains("tokscale download manifest does not match"))
+    }
+
+    func testVerificationScriptFailsWhenTokscaleDownloadManifestMissing() throws {
+        let fixture = try self.makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try FileManager.default.removeItem(
+            at: fixture.appBundleURL.appendingPathComponent("Contents/Resources/tokscale-manifest.json")
+        )
+
+        let result = try self.runVerificationScript(appURL: fixture.appBundleURL, distURL: fixture.distURL)
+        XCTAssertNotEqual(result.status, 0)
+        XCTAssertTrue(result.stderr.contains("tokscale download manifest missing"))
+    }
+
     private func runVerificationScript(appURL: URL, distURL: URL) throws -> (status: Int32, stdout: String, stderr: String) {
         let scriptURL = self.repoRootURL()
             .appendingPathComponent("scripts", isDirectory: true)
@@ -100,6 +162,23 @@ final class ReleaseArtifactVerificationScriptTests: XCTestCase {
         let mainBinaryURL = mainBinaryDir.appendingPathComponent("Codex Panel", isDirectory: false)
         try fileManager.copyItem(at: URL(fileURLWithPath: "/bin/ls"), to: mainBinaryURL)
 
+        let helperDirectory = appBundleURL.appendingPathComponent("Contents/Helpers", isDirectory: true)
+        let resourcesDirectory = appBundleURL.appendingPathComponent("Contents/Resources", isDirectory: true)
+        try fileManager.createDirectory(at: helperDirectory, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: resourcesDirectory, withIntermediateDirectories: true)
+        try fileManager.copyItem(
+            at: self.repoRootURL().appendingPathComponent("ThirdParty/tokscale/tokscale-LICENSE.txt"),
+            to: resourcesDirectory.appendingPathComponent("tokscale-LICENSE.txt")
+        )
+        try fileManager.copyItem(
+            at: self.repoRootURL().appendingPathComponent("ThirdParty/litellm/litellm-LICENSE.txt"),
+            to: resourcesDirectory.appendingPathComponent("litellm-LICENSE.txt")
+        )
+        try fileManager.copyItem(
+            at: self.repoRootURL().appendingPathComponent("ThirdParty/tokscale/tokscale-manifest.json"),
+            to: resourcesDirectory.appendingPathComponent("tokscale-manifest.json")
+        )
+
         let infoPlistURL = appBundleURL
             .appendingPathComponent("Contents", isDirectory: true)
             .appendingPathComponent("Info.plist", isDirectory: false)
@@ -125,10 +204,6 @@ final class ReleaseArtifactVerificationScriptTests: XCTestCase {
         try infoPlist.write(to: infoPlistURL, atomically: true, encoding: .utf8)
 
         if includeLegacyCLIHelper {
-            let helperDirectory = appBundleURL
-                .appendingPathComponent("Contents", isDirectory: true)
-                .appendingPathComponent("Helpers", isDirectory: true)
-            try fileManager.createDirectory(at: helperDirectory, withIntermediateDirectories: true)
             try fileManager.copyItem(
                 at: URL(fileURLWithPath: "/bin/ls"),
                 to: helperDirectory.appendingPathComponent("codexpanel", isDirectory: false)

@@ -63,15 +63,6 @@ struct MenuBarOpenRefreshGate: Equatable {
     }
 }
 
-enum MenuBarRefreshOrigin: Equatable {
-    case menuOpen
-    case manual
-
-    var refreshesSessionCache: Bool {
-        self == .manual
-    }
-}
-
 private struct AdaptiveMenuScrollContainer<Content: View>: NSViewRepresentable {
     let heightLimit: AdaptiveScrollHeightLimit
     let initialHeight: CGFloat
@@ -647,6 +638,28 @@ struct MenuBarView: View {
             guard isCostPanelPresented else { return }
             showCostPanel()
         }
+        .onChange(of: store.localUsageEnabled) { enabled in
+            guard !enabled else { return }
+            pendingCostHide?.cancel()
+            isCostPanelPresented = false
+            isCostSummaryHovered = false
+            isCostPanelHovered = false
+            DetachedWindowPresenter.shared.close(id: costPanelID)
+        }
+        .onReceive(store.$isRefreshingLocalCostSummary) { _ in
+            guard isCostPanelPresented else { return }
+            DispatchQueue.main.async {
+                guard isCostPanelPresented else { return }
+                showCostPanel()
+            }
+        }
+        .onReceive(store.$localCostRefreshError) { _ in
+            guard isCostPanelPresented else { return }
+            DispatchQueue.main.async {
+                guard isCostPanelPresented else { return }
+                showCostPanel()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .openAILoginDidSucceed)) { _ in
             self.clearError()
             refreshRunningThreadAttribution()
@@ -747,7 +760,7 @@ struct MenuBarView: View {
             }
 
             Button {
-                Task { await refresh(origin: .manual, announceResult: true) }
+                Task { await refresh(announceResult: true) }
             } label: {
                 Group {
                     if isRefreshing {
@@ -778,6 +791,28 @@ struct MenuBarView: View {
             Divider()
                 .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
 
+            if store.localUsageEnabled {
+                VStack(alignment: .leading, spacing: 0) {
+                    CostSummaryRowView(
+                        summary: store.localCostSummary,
+                        currency: currency,
+                        compactTokens: compactTokens,
+                        refreshError: store.localCostRefreshError,
+                        isRefreshing: store.isRefreshingLocalCostSummary
+                    )
+                }
+                .background(
+                    ViewReferenceReader { view in
+                        resolveCostSummaryAnchor(view)
+                    }
+                )
+                .onHover { hovering in
+                    setCostSummaryHover(hovering)
+                }
+                .padding(.horizontal, MenuBarPopoverSizing.sectionHorizontalInset)
+                .padding(.vertical, 8)
+            }
+
             if isCompletelyEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "person.crop.circle.badge.plus")
@@ -793,22 +828,6 @@ struct MenuBarView: View {
                 .padding(.vertical, 24)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        CostSummaryRowView(
-                            summary: store.localCostSummary,
-                            currency: currency,
-                            compactTokens: compactTokens
-                        )
-                    }
-                    .background(
-                        ViewReferenceReader { view in
-                            resolveCostSummaryAnchor(view)
-                        }
-                    )
-                    .onHover { hovering in
-                        setCostSummaryHover(hovering)
-                    }
-
                     openAIAccountsSection
 
                     providersSection
@@ -1589,6 +1608,7 @@ struct MenuBarView: View {
     }
 
     private func presentCostPanel() {
+        guard store.localUsageEnabled else { return }
         pendingCostHide?.cancel()
         pendingCostHide = nil
         isCostPanelPresented = true
@@ -1623,12 +1643,20 @@ struct MenuBarView: View {
     }
 
     private func showCostPanel() {
+        guard store.localUsageEnabled else { return }
         guard let anchorView = costSummaryAnchorView,
               anchorView.window != nil else { return }
 
         let panelSize = CGSize(
             width: CostDetailsPanelView.panelWidth,
-            height: CostDetailsPanelView.panelHeight(hasHistory: !store.localCostSummary.dailyEntries.isEmpty)
+            height: CostDetailsPanelView.panelHeight(
+                hasHistory: !LocalCostPresentation.chartEntries(summary: store.localCostSummary).isEmpty,
+                hasStatus: LocalCostPresentation.statusText(
+                    summary: store.localCostSummary,
+                    refreshError: store.localCostRefreshError,
+                    isRefreshing: store.isRefreshingLocalCostSummary
+                ) != nil
+            )
         )
         DetachedWindowPresenter.shared.showHoverPopover(
             id: costPanelID,
@@ -1639,7 +1667,9 @@ struct MenuBarView: View {
                 summary: store.localCostSummary,
                 currency: currency,
                 compactTokens: compactTokens,
-                shortDay: shortDay
+                shortDay: shortDay,
+                refreshError: store.localCostRefreshError,
+                isRefreshing: store.isRefreshingLocalCostSummary
             )
             .onHover { hovering in
                 setCostPanelHover(hovering)
@@ -2141,9 +2171,8 @@ struct MenuBarView: View {
         )
         now = Date()
         store.refreshLocalCostSummary(
-            force: true,
-            minimumInterval: 0,
-            refreshSessionCache: false
+            force: false,
+            minimumInterval: 60
         )
         refreshRunningThreadAttribution()
 
@@ -2182,7 +2211,6 @@ struct MenuBarView: View {
     }
 
     private func refresh(
-        origin: MenuBarRefreshOrigin,
         force: Bool = true,
         announceResult: Bool = false
     ) async {
@@ -2199,8 +2227,7 @@ struct MenuBarView: View {
             didRequestLocalCostRefresh = true
             store.refreshLocalCostSummary(
                 force: true,
-                minimumInterval: 0,
-                refreshSessionCache: origin.refreshesSessionCache
+                minimumInterval: 0
             )
             refreshRunningThreadAttribution()
         }
@@ -2221,8 +2248,7 @@ struct MenuBarView: View {
         if didRequestLocalCostRefresh == false {
             store.refreshLocalCostSummary(
                 force: true,
-                minimumInterval: usageRefreshInterval,
-                refreshSessionCache: origin.refreshesSessionCache
+                minimumInterval: usageRefreshInterval
             )
         }
         refreshRunningThreadAttribution()

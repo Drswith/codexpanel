@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import XCTest
 
 @MainActor
@@ -50,6 +51,132 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
             minimumInterval: 300,
             now: now
         ))
+    }
+
+    func testCostRefreshFailurePreservesLastSuccessfulSummaryAndCache() throws {
+        let cached = self.costSummary(tokens: 42)
+        try self.writeCostCache(cached)
+        let cachedData = try Data(contentsOf: CodexPaths.costCacheURL)
+        let service = CostSummaryProviderStub { _, _ in throw CostSummaryTestError.unavailable }
+        let store = self.makeTokenStore(costSummaryService: service)
+
+        XCTAssertEqual(service.callCount, 0)
+        store.refreshLocalCostSummary(force: true, minimumInterval: 0)
+        self.waitForCostRefresh(store)
+
+        XCTAssertEqual(store.localCostSummary.lifetimeTokens, 42)
+        XCTAssertEqual(store.localCostSummary.updatedAt, cached.updatedAt)
+        XCTAssertEqual(store.localCostRefreshError, "测试统计程序不可用")
+        XCTAssertEqual(try Data(contentsOf: CodexPaths.costCacheURL), cachedData)
+    }
+
+    func testCostScopeExpiresAcrossMidnightAndTimeZoneDespiteFreshTimestamp() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Shanghai"))
+        let now = try XCTUnwrap(ISO8601Parsing.parse("2026-10-22T00:00:05+08:00"))
+        var summary = self.costSummary(tokens: 42)
+        summary.updatedAt = now.addingTimeInterval(-20)
+        summary.bucketTimeZoneIdentifier = calendar.timeZone.identifier
+        XCTAssertFalse(TokenStore.shouldRefreshLocalCostSummary(updatedAt: summary.updatedAt, force: false, minimumInterval: 60, now: now))
+        XCTAssertTrue(TokenStore.isLocalCostSummaryScopeStale(summary, calendar: calendar, now: now))
+        summary.updatedAt = now
+        XCTAssertFalse(TokenStore.isLocalCostSummaryScopeStale(summary, calendar: calendar, now: now))
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        XCTAssertTrue(TokenStore.isLocalCostSummaryScopeStale(summary, calendar: calendar, now: now))
+    }
+
+    func testInitialCostFailureDoesNotPersistAnEmptySuccessfulResult() {
+        let service = CostSummaryProviderStub { _, _ in throw CostSummaryTestError.unavailable }
+        let store = self.makeTokenStore(costSummaryService: service)
+        self.waitForCostRefresh(store)
+
+        XCTAssertNil(store.localCostSummary.updatedAt)
+        XCTAssertNotNil(store.localCostRefreshError)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: CodexPaths.costCacheURL.path))
+    }
+
+    func testFreshLegacyCostCacheIsKeptWhileNewEngineRebuildsIt() throws {
+        var old = self.costSummary(tokens: 42)
+        old.source = nil
+        try self.writeCostCache(old)
+        let gate = DispatchSemaphore(value: 0)
+        let replacement = self.costSummary(tokens: 84)
+        let service = CostSummaryProviderStub { _, _ in
+            _ = gate.wait(timeout: .now() + 5)
+            return replacement
+        }
+        let store = self.makeTokenStore(costSummaryService: service)
+        XCTAssertEqual(store.localCostSummary.lifetimeTokens, 42)
+        XCTAssertTrue(store.isCheckingTokscaleEngines)
+        gate.signal()
+        self.waitForCostRefresh(store)
+
+        XCTAssertEqual(store.localCostSummary.lifetimeTokens, 84)
+        XCTAssertEqual(store.localCostSummary.source, "tokscale-v4")
+    }
+
+    func testPriceChangesDuringScanCoalesceAndDiscardObsoleteResult() throws {
+        try self.writeCostCache(self.costSummary(tokens: 42))
+        let gate = DispatchSemaphore(value: 0)
+        let first = self.costSummary(tokens: 1)
+        let latest = self.costSummary(tokens: 2)
+        let service = CostSummaryProviderStub { call, _ in
+            if call == 1 {
+                _ = gate.wait(timeout: .now() + 5)
+                return first
+            }
+            return latest
+        }
+        let store = self.makeTokenStore(costSummaryService: service)
+        var published: [Int] = []
+        let observation = store.$localCostSummary.sink { published.append($0.lifetimeTokens) }
+        defer { observation.cancel() }
+        let deadline = Date().addingTimeInterval(5)
+        while service.callCount == 0 && Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+        XCTAssertEqual(service.callCount, 1)
+        for rate in [2e-6, 3e-6] {
+            try store.saveModelPricingSettings(ModelPricingSettingsUpdate(
+                upserts: ["gpt-5.5": CodexPanelModelPricing(
+                    inputUSDPerToken: rate, cachedInputUSDPerToken: 1e-7, outputUSDPerToken: 1e-5
+                )], removals: []
+            ))
+        }
+        gate.signal()
+        self.waitForCostRefresh(store)
+
+        XCTAssertEqual(service.callCount, 2)
+        XCTAssertEqual(service.maximumConcurrentLoads, 1)
+        XCTAssertEqual(service.pricingSnapshots.last?["gpt-5.5"]?.inputUSDPerToken, 3e-6)
+        XCTAssertEqual(store.localCostSummary.lifetimeTokens, 2)
+        XCTAssertFalse(published.contains(1), "旧价格的扫描结果不可覆盖新配置")
+    }
+
+    private func costSummary(tokens: Int) -> LocalCostSummary {
+        let now = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970))
+        return LocalCostSummary(
+            todayCostUSD: 1, todayTokens: tokens, last30DaysCostUSD: 1, last30DaysTokens: tokens,
+            lifetimeCostUSD: 1, lifetimeTokens: tokens,
+            dailyEntries: [DailyCostEntry(id: "today", date: Calendar.current.startOfDay(for: now), costUSD: 1, totalTokens: tokens)],
+            updatedAt: now, source: "tokscale-v4", bucketTimeZoneIdentifier: TimeZone.current.identifier,
+            historicalModels: ["gpt-5.5"]
+        )
+    }
+
+    private func writeCostCache(_ summary: LocalCostSummary) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try CodexPaths.writeSecureFile(try encoder.encode(summary), to: CodexPaths.costCacheURL)
+    }
+
+    private func waitForCostRefresh(_ store: TokenStore) {
+        let deadline = Date().addingTimeInterval(5)
+        while (store.isCheckingTokscaleEngines || store.isRefreshingLocalCostSummary) && Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+        }
+        XCTAssertFalse(store.isCheckingTokscaleEngines)
+        XCTAssertFalse(store.isRefreshingLocalCostSummary)
     }
 
     func testDebugDefaultEmptyProvidersInjectsMockDataEvenWhenCostCacheExists() {
@@ -633,11 +760,18 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
 
     private func makeTokenStore(
         syncService: any CodexSynchronizing = CodexSyncServiceNoOp(),
-        costSummaryService: LocalCostSummaryService = LocalCostSummaryService()
+        costSummaryService: any LocalCostSummaryProviding = LocalCostSummaryService()
     ) -> TokenStore {
-        TokenStore(
+        let configStore = CodexPanelConfigStore()
+        var config = (try? configStore.loadOrMigrate()) ?? CodexPanelConfig()
+        config.localUsage.enabled = true
+        try? configStore.save(config)
+        return TokenStore(
             syncService: syncService,
             costSummaryService: costSummaryService,
+            tokscaleEngineManager: LocalUsageEngineManagerStub(discover: {
+                [TokscaleEngineDescriptor(source: .installed, executableURL: URL(fileURLWithPath: "/usr/bin/true"), version: "4.20.0")]
+            }),
             openAIAccountGatewayService: OpenAIAccountGatewayControllerStub(),
             openRouterGatewayService: OpenRouterGatewayControllerStub(),
             chatCompletionsGatewayService: ChatGatewayControllerStub(),
@@ -650,6 +784,43 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
 
 private final class CodexSyncServiceNoOp: CodexSynchronizing {
     func synchronize(config _: CodexPanelConfig) throws {}
+}
+
+private enum CostSummaryTestError: LocalizedError {
+    case unavailable
+    var errorDescription: String? { "测试统计程序不可用" }
+}
+
+private final class CostSummaryProviderStub: LocalCostSummaryProviding {
+    private let lock = NSLock()
+    private var calls = 0
+    private var active = 0
+    private var maximum = 0
+    private var snapshots: [[String: CodexPanelModelPricing]] = []
+    private let handler: (Int, [String: CodexPanelModelPricing]) throws -> LocalCostSummary
+
+    init(handler: @escaping (Int, [String: CodexPanelModelPricing]) throws -> LocalCostSummary) {
+        self.handler = handler
+    }
+
+    var callCount: Int { lock.lock(); defer { lock.unlock() }; return calls }
+    var maximumConcurrentLoads: Int { lock.lock(); defer { lock.unlock() }; return maximum }
+    var pricingSnapshots: [[String: CodexPanelModelPricing]] { lock.lock(); defer { lock.unlock() }; return snapshots }
+
+    func setEngine(_ engine: TokscaleEngineDescriptor?) {}
+
+    func load(now: Date, modelPricingOverrides: [String: CodexPanelModelPricing]) throws -> LocalCostSummary {
+        lock.lock()
+        calls += 1
+        active += 1
+        maximum = max(maximum, active)
+        snapshots.append(modelPricingOverrides)
+        let call = calls
+        lock.unlock()
+        defer { lock.lock(); active -= 1; lock.unlock() }
+        return try handler(call, modelPricingOverrides)
+    }
+
 }
 
 private final class OpenAIAccountGatewayControllerStub: OpenAIAccountGatewayControlling {

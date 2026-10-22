@@ -66,13 +66,21 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             build
 
-      - name: Development isolation regression tests
+      - name: 开发隔离与用量统计回归测试
         run: |
           xcodebuild \
             -project codexpanel.xcodeproj \
             -scheme codexpanel \
             -destination 'platform=macOS' \
             -only-testing:codexpanelTests/CodexPanelRuntimeProfileTests \
+            -only-testing:codexpanelTests/TokscaleCostSummaryServiceTests \
+            -only-testing:codexpanelTests/TokscaleProcessRunnerTests \
+            -only-testing:codexpanelTests/TokscaleEngineManagerTests \
+            -only-testing:codexpanelTests/LocalCostSummaryPresentationTests \
+            -only-testing:codexpanelTests/ReleaseArtifactVerificationScriptTests \
+            -only-testing:codexpanelTests/TokenStoreSettingsTests \
+            -only-testing:codexpanelTests/TokenStoreLocalUsageTests \
+            -only-testing:codexpanelTests/SettingsWindowCoordinatorTests \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             test

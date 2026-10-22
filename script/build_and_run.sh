@@ -17,7 +17,7 @@ for line in subprocess.check_output(['ps', '-axo', 'pid=,comm='], text=True).spl
         os.kill(int(parts[0]), signal.SIGTERM)
 PY
 xcodebuild -project "$ROOT_DIR/codexpanel.xcodeproj" -scheme codexpanel \
-  -configuration Debug -destination 'platform=macOS,arch=arm64' \
+  -configuration Debug -destination "platform=macOS,arch=$(uname -m)" \
   -derivedDataPath "$BUILD_DIR" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
 if [[ "$MODE" == --build-only ]]; then exit 0; fi
 /usr/bin/open -n "$APP" --env "CODEXPANEL_HOME=${CODEXPANEL_HOME:-$HOME/.codexpanel-dev/home}" --env "CODEXPANEL_DEBUG_MOCK_DATA=${CODEXPANEL_DEBUG_MOCK_DATA:-0}"

@@ -141,8 +141,11 @@ file "$UNIVERSAL_APP/Contents/MacOS/$APP_EXECUTABLE_NAME"
 
 ## 4. 可选：签名与公证
 
-如果你走 Developer ID 分发，请先对 `UNIVERSAL_APP` 签名，再走 notarization。  
-如果暂时是内测分发，可以跳过这一步。
+默认脚本保持未签名、未公证的构建流程。App 不含 tokscale 引擎，构建阶段不下载引擎；仅复制 `tokscale-manifest.json`、两份许可证及离线价格种子。`scripts/verify_release_artifacts.sh` 会拒绝包内任何名为 `tokscale` 的文件或符号链接，并校验下载清单与仓库固定内容一致。
+
+Developer ID 分发需要在打包前按由内到外的顺序签名：先为存在的嵌套 dylib 使用 Developer ID Application 身份、`--options runtime --timestamp`，再签 `UNIVERSAL_APP`，最后执行 `codesign --verify --deep --strict --all-architectures "$UNIVERSAL_APP"`。
+
+完成以上签名后再提交公证并装订票据。产物结构校验不会执行 Gatekeeper 验收或公证。[Apple 的分发签名说明](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac/)
 
 ## 5. 产出 zip + dmg
 
