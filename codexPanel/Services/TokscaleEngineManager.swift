@@ -57,14 +57,14 @@ nonisolated enum TokscaleEngineError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .manifestMissing: return "缺少 tokscale 下载清单，请重新安装 Codex Panel。"
-        case .invalidManifest: return "tokscale 下载清单无效。"
-        case .downloadFailed: return "tokscale 下载失败，请检查网络后重试。"
-        case .downloadTooLarge: return "tokscale 下载文件超过大小限制。"
-        case .checksumMismatch: return "tokscale 文件校验失败，未安装下载内容。"
-        case .invalidArchive: return "tokscale 安装包内容无效。"
-        case .invalidVersion: return "无法确认 tokscale 版本。"
-        case .installationFailed: return "无法安装 Codex Panel 管理的 tokscale 副本。"
+        case .manifestMissing: return "缺少用量引擎下载清单，请重新安装 Codex Panel。"
+        case .invalidManifest: return "用量引擎下载清单无效。"
+        case .downloadFailed: return "用量引擎下载失败，请检查网络后重试。"
+        case .downloadTooLarge: return "用量引擎下载文件超过大小限制。"
+        case .checksumMismatch: return "用量引擎文件校验失败，未安装下载内容。"
+        case .invalidArchive: return "用量引擎安装包内容无效。"
+        case .invalidVersion: return "无法确认引擎版本。"
+        case .installationFailed: return "无法安装用量引擎。"
         }
     }
 }

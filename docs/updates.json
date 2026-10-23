@@ -2,25 +2,25 @@
   "schemaVersion": 1,
   "channel": "stable",
   "release": {
-    "version": "1.5.24",
-    "publishedAt": "2026-10-22T17:09:15Z",
-    "summary": "接入外挂 tokscale，默认关闭本地用量统计，支持专用副本与原生界面。",
-    "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.24",
-    "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.24",
+    "version": "1.5.25",
+    "publishedAt": "2026-10-23T02:50:43Z",
+    "summary": "精简用量引擎界面，统一引擎文案并修复单引擎恢复选择。",
+    "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.25",
+    "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.25",
     "deliveryMode": "guidedDownload",
     "minimumAutomaticUpdateVersion": null,
     "artifacts": [
       {
         "architecture": "universal",
         "format": "dmg",
-        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.24/codexpanel-1.5.24-macOS.dmg",
-        "sha256": "357336599e611985033dde7001e253793c35a250bffef80687e4f9eb91f64a43"
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.25/codexpanel-1.5.25-macOS.dmg",
+        "sha256": "19c1f7f2e58af3f96aafd217de2e2179fc95a820132ec9605b92aade7ff3c5c6"
       },
       {
         "architecture": "universal",
         "format": "zip",
-        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.24/codexpanel-1.5.24-macOS.zip",
-        "sha256": "20851fd6905ee092a638a0942e81bd78464d1edbd7dd4e6c56e9805f00c708f1"
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.25/codexpanel-1.5.25-macOS.zip",
+        "sha256": "c762f2ec08110472d0c6ed629a9892590c03d2bcffb93d6ca7f3153b766de6f3"
       }
     ]
   }

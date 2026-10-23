@@ -256,80 +256,43 @@ private struct SettingsLocalUsageEngineSection: View {
                 )
             )
 
-            if !self.store.localUsageEnabled {
-                Text(L.localUsageDisabledHint)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let engine = self.store.activeTokscaleEngine {
-                LabeledContent(
-                    self.store.localUsageEnabled ? L.localUsageEngineCurrentVersion : L.localUsageEngineSelectedVersion
-                ) {
-                    Text("tokscale \(engine.version) · \(self.sourceTitle(engine))")
-                        .textSelection(.enabled)
-                        .help(engine.executableURL.path)
-                }
-            }
-
-            if self.store.isCheckingTokscaleEngines {
-                self.progressRow(L.localUsageEngineChecking)
-            }
-            if self.store.isInstallingTokscaleEngine {
-                self.progressRow(L.localUsageEngineDownloading)
-            }
-
-            if self.store.tokscaleEngines.isEmpty && !self.isBusy && self.store.tokscaleEngineError == nil {
-                Text(self.store.hasCheckedTokscaleEngines ? L.localUsageEngineNotFound : L.localUsageEngineUnchecked)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            ForEach(self.store.tokscaleEngines, id: \.id) { engine in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("tokscale \(engine.version)")
-                                .font(.callout.weight(.medium))
-                            Text(self.sourceTitle(engine))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .help(engine.executableURL.path)
-                        Spacer()
-                        if self.store.selectedTokscaleEngineID == engine.id {
-                            Label(
-                                self.store.localUsageEnabled ? L.localUsageEngineInUse : L.localUsageEngineSelected,
-                                systemImage: "checkmark.circle.fill"
-                            )
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                        } else {
-                            Button(L.localUsageEngineUseVersion) {
+            HStack(spacing: 12) {
+                if self.store.isCheckingTokscaleEngines {
+                    self.progressRow(L.localUsageEngineChecking)
+                } else if self.store.isInstallingTokscaleEngine {
+                    self.progressRow(L.localUsageEngineDownloading)
+                } else if !self.store.tokscaleEngines.isEmpty {
+                    Menu {
+                        ForEach(self.store.tokscaleEngines, id: \.id) { engine in
+                            Button {
                                 self.store.selectTokscaleEngine(id: engine.id)
+                            } label: {
+                                if self.store.selectedTokscaleEngineID == engine.id {
+                                    Label(self.engineTitle(engine), systemImage: "checkmark")
+                                } else {
+                                    Text(self.engineTitle(engine))
+                                }
                             }
-                            .disabled(!self.store.localUsageEnabled || self.isBusy || !engine.isCompatible)
+                            .disabled(!self.store.localUsageEnabled || !engine.isCompatible)
+                            .help(engine.isCompatible ? engine.executableURL.path : L.localUsageEngineIncompatible)
                         }
+                    } label: {
+                        Text((self.store.activeTokscaleEngine ?? self.store.tokscaleEngines.first).map(self.engineTitle) ?? L.localUsageEngineVersion)
                     }
-                    if !engine.isCompatible {
-                        Text(L.localUsageEngineIncompatible)
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    }
+                    .menuStyle(.borderlessButton)
+                    .accessibilityLabel(L.localUsageEngineVersion)
+                } else if self.store.tokscaleEngineError == nil {
+                    Text(self.store.hasCheckedTokscaleEngines ? L.localUsageEngineNotFound : L.localUsageEngineUnchecked)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
-            }
 
-            if let error = self.store.tokscaleEngineError {
-                Text(error)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-            }
+                Spacer(minLength: 0)
 
-            HStack {
                 Button(L.localUsageEngineCheck) {
                     self.store.checkTokscaleEngines()
                 }
+                .fixedSize()
                 .disabled(self.isBusy)
 
                 if !self.hasCompatibleManagedEngine {
@@ -341,8 +304,23 @@ private struct SettingsLocalUsageEngineSection: View {
                         self.hasRequestedDownload = true
                         self.store.installManagedTokscaleEngine()
                     }
+                    .fixedSize()
                     .disabled(!self.store.localUsageEnabled || self.isBusy)
                 }
+            }
+
+            if !self.isBusy, self.store.tokscaleEngines.count == 1,
+               self.store.tokscaleEngines.first?.isCompatible == false {
+                Text(L.localUsageEngineIncompatible)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            if let error = self.store.tokscaleEngineError {
+                Text(error)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
             }
         } header: {
             Text(L.localUsageEngineTitle)
@@ -351,8 +329,9 @@ private struct SettingsLocalUsageEngineSection: View {
         }
     }
 
-    private func sourceTitle(_ engine: TokscaleEngineDescriptor) -> String {
-        engine.source == .managed ? L.localUsageEngineManaged : L.localUsageEngineInstalled
+    private func engineTitle(_ engine: TokscaleEngineDescriptor) -> String {
+        let source = engine.source == .managed ? L.localUsageEngineManaged : L.localUsageEngineInstalled
+        return "tokscale \(engine.version) · \(source)"
     }
 
     private func progressRow(_ title: String) -> some View {

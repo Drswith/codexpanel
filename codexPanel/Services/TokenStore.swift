@@ -1098,8 +1098,8 @@ final class TokenStore: ObservableObject {
         self.invalidateLocalUsageEngine()
         guard let selected else {
             let message = self.tokscaleEngines.isEmpty
-                ? "未找到可用的 tokscale，请下载安装 Codex Panel 专用副本。"
-                : "所选用量引擎不可用；请选择兼容的 tokscale 4.20 及以上 4.x 版本，或下载专用副本。"
+                ? "未找到可用的用量引擎，请点击“下载引擎”安装。"
+                : "所选用量引擎不可用；请选择兼容的 tokscale 4.20 及以上 4.x 版本，或重新下载引擎。"
             self.tokscaleEngineError = message
             self.localCostRefreshError = message
             return
