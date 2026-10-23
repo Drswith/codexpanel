@@ -305,7 +305,7 @@ private struct SettingsLocalUsageEngineSection: View {
                         self.store.installManagedTokscaleEngine()
                     }
                     .fixedSize()
-                    .disabled(!self.store.localUsageEnabled || self.isBusy)
+                    .disabled(self.isBusy)
                 }
             }
 
