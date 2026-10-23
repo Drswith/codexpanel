@@ -1121,7 +1121,7 @@ final class TokenStore: ObservableObject {
     }
 
     func installManagedTokscaleEngine() {
-        guard self.localUsageEnabled, !self.isCheckingTokscaleEngines, !self.isInstallingTokscaleEngine else { return }
+        guard !self.isCheckingTokscaleEngines, !self.isInstallingTokscaleEngine else { return }
         self.isInstallingTokscaleEngine = true
         self.tokscaleEngineError = nil
         let manager = self.tokscaleEngineManager

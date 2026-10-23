@@ -14,7 +14,6 @@ final class TokenStoreLocalUsageTests: CodexPanelTestCase {
         let store = self.makeStore(manager: manager, service: service)
 
         store.refreshLocalCostSummary(force: true, minimumInterval: 0)
-        store.installManagedTokscaleEngine()
         store.load()
         self.drainMainRunLoop()
 
@@ -299,6 +298,49 @@ final class TokenStoreLocalUsageTests: CodexPanelTestCase {
         XCTAssertNil(store.activeTokscaleEngine)
         XCTAssertEqual(service.loadCount, 0)
         XCTAssertEqual(manager.installationCount, 0)
+    }
+
+    func testManualDownloadWhileDisabledDoesNotEnableOrScan() throws {
+        let managed = self.managed
+        let manager = LocalUsageEngineManagerStub(discover: { [] }, install: { managed })
+        let service = LocalUsageSummaryStub()
+        let store = self.makeStore(manager: manager, service: service)
+
+        store.installManagedTokscaleEngine()
+        self.waitUntil { !store.isInstallingTokscaleEngine }
+
+        XCTAssertEqual(manager.installationCount, 1)
+        XCTAssertEqual(store.tokscaleEngines, [managed])
+        XCTAssertTrue(store.hasCheckedTokscaleEngines)
+        XCTAssertFalse(store.localUsageEnabled)
+        XCTAssertFalse(try CodexPanelConfigStore().load().localUsage.enabled)
+        XCTAssertNil(store.activeTokscaleEngine)
+        XCTAssertNil(service.selectedEngine)
+        XCTAssertEqual(service.loadCount, 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: CodexPaths.costCacheURL.path))
+
+        store.setLocalUsageEnabled(true)
+        self.waitUntil { !store.isCheckingTokscaleEngines && !store.isRefreshingLocalCostSummary && service.loadCount == 1 }
+        XCTAssertEqual(store.activeTokscaleEngine, managed)
+        XCTAssertEqual(service.loadedEngines, [managed])
+        XCTAssertEqual(manager.installationCount, 1)
+    }
+
+    func testFailedManualDownloadWhileDisabledCanBeRetried() {
+        let manager = LocalUsageEngineManagerStub(discover: { [] })
+        let service = LocalUsageSummaryStub()
+        let store = self.makeStore(manager: manager, service: service)
+
+        for attempt in 1...2 {
+            store.installManagedTokscaleEngine()
+            self.waitUntil { !store.isInstallingTokscaleEngine }
+
+            XCTAssertEqual(manager.installationCount, attempt)
+            XCTAssertEqual(store.tokscaleEngineError, "测试下载失败")
+            XCTAssertFalse(store.localUsageEnabled)
+            XCTAssertNil(store.activeTokscaleEngine)
+            XCTAssertEqual(service.loadCount, 0)
+        }
     }
 
     func testExplicitInstalledPathPersistsAndWinsAtNextStartup() throws {
