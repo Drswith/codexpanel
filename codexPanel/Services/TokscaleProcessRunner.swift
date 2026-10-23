@@ -26,16 +26,16 @@ nonisolated enum TokscaleError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .helperMissing: return "选中的 tokscale 已不可用，请重新检测或下载。"
-        case .launchFailed: return "无法启动用量统计程序。"
+        case .helperMissing: return "所选用量引擎已不可用，请重新检查或下载引擎。"
+        case .launchFailed: return "无法启动用量引擎。"
         case .timedOut: return "用量统计超时，请稍后重试。"
         case .cancelled: return "用量统计已取消。"
         case .outputTooLarge: return "用量统计结果超过大小限制。"
-        case .processFailed(let status): return "用量统计程序退出，状态码 \(status)。"
+        case .processFailed(let status): return "用量引擎退出，状态码 \(status)。"
         case .invalidReport: return "用量统计返回了无效数据。"
         case .pricingSeedMissing: return "应用内的离线价格数据缺失，请重新安装完整应用。"
-        case .engineNotSelected: return "请先选择已安装的 tokscale，或下载 Codex Panel 管理的副本。"
-        case .incompatibleVersion(let version): return "tokscale \(version) 不兼容；需要 4.20.0 或更新的 4.x 版本。"
+        case .engineNotSelected: return "请先选择已安装的用量引擎，或点击“下载引擎”安装。"
+        case .incompatibleVersion(let version): return "用量引擎 tokscale \(version) 不兼容；需要 4.20.0 或更新的 4.x 版本。"
         }
     }
 }

@@ -282,34 +282,27 @@ enum L {
     static var usedQuotaDisplay: String { zh ? "已用额度" : "Used Quota" }
     static var remainingShort: String { zh ? "剩余" : "Remaining" }
     static var usedShort: String { zh ? "已用" : "Used" }
-    static var localUsageEngineTitle: String { zh ? "本地用量统计" : "Local Usage Statistics" }
+    static var localUsageEngineTitle: String { zh ? "用量引擎" : "Usage Engine" }
     static var localUsageEnabledTitle: String { zh ? "启用本地用量统计" : "Enable Local Usage Statistics" }
     static var localUsageEngineHint: String {
         zh
-            ? "使用 tokscale 读取本地会话并估算费用。默认关闭；启用时优先检测已安装版本，也可下载保存在 Codex Panel 数据目录中的专用副本。账号额度功能始终可用。"
-            : "Use tokscale to read local sessions and estimate costs. Disabled by default. Enabling first checks installed versions; you can also download a dedicated copy stored in Codex Panel’s data directory. Account quota features remain available."
+            ? "使用 tokscale 统计本地会话和费用，不影响账号额度。"
+            : "Uses tokscale to estimate local session usage and costs. Account quotas are unaffected."
     }
-    static var localUsageDisabledHint: String {
-        zh ? "已关闭本地用量扫描。" : "Local usage scanning is disabled."
-    }
-    static var localUsageEngineChecking: String { zh ? "正在检测已安装的 tokscale…" : "Checking installed tokscale versions…" }
-    static var localUsageEngineDownloading: String { zh ? "正在下载并准备 tokscale…" : "Downloading and preparing tokscale…" }
-    static var localUsageEngineUnchecked: String { zh ? "尚未检查 tokscale。" : "tokscale has not been checked yet." }
+    static var localUsageEngineChecking: String { zh ? "正在检查用量引擎…" : "Checking usage engines…" }
+    static var localUsageEngineDownloading: String { zh ? "正在下载并安装用量引擎…" : "Downloading and installing the usage engine…" }
+    static var localUsageEngineUnchecked: String { zh ? "尚未检查用量引擎。" : "Usage engines have not been checked yet." }
     static var localUsageEngineNotFound: String {
-        zh ? "未找到可用的 tokscale。可下载 Codex Panel 专用副本。" : "No usable tokscale version was found. You can download a dedicated copy for Codex Panel."
+        zh ? "未找到可用的用量引擎。" : "No compatible usage engine was found."
     }
-    static var localUsageEngineInstalled: String { zh ? "已安装" : "Installed" }
-    static var localUsageEngineManaged: String { zh ? "Codex Panel 专用副本" : "Dedicated Codex Panel Copy" }
-    static var localUsageEngineCurrentVersion: String { zh ? "当前版本" : "Current Version" }
-    static var localUsageEngineSelectedVersion: String { zh ? "已选版本" : "Selected Version" }
-    static var localUsageEngineInUse: String { zh ? "正在使用" : "In Use" }
-    static var localUsageEngineSelected: String { zh ? "已选择" : "Selected" }
-    static var localUsageEngineUseVersion: String { zh ? "使用此版本" : "Use This Version" }
+    static var localUsageEngineInstalled: String { zh ? "系统已安装" : "System Installation" }
+    static var localUsageEngineManaged: String { zh ? "Codex Panel 管理" : "Managed by Codex Panel" }
+    static var localUsageEngineVersion: String { zh ? "引擎版本" : "Engine Version" }
     static var localUsageEngineIncompatible: String {
         zh ? "需要 tokscale 4.20 及以上的 4.x 版本。" : "Requires tokscale 4.x, version 4.20 or later."
     }
-    static var localUsageEngineCheck: String { zh ? "检查已安装版本" : "Check Installed Versions" }
-    static var localUsageEngineDownload: String { zh ? "下载专用副本" : "Download Dedicated Copy" }
+    static var localUsageEngineCheck: String { zh ? "检查引擎" : "Check Engine" }
+    static var localUsageEngineDownload: String { zh ? "下载引擎" : "Download Engine" }
     static var localUsageEngineRetryDownload: String { zh ? "重试下载" : "Retry Download" }
     static var quotaSortSettingsTitle: String { zh ? "用量排序参数" : "Quota Sort Parameters" }
     static var quotaSortSettingsHint: String {
