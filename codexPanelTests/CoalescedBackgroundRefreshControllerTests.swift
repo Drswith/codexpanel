@@ -2,6 +2,32 @@ import XCTest
 
 @MainActor
 final class CoalescedBackgroundRefreshControllerTests: XCTestCase {
+    func testClosingDiscardsQueuedRefreshAndInFlightDelivery() {
+        let controller = CoalescedBackgroundRefreshController<Int>()
+        let started = expectation(description: "load started")
+        let finished = expectation(description: "load finished")
+        let staleDelivered = expectation(description: "closed menu delivery")
+        staleDelivered.isInverted = true
+        let pendingStarted = expectation(description: "queued refresh after close")
+        pendingStarted.isInverted = true
+        let release = DispatchSemaphore(value: 0)
+        controller.requestRefresh(load: { _ in
+            started.fulfill()
+            _ = release.wait(timeout: .now() + 2)
+            finished.fulfill()
+            return 1
+        }) { _ in staleDelivered.fulfill() }
+        wait(for: [started], timeout: 1)
+        controller.requestRefresh(load: { _ in
+            pendingStarted.fulfill()
+            return 2
+        }) { _ in staleDelivered.fulfill() }
+        controller.reset()
+        release.signal()
+        wait(for: [finished], timeout: 1)
+        wait(for: [staleDelivered, pendingStarted], timeout: 0.2)
+    }
+
     func testCoalescesRepeatedRequestsWhileRefreshIsInFlight() {
         let controller = CoalescedBackgroundRefreshController<Int>()
         let firstStarted = expectation(description: "first load started")

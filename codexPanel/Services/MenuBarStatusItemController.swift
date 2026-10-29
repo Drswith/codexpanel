@@ -408,17 +408,29 @@ final class MenuBarStatusItemController: NSObject, ObservableObject {
         #endif
     }
 
-    func synchronizePresentation() {
-        guard let window = self.menuWindow else { return }
-        // Occlusion notifications also fire when the native menu is ordered out.
-        let visible = window.isVisible
+    func detachMenuWindow(_ window: NSWindow) {
+        guard self.menuWindow === window else { return }
+        self.menuWindow = nil
+        self.menuDidClose()
+    }
+
+    @discardableResult
+    func synchronizePresentation() -> Bool {
+        guard let window = self.menuWindow else {
+            self.menuDidClose()
+            return false
+        }
+        // 原生 MenuBarExtra 的窗口可能仍被保留；仅实际可见时运行界面轮询。
+        let visible = window.isVisible && window.occlusionState.contains(.visible)
         if visible && !self.isRuntimeReady {
             self.prepareMenuContent()
             DispatchQueue.main.async { [weak self] in self?.synchronizePresentation() }
-            return
+            return false
         }
-        guard visible != self.isPresented else { return }
-        if visible { self.menuWillOpen() } else { self.menuDidClose() }
+        if visible != self.isPresented {
+            if visible { self.menuWillOpen() } else { self.menuDidClose() }
+        }
+        return visible
     }
 
     func menuWillOpen() {
@@ -569,6 +581,7 @@ private struct NativeMenuBarWindowReader: NSViewRepresentable {
 
     final class ReaderView: NSView {
         private var observations: [NSObjectProtocol] = []
+        private weak var observedWindow: NSWindow?
 
         override init(frame: NSRect) { super.init(frame: frame) }
 
@@ -576,8 +589,12 @@ private struct NativeMenuBarWindowReader: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            if let observedWindow, observedWindow !== self.window {
+                MenuBarStatusItemController.shared.detachMenuWindow(observedWindow)
+            }
             self.observations.forEach { NotificationCenter.default.removeObserver($0) }
             self.observations.removeAll()
+            self.observedWindow = self.window
             guard let window else { return }
             for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
                          NSWindow.didChangeOcclusionStateNotification] {
@@ -585,7 +602,7 @@ private struct NativeMenuBarWindowReader: NSViewRepresentable {
                     forName: name, object: window, queue: .main
                 ) { _ in
                     MainActor.assumeIsolated {
-                        MenuBarStatusItemController.shared.synchronizePresentation()
+                        _ = MenuBarStatusItemController.shared.synchronizePresentation()
                     }
                 })
             }

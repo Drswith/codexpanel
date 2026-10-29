@@ -2,6 +2,104 @@ import Foundation
 import XCTest
 
 final class SessionLogStoreCacheTests: CodexPanelTestCase {
+    func testLifecycleRefreshReadsOnlyAppendAndKeepsInactiveSessionCursor() throws {
+        let home = try self.makeCodexHome()
+        let file = home.appendingPathComponent(".codex/sessions/alpha.jsonl")
+        let initial = self.lifecycleSession(id: "alpha") + String(repeating: "{}\n", count: 350_000)
+        try Data(initial.utf8).write(to: file)
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(home: home) { sink.record(type: $0, fields: $1) }
+        XCTAssertEqual(store.currentSessionLifecycleRecords(matchingSessionIDs: ["alpha"]).first?.taskLifecycleState, .running)
+        XCTAssertEqual(store.currentSessionLifecycleRecords(matchingSessionIDs: ["alpha"]).count, 1)
+        XCTAssertEqual(sink.events().filter { $0.type == "session_lifecycle_scanned" }.count, 1)
+        XCTAssertTrue(store.currentSessionLifecycleRecords(matchingSessionIDs: ["other"]).isEmpty)
+
+        let appended = #"{"type":"event_msg","payload":{"type":"task_complete"}}"# + "\n"
+        try self.append(Data(appended.utf8), to: file)
+        XCTAssertEqual(store.currentSessionLifecycleRecords(matchingSessionIDs: ["alpha"]).first?.taskLifecycleState, .completed)
+        let event = try XCTUnwrap(sink.events().last)
+        XCTAssertEqual(event.fields["incremental"] as? Bool, true)
+        XCTAssertEqual(event.fields["parsedBytes"] as? Int64, Int64(appended.utf8.count))
+    }
+
+    func testLifecycleRefreshRetainsPartialUTF8LineUntilCompleted() throws {
+        let home = try self.makeCodexHome()
+        let file = home.appendingPathComponent(".codex/sessions/alpha.jsonl")
+        try Data(self.lifecycleSession(id: "alpha").utf8).write(to: file)
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(home: home) { sink.record(type: $0, fields: $1) }
+        XCTAssertEqual(store.currentSessionLifecycleRecords().first?.taskLifecycleState, .running)
+        let line = Data((#"{"type":"event_msg","payload":{"type":"task_complete","message":"完成"}}"# + "\n").utf8)
+        let split = try XCTUnwrap(line.firstIndex(of: 0xE5)) + 1
+        try self.append(line.prefix(split), to: file)
+        XCTAssertEqual(store.currentSessionLifecycleRecords().first?.taskLifecycleState, .running)
+        XCTAssertEqual(sink.events().last?.fields["parsedBytes"] as? Int64, 0)
+        try self.append(line.suffix(from: split), to: file)
+        XCTAssertEqual(store.currentSessionLifecycleRecords().first?.taskLifecycleState, .completed)
+        XCTAssertEqual(sink.events().last?.fields["incremental"] as? Bool, true)
+        XCTAssertEqual(sink.events().last?.fields["parsedBytes"] as? Int64, Int64(line.count))
+    }
+
+    func testLifecycleRefreshRebuildsAfterTruncationReplacementAndRewrite() throws {
+        let home = try self.makeCodexHome()
+        let file = home.appendingPathComponent(".codex/sessions/alpha.jsonl")
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(home: home) { sink.record(type: $0, fields: $1) }
+        try Data((self.lifecycleSession(id: "alpha") + String(repeating: "{}\n", count: 100)).utf8).write(to: file)
+        _ = store.currentSessionLifecycleRecords()
+        // 同 inode 截断。
+        let truncated = Data(self.lifecycleSession(id: "short", state: "task_complete").utf8)
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.truncate(atOffset: 0)
+        try handle.write(contentsOf: truncated)
+        try handle.close()
+        XCTAssertEqual(store.currentSessionLifecycleRecords().first?.id, "short")
+        XCTAssertEqual(sink.events().last?.fields["incremental"] as? Bool, false)
+
+        // 原子替换为更大的文件。
+        let replacement = self.lifecycleSession(id: "replacement") + String(repeating: "{}\n", count: 200)
+        try Data(replacement.utf8).write(to: file, options: .atomic)
+        XCTAssertEqual(store.currentSessionLifecycleRecords().first?.id, "replacement")
+        XCTAssertEqual(sink.events().last?.fields["incremental"] as? Bool, false)
+
+        // 同 inode 改写头部后追加，头尾校验必须拒绝旧游标。
+        let rewritten = replacement.replacingOccurrences(of: "replacement", with: "rewrittenxx") + "{}\n"
+        let rewriteHandle = try FileHandle(forWritingTo: file)
+        try rewriteHandle.write(contentsOf: Data(rewritten.utf8))
+        try rewriteHandle.close()
+        XCTAssertEqual(store.currentSessionLifecycleRecords().first?.id, "rewrittenxx")
+        XCTAssertEqual(sink.events().last?.fields["incremental"] as? Bool, false)
+    }
+
+    func testLifecycleRefreshReusesCompleteUsageCacheCursor() throws {
+        let home = try self.makeCodexHome()
+        let directory = home.appendingPathComponent(".codex/sessions")
+        try self.writeFastSession(directory: directory, fileName: "alpha.jsonl", id: "alpha",
+            timestamp: "2026-04-21T08:00:00Z", model: "gpt-5.5", inputTokens: 1, cachedInputTokens: 0, outputTokens: 1)
+        let sink = DiagnosticsSink()
+        let store = self.makeStore(home: home) { sink.record(type: $0, fields: $1) }
+        _ = store.sessionRecords()
+        XCTAssertEqual(store.currentSessionLifecycleRecords().count, 1)
+        XCTAssertFalse(sink.events().contains { $0.type == "session_lifecycle_scanned" })
+        try self.append(Data((#"{"type":"event_msg","payload":{"type":"task_complete"}}"# + "\n").utf8), to: directory.appendingPathComponent("alpha.jsonl"))
+        XCTAssertEqual(store.currentSessionLifecycleRecords().first?.taskLifecycleState, .completed)
+        XCTAssertEqual(sink.events().last?.fields["incremental"] as? Bool, true)
+    }
+
+    private func lifecycleSession(id: String, state: String = "task_started") -> String {
+        [
+            #"{"type":"session_meta","payload":{"id":"\#(id)","timestamp":"2026-10-29T07:00:00Z"}}"#,
+            #"{"type":"event_msg","payload":{"type":"\#(state)"}}"#,
+        ].joined(separator: "\n") + "\n"
+    }
+
+    private func append(_ data: Data, to file: URL) throws {
+        let handle = try FileHandle(forWritingTo: file)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: data)
+    }
+
     func testPersistedCacheReusesUnchangedFileAndUpgradesLegacyMilliseconds() throws {
         let home = try self.makeCodexHome()
         let directory = home.appendingPathComponent(".codex/sessions")

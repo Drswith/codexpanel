@@ -2,25 +2,25 @@
   "schemaVersion": 1,
   "channel": "stable",
   "release": {
-    "version": "1.5.26",
-    "publishedAt": "2026-10-23T03:23:37Z",
-    "summary": "修复统计关闭时无法下载用量引擎的问题，下载后仍保持统计关闭。",
-    "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.26",
-    "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.26",
+    "version": "1.5.27",
+    "publishedAt": "2026-10-29T07:34:38Z",
+    "summary": "v1.5.27",
+    "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.27",
+    "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.27",
     "deliveryMode": "guidedDownload",
     "minimumAutomaticUpdateVersion": null,
     "artifacts": [
       {
         "architecture": "universal",
         "format": "dmg",
-        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.26/codexpanel-1.5.26-macOS.dmg",
-        "sha256": "c55d67763ad14d0841fae0cc2d151ea8658a194c59298cc62bf1903c0996e791"
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.27/codexpanel-1.5.27-macOS.dmg",
+        "sha256": "9d5d6260c4328af551d70d97441e4317f08b5b1750279c4a0bb360dbf1c26daf"
       },
       {
         "architecture": "universal",
         "format": "zip",
-        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.26/codexpanel-1.5.26-macOS.zip",
-        "sha256": "85be92ec4636b24e77d8a685ea5bce33f8dbd2afe763eec0e5e7e9fb59ea8072"
+        "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.27/codexpanel-1.5.27-macOS.zip",
+        "sha256": "12c4022856cec052667af5ee8c4ad82f1729ecda7edaaaa5cb1da186878737b7"
       }
     ]
   }

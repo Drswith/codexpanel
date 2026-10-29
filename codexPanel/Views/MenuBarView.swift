@@ -614,6 +614,10 @@ struct MenuBarView: View {
         mainMenuContent
         .frame(width: MenuBarStatusItemIdentity.popoverContentWidth)
         .onReceive(countdownTimer) { _ in
+            guard MenuBarStatusItemController.shared.synchronizePresentation() else {
+                self.handleMenuPresentationClosed()
+                return
+            }
             now = Date()
             if isResetCreditsPanelPresented {
                 showResetCreditsPanel()
@@ -2464,6 +2468,10 @@ struct MenuBarView: View {
     }
 
     private func refreshRunningThreadAttribution() {
+        guard MenuBarStatusItemController.shared.synchronizePresentation() else {
+            self.handleMenuPresentationClosed()
+            return
+        }
         let now = Date()
         let service = self.runningThreadAttributionService
 
