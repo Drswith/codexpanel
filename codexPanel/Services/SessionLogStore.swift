@@ -184,6 +184,8 @@ final class SessionLogStore: @unchecked Sendable {
     private struct CachedSessionLifecycleRecord: Codable {
         let fingerprint: FileFingerprint
         let record: SessionLifecycleRecord?
+        let parsedBytes: Int64
+        let anchorHash: String?
     }
 
 
@@ -875,8 +877,9 @@ final class SessionLogStore: @unchecked Sendable {
         _ update: (inout Result, CachedSessionLifecycleRecord) -> Void
     ) {
         let files = self.sessionFiles()
-        var nextLifecycleCache: [URL: CachedSessionLifecycleRecord] = [:]
-        nextLifecycleCache.reserveCapacity(files.count)
+        let existingFiles = Set(files)
+        // 暂时不活跃的会话仍保留游标，恢复运行时无需重读历史。
+        var nextLifecycleCache = self.sessionLifecycleCache.filter { existingFiles.contains($0.key) }
 
         for fileURL in files {
             autoreleasepool {
@@ -898,6 +901,7 @@ final class SessionLogStore: @unchecked Sendable {
 
             if let cachedSession = self.sessionCache[fileURL],
                cachedSession.fingerprint == fingerprint,
+               cachedSession.isComplete, cachedSession.hasTrailingNewline,
                let record = cachedSession.record {
                 let lifecycleRecord = CachedSessionLifecycleRecord(
                     fingerprint: fingerprint,
@@ -907,14 +911,18 @@ final class SessionLogStore: @unchecked Sendable {
                         lastActivityAt: record.lastActivityAt,
                         isArchived: record.isArchived,
                         taskLifecycleState: record.taskLifecycleState
-                    )
+                    ),
+                    parsedBytes: cachedSession.parsedBytes,
+                    anchorHash: cachedSession.anchorHash
                 )
                 nextLifecycleCache[fileURL] = lifecycleRecord
                 update(&result, lifecycleRecord)
                 return
             }
 
-            let cached = self.parseSessionLifecycle(fileURL, fingerprint: fingerprint)
+            guard let cached = self.parseSessionLifecycle(
+                fileURL, fingerprint: fingerprint, previous: self.sessionLifecycleCache[fileURL]
+            ) else { return }
             nextLifecycleCache[fileURL] = cached
             update(&result, cached)
             }
@@ -1142,20 +1150,31 @@ final class SessionLogStore: @unchecked Sendable {
 
     private func parseSessionLifecycle(
         _ fileURL: URL,
-        fingerprint: FileFingerprint
-    ) -> CachedSessionLifecycleRecord {
-        var sessionID: String?
-        var sessionDate: Date?
-        var taskLifecycleState: TaskLifecycleState?
+        fingerprint: FileFingerprint,
+        previous: CachedSessionLifecycleRecord?
+    ) -> CachedSessionLifecycleRecord? {
+        var reusable: CachedSessionLifecycleRecord?
+        if let previous, previous.record != nil, previous.parsedBytes > 0,
+           fingerprint.fileSize > previous.fingerprint.fileSize,
+           previous.fingerprint.fileIdentifier == fingerprint.fileIdentifier,
+           let anchor = previous.anchorHash,
+           self.anchorHash(for: fileURL, parsedBytes: previous.parsedBytes) == anchor {
+            // shortcut: 头尾采样校验追加日志；支持任意原地编辑时需完整内容校验。
+            reusable = previous
+        }
+        let offset = reusable?.parsedBytes ?? 0
+        var sessionID = reusable?.record?.id
+        var sessionDate = reusable?.record?.startedAt
+        var taskLifecycleState = reusable?.record?.taskLifecycleState
 
-        let didRead = self.enumerateLines(in: fileURL) { line in
+        // 游标只越过完整行，写入到一半的尾行留到下一次追加后解析。
+        guard let scan = self.enumerateLinesIncrementally(in: fileURL, fromOffset: offset, handleLine: { line in
             self.consumeSessionMetadata(in: line, sessionID: &sessionID, sessionDate: &sessionDate)
             self.consumeTaskLifecycle(in: line, taskLifecycleState: &taskLifecycleState)
-        }
+        }) else { return nil }
 
         let record: SessionLifecycleRecord?
-        if didRead,
-           let startedAt = sessionDate {
+        if let startedAt = sessionDate {
             record = SessionLifecycleRecord(
                 id: sessionID ?? fileURL.deletingPathExtension().lastPathComponent,
                 startedAt: startedAt,
@@ -1167,9 +1186,15 @@ final class SessionLogStore: @unchecked Sendable {
             record = nil
         }
 
+        self.diagnosticsRecorder("session_lifecycle_scanned", [
+            "incremental": reusable != nil,
+            "parsedBytes": scan.parsedBytes - offset,
+        ])
         return CachedSessionLifecycleRecord(
             fingerprint: fingerprint,
-            record: record
+            record: record,
+            parsedBytes: scan.parsedBytes,
+            anchorHash: self.anchorHash(for: fileURL, parsedBytes: scan.parsedBytes)
         )
     }
 
