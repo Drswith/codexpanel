@@ -193,9 +193,9 @@ public enum DesktopSidebarState {
             if let expanded = fromAtoms[key] as? Bool { atoms[key] = expanded }
         }
 
-        guard !NSDictionary(dictionary: globals).isEqual(to: previousGlobals)
-                || !NSDictionary(dictionary: atoms).isEqual(to: previousAtoms)
-        else { return nil }
+        let before = try JSONSerialization.data(withJSONObject: [previousGlobals, previousAtoms], options: .sortedKeys)
+        let after = try JSONSerialization.data(withJSONObject: [globals, atoms], options: .sortedKeys)
+        guard before != after else { return nil }
         var result = state
         if active == target {
             result = globals

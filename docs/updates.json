@@ -3,7 +3,7 @@
   "channel": "stable",
   "release": {
     "version": "1.5.28",
-    "publishedAt": "2026-11-09T04:08:12Z",
+    "publishedAt": "2026-11-09T05:45:10Z",
     "summary": "v1.5.28",
     "releaseNotesURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.28",
     "downloadPageURL": "https://github.com/Drswith/codexpanel/releases/tag/v1.5.28",
@@ -14,13 +14,13 @@
         "architecture": "universal",
         "format": "dmg",
         "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.28/codexpanel-1.5.28-macOS.dmg",
-        "sha256": "9eae813e466055e3e10361097e14aa3403e2f654baab5f67aa21b9937b4a724e"
+        "sha256": "343eec97e8d891bf3885c165aa491efcf6d33694983867cef789352bc5b57682"
       },
       {
         "architecture": "universal",
         "format": "zip",
         "downloadURL": "https://github.com/Drswith/codexpanel/releases/download/v1.5.28/codexpanel-1.5.28-macOS.zip",
-        "sha256": "7b44108ef25b6ffe3327cbe3cb7ef67669a7289a8066541d44d56f6f06e21279"
+        "sha256": "566c5ba98a499fb4f93ac9e872f7870b785834794871c992eb56b94e98bb34f0"
       }
     ]
   }
