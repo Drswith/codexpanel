@@ -101,6 +101,13 @@ final class TokenStore: ObservableObject {
     @Published private(set) var isInstallingTokscaleEngine = false
     @Published private(set) var hasCheckedTokscaleEngines = false
     @Published private(set) var tokscaleEngineError: String?
+    enum DesktopSwitchFeedback: Equatable {
+        case pending(accountID: String, source: CodexPanelActiveSelection)
+        case completed(accountID: String)
+        case failed(String)
+    }
+
+    @Published private(set) var desktopSwitchFeedback: DesktopSwitchFeedback?
     @Published private(set) var aggregateRoutedAccountID: String?
 
     private let configStore: CodexPanelConfigStore
@@ -176,6 +183,15 @@ final class TokenStore: ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.aggregateRoutedAccountID = self.openAIAccountGatewayService.currentRoutedAccountID()
+            }
+            .store(in: &self.cancellables)
+
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didTerminateApplicationNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                      app.bundleIdentifier == "com.openai.codex" else { return }
+                self?.completePendingDesktopSwitch()
             }
             .store(in: &self.cancellables)
 
@@ -266,6 +282,44 @@ final class TokenStore: ObservableObject {
         self.persistIgnoringErrors(syncCodex: self.config.active.providerId == provider.id)
     }
 
+    /// Returns false when the existing switch banner should show a pending activation.
+    func requestDesktopSwitch(_ account: TokenAccount) throws -> Bool {
+        self.desktopSwitchFeedback = nil
+        do {
+            try self.activate(account)
+            return true
+        } catch CodexSyncService.SidebarSwitchError.desktopRunning {
+            self.desktopSwitchFeedback = .pending(accountID: account.accountId, source: self.config.active)
+            if self.codexRunningProcessIDs().isEmpty { self.completePendingDesktopSwitch() }
+            return false
+        }
+    }
+
+    func completePendingDesktopSwitch() {
+        guard case let .pending(accountID, source) = self.desktopSwitchFeedback else { return }
+        guard self.config.active == source, let account = self.oauthAccount(accountID: accountID) else {
+            self.desktopSwitchFeedback = nil
+            return
+        }
+        do {
+            try self.activate(account)
+            self.desktopSwitchFeedback = .completed(accountID: accountID)
+        } catch CodexSyncService.SidebarSwitchError.desktopRunning {
+            return
+        } catch {
+            self.desktopSwitchFeedback = .failed(error.localizedDescription)
+        }
+    }
+
+    var isDesktopSwitchPending: Bool {
+        if case .pending = self.desktopSwitchFeedback { return true }
+        return false
+    }
+
+    func dismissDesktopSwitchFeedback() {
+        self.desktopSwitchFeedback = nil
+    }
+
     func activate(
         _ account: TokenAccount,
         reason: AutoRoutingSwitchReason = .manual,
@@ -274,9 +328,16 @@ final class TokenStore: ObservableObject {
         protectedByManualGrace: Bool = false
     ) throws {
         _ = try self.reconcileAuthJSONIfNeeded(accountID: account.accountId)
+        let previousConfig = self.config
         let previousAccountID = self.activeAccount()?.accountId
         _ = try self.config.activateOAuthAccount(accountID: account.accountId)
-        try self.persist(syncCodex: true)
+        do {
+            try self.persist(syncCodex: true)
+        } catch {
+            self.config = previousConfig
+            try self.configStore.save(previousConfig)
+            throw error
+        }
         try self.appendSwitchJournal(
             previousAccountID: previousAccountID,
             reason: reason,
@@ -710,7 +771,13 @@ final class TokenStore: ObservableObject {
     }
 
     private func publishState() {
-
+        switch self.desktopSwitchFeedback {
+        case let .pending(_, source) where source != self.config.active:
+            self.desktopSwitchFeedback = nil
+        case let .completed(accountID) where accountID != self.config.active.accountId:
+            self.desktopSwitchFeedback = nil
+        default: break
+        }
         _ = self.refreshAggregateGatewayLeaseState()
         _ = self.refreshOpenRouterGatewayLeaseState()
         self.pushPublishedState()

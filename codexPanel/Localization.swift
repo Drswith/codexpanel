@@ -348,6 +348,33 @@ enum L {
             ? "OpenAI OAuth 账号会被当成一个本地账号池。Codex 连接本地 gateway，gateway 按会话粘性与 failover 规则挑选账号，不再依赖重启 Codex 才切号。"
             : "Treat OpenAI OAuth accounts as one local pool. Codex talks to a local gateway, which applies session stickiness and failover instead of relying on process restarts to switch accounts."
     }
+    static var sidebarSwitchIdentityError: String {
+        zh ? "无法确认 Codex Desktop 的侧栏归属，未切换账号。" : "Could not verify the Codex Desktop sidebar owner. The account was not switched."
+    }
+
+    static var sidebarSwitchPendingTitle: String {
+        zh ? "等待切换账号" : "Account switch pending"
+    }
+
+    static func sidebarSwitchPendingDetail(_ target: String) -> String {
+        zh ? "当前实例继续运行，退出 Desktop 后自动切换到 \(target)。"
+           : "The current instance keeps running. Codex Panel will switch to \(target) after Desktop quits."
+    }
+
+    static var sidebarSwitchCancel: String { zh ? "取消切换" : "Cancel switch" }
+
+    static var sidebarSwitchFailedTitle: String {
+        zh ? "账号未切换" : "Account switch failed"
+    }
+
+    static var sidebarSwitchQuitDesktop: String {
+        zh ? "为保留本地项目和侧栏，请完全退出 Codex Desktop 后再切换账号。" : "Quit Codex Desktop before switching accounts to keep local projects and sidebar settings."
+    }
+
+    static var sidebarSwitchStateChanged: String {
+        zh ? "Codex Desktop 状态已变化，切换已中止。请完全退出后重试。" : "Codex Desktop state changed during the switch. Quit Desktop and try again."
+    }
+
     static var accountUsageModeSwitch: String { zh ? "手动切换" : "Manual Switch" }
     static var accountUsageModeSwitchShort: String { zh ? "切换" : "Switch" }
     static var accountUsageModeSwitchHint: String {

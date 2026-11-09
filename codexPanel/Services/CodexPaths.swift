@@ -25,11 +25,10 @@ enum CodexPaths {
     static var configTomlURL: URL { self.codexRoot.appendingPathComponent("config.toml") }
     static var modelsCacheURL: URL { self.codexRoot.appendingPathComponent("models_cache.json") }
     static var providerSecretsURL: URL { self.codexRoot.appendingPathComponent("provider-secrets.env") }
-    static var stateSQLiteURL: URL {
-        self.versionedSQLiteURL(
-            basename: "state",
-            defaultVersion: self.stateSQLiteDefaultVersion
-        )
+    static var stateSQLiteURL: URL { self.stateSQLiteURL(in: self.codexRoot) }
+
+    static func stateSQLiteURL(in home: URL) -> URL {
+        self.versionedSQLiteURL(basename: "state", defaultVersion: self.stateSQLiteDefaultVersion, home: home)
     }
     static var logsSQLiteURL: URL {
         self.versionedSQLiteURL(
@@ -102,15 +101,16 @@ enum CodexPaths {
 
     private static func versionedSQLiteURL(
         basename: String,
-        defaultVersion: Int
+        defaultVersion: Int,
+        home: URL = Self.codexRoot
     ) -> URL {
-        let version = self.latestSQLiteVersion(basename: basename) ?? defaultVersion
-        return self.codexRoot.appendingPathComponent("\(basename)_\(version).sqlite")
+        let version = self.latestSQLiteVersion(basename: basename, in: home) ?? defaultVersion
+        return home.appendingPathComponent("\(basename)_\(version).sqlite")
     }
 
-    private static func latestSQLiteVersion(basename: String) -> Int? {
+    private static func latestSQLiteVersion(basename: String, in home: URL) -> Int? {
         guard let urls = try? FileManager.default.contentsOfDirectory(
-            at: self.codexRoot,
+            at: home,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
         ) else {
