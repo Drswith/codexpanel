@@ -49,6 +49,8 @@ Many multi-account workflows isolate each account by creating a separate `CODEX_
 
 That is the main value of the app: switching account or provider does not mean splitting the original Codex history pool.
 
+When switching OpenAI accounts, Codex Panel preserves local projects, chat groups, pins, and sidebar order by default. If Desktop is using that sidebar, the switch completes automatically after Desktop quits. To use the new account right away, launch a new instance from the account menu.
+
 ## Features
 
 - Multiple OpenAI OAuth accounts

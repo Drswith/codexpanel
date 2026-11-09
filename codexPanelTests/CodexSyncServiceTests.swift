@@ -1,4 +1,6 @@
+import CryptoKit
 import Foundation
+import SQLite3
 import XCTest
 
 final class CodexSyncServiceTests: CodexPanelTestCase {
@@ -320,6 +322,62 @@ final class CodexSyncServiceTests: CodexPanelTestCase {
 
         let chatTOMLText = try String(contentsOf: CodexPaths.configTomlURL, encoding: .utf8)
         XCTAssertTrue(chatTOMLText.contains(#"openai_base_url = "http://localhost:1558/v1""#))
+    }
+
+    func testOAuthSwitchPreservesDesktopSidebarByDefault() throws {
+        try CodexPaths.ensureDirectories()
+        let old = try self.makeOAuthAccount(accountID: "old", email: "old@example.com", userID: "old-user")
+        let target = try self.makeOAuthAccount(accountID: "target", email: "target@example.com", userID: "target-user")
+        func config(_ account: TokenAccount) -> CodexPanelConfig {
+            let stored = CodexPanelProviderAccount.fromTokenAccount(account, existingID: account.accountId)
+            let provider = CodexPanelProvider(id: "openai-oauth", kind: .openAIOAuth, label: "OpenAI",
+                                              activeAccountId: stored.id, accounts: [stored])
+            return CodexPanelConfig(active: .init(providerId: provider.id, accountId: stored.id), providers: [provider])
+        }
+        func owner(_ user: String, _ account: String) throws -> String {
+            SHA256.hash(data: try JSONSerialization.data(withJSONObject: [user, account]))
+                .map { String(format: "%02x", $0) }.joined()
+        }
+
+        try CodexSyncService().synchronize(config: config(old))
+        let auth = try Data(contentsOf: CodexPaths.authURL)
+        let stateURL = CodexPaths.codexRoot.appendingPathComponent(".codex-global-state.json")
+        let scope = "electron-account-renderer-state-v1"
+        let root = CodexPaths.codexRoot.resolvingSymlinksInPath().path
+        let initial = try JSONSerialization.data(withJSONObject: [
+            scope: ["owner": try owner("old-user", "old"), "inactive": [:]],
+            "local-projects": ["local": ["id": "local", "rootPaths": [root]]],
+            "app-server-project-id-by-legacy-project-id-by-host": ["local:" + root: ["local": "server"]],
+            "pinned-project-ids": ["local"],
+        ])
+        try initial.write(to: stateURL)
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(CodexPaths.stateSQLiteURL.path, &db), SQLITE_OK)
+        XCTAssertEqual(sqlite3_exec(db, """
+            CREATE TABLE project_roots (project_id, path);
+            INSERT INTO project_roots VALUES ('server', '\(root)');
+            CREATE TABLE threads (id, cwd, project_id);
+            """, nil, nil, nil), SQLITE_OK)
+        sqlite3_close(db)
+
+        XCTAssertThrowsError(try CodexSyncService(desktopIsRunning: { true }).synchronize(config: config(target)))
+        XCTAssertEqual(try Data(contentsOf: CodexPaths.authURL), auth)
+        XCTAssertEqual(try Data(contentsOf: stateURL), initial)
+
+        let failure = CodexSyncService(writeSecureFile: { data, url in
+            if url == CodexPaths.configTomlURL { throw SyncFailure.configWriteFailed }
+            try CodexPaths.writeSecureFile(data, to: url)
+        }, desktopIsRunning: { false })
+        XCTAssertThrowsError(try failure.synchronize(config: config(target)))
+        XCTAssertEqual(try Data(contentsOf: CodexPaths.authURL), auth)
+        XCTAssertEqual(try Data(contentsOf: stateURL), initial)
+
+        try CodexSyncService(desktopIsRunning: { false }).synchronize(config: config(target))
+        let result = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: stateURL)) as? [String: Any])
+        let scoped = try XCTUnwrap(result[scope] as? [String: Any])
+        let inactive = try XCTUnwrap(scoped["inactive"] as? [String: [String: Any]])
+        let globals = try XCTUnwrap(inactive[try owner("target-user", "target")]?["globals"] as? [String: Any])
+        XCTAssertEqual(globals["pinned-project-ids"] as? [String], ["local"])
     }
 
     private enum SyncFailure: Error, Equatable {

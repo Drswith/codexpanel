@@ -1,4 +1,5 @@
 import AppKit
+import CodexPanelCore
 import Foundation
 
 /// 新实例与主实例的数据关系。
@@ -195,7 +196,7 @@ final class CodexDesktopInstanceService {
         case .clonedHome:
             let authData = try Self.renderAuthJSON(for: account, now: self.now())
             let homeURL = root.appendingPathComponent("home", isDirectory: true)
-            try self.prepareInstanceHome(homeURL: homeURL, authData: authData)
+            try self.prepareInstanceHome(homeURL: homeURL, authData: authData, account: account)
             launchEnvironment["CODEX_HOME"] = homeURL.path
         }
 
@@ -245,7 +246,7 @@ final class CodexDesktopInstanceService {
 
     // MARK: - Steps
 
-    private func prepareInstanceHome(homeURL: URL, authData: Data) throws {
+    private func prepareInstanceHome(homeURL: URL, authData: Data, account: TokenAccount) throws {
         guard self.fileManager.fileExists(atPath: self.codexHomeURL.path) else {
             throw CodexDesktopInstanceError.cloneFailed(
                 "source home missing: \(self.codexHomeURL.path)"
@@ -272,11 +273,37 @@ final class CodexDesktopInstanceService {
         )
 
         try self.relinkSharedHistory(into: homeURL)
+        try self.preserveClonedSidebar(in: homeURL, for: account)
 
         try CodexPaths.writeSecureFile(
             authData,
             to: homeURL.appendingPathComponent("auth.json")
         )
+    }
+
+    private func preserveClonedSidebar(in home: URL, for account: TokenAccount) throws {
+        let file = home.appendingPathComponent(".codex-global-state.json")
+        guard self.fileManager.fileExists(atPath: file.path) else { return }
+        guard try file.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == false,
+              let state = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any]
+        else { throw CodexSyncService.SidebarSwitchError.invalidIdentity }
+        guard state[DesktopSidebarState.scopeKey] != nil else { return }
+        let auth = try Data(contentsOf: home.appendingPathComponent("auth.json"))
+        guard let object = try JSONSerialization.jsonObject(with: auth) as? [String: Any],
+              let tokens = object["tokens"] as? [String: Any],
+              let source = CodexSyncService.sidebarOwner(
+                accountID: tokens["account_id"] as? String,
+                accessToken: tokens["access_token"] as? String
+              ),
+              let target = CodexSyncService.sidebarOwner(accountID: account.remoteAccountId, accessToken: account.accessToken)
+        else { throw CodexSyncService.SidebarSwitchError.invalidIdentity }
+        let updated = try DesktopSidebarState.merge(
+            state, source: source, target: target, codexHome: self.codexHomeURL,
+            destinationHome: home
+        ) { try CodexSyncService.sidebarProjectIndex(database: CodexPaths.stateSQLiteURL(in: self.codexHomeURL)) }
+        if let updated {
+            try updated.write(to: file, options: .atomic)
+        }
     }
 
     /// 把会话、线程索引和 writer lock 指回主 home，让 Codex 原生 per-thread

@@ -519,6 +519,23 @@ struct MenuBarView: View {
     }
 
     private var manualSwitchBanner: OpenAIStatusBannerPresentation? {
+        switch self.store.desktopSwitchFeedback {
+        case let .pending(accountID, _):
+            guard let account = self.store.oauthAccount(accountID: accountID) else { return nil }
+            return .init(title: L.sidebarSwitchPendingTitle, message: L.sidebarSwitchPendingDetail(account.displayIdentifier),
+                         actionTitle: L.sidebarSwitchCancel, tone: .info)
+        case let .completed(accountID):
+            let result = OpenAIManualSwitchResult(
+                action: .updateConfigOnly, targetAccountID: accountID, targetMode: .switchAccount,
+                launchedNewInstance: false
+            )
+            return OpenAIAccountPresentation.manualSwitchBanner(
+                result: result, targetAccount: self.store.oauthAccount(accountID: accountID)
+            )
+        case let .failed(message):
+            return .init(title: L.sidebarSwitchFailedTitle, message: message, actionTitle: nil, tone: .warning)
+        case nil: break
+        }
         guard let lastOpenAIManualSwitchResult else { return nil }
         return OpenAIAccountPresentation.manualSwitchBanner(
             result: lastOpenAIManualSwitchResult,
@@ -1006,14 +1023,10 @@ struct MenuBarView: View {
             if let manualSwitchBanner {
                 self.openAIStatusBanner(
                     manualSwitchBanner,
-                    onAction: {
-                        guard let result = self.lastOpenAIManualSwitchResult else { return }
-                        Task {
-                            await self.applyManualSwitchRecommendation(result)
-                        }
-                    },
-                    onDismiss: {
+                    onAction: { self.store.dismissDesktopSwitchFeedback() },
+                    onDismiss: self.store.isDesktopSwitchPending ? nil : {
                         self.lastOpenAIManualSwitchResult = nil
+                        self.store.dismissDesktopSwitchFeedback()
                     }
                 )
             }
@@ -1802,29 +1815,23 @@ struct MenuBarView: View {
         trigger: OpenAIManualActivationTrigger = .primaryTap
     ) async {
         do {
+            var switched = false
             let result = try await OpenAIManualActivationExecutor.execute(
                 targetAccountID: account.accountId,
                 targetMode: .switchAccount,
                 configuredBehavior: self.store.config.openAI.manualActivationBehavior,
                 trigger: trigger
             ) {
-                try self.store.activate(
-                    account,
-                    reason: .manual,
-                    automatic: false,
-                    forced: false,
-                    protectedByManualGrace: false
-                )
+                switched = try self.store.requestDesktopSwitch(account)
             } launchNewInstance: {
-                try self.store.activate(
-                    account,
-                    reason: .manual,
-                    automatic: false,
-                    forced: false,
-                    protectedByManualGrace: false
-                )
+                switched = try self.store.requestDesktopSwitch(account)
             }
 
+            guard switched else {
+                self.lastOpenAIManualSwitchResult = nil
+                self.clearError()
+                return
+            }
             self.lastOpenAIManualSwitchResult = result
             self.refreshRunningThreadAttribution()
             self.clearError()
@@ -1953,12 +1960,6 @@ struct MenuBarView: View {
         } catch {
             self.setGenericError(error.localizedDescription)
         }
-    }
-
-    private func applyManualSwitchRecommendation(
-        _ result: OpenAIManualSwitchResult
-    ) async {
-        _ = result
     }
 
     private func clearStaleAggregateStickyIfNeeded() {

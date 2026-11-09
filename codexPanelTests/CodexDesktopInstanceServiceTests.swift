@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import XCTest
 
 @MainActor
@@ -320,6 +321,60 @@ final class CodexDesktopInstanceServiceTests: CodexPanelTestCase {
                 CodexDesktopInstanceError.missingOAuthTokens.localizedDescription
             )
         }
+    }
+
+    func testClonedHomeRetainsProjectsUsingCloneHostMapping() async throws {
+        let sourceHome = try self.makeSourceHome()
+        let a = try self.makeOAuthAccount(accountID: "a", email: "a@example.com")
+        let b = try self.makeOAuthAccount(accountID: "b", email: "b@example.com")
+        let aOwner = try XCTUnwrap(CodexSyncService.sidebarOwner(accountID: a.remoteAccountId, accessToken: a.accessToken))
+        let bOwner = try XCTUnwrap(CodexSyncService.sidebarOwner(accountID: b.remoteAccountId, accessToken: b.accessToken))
+        let stateName = ".codex-global-state.json"
+        let scope = "electron-account-renderer-state-v1"
+        let mapKey = "app-server-project-id-by-legacy-project-id-by-host"
+        let sourceHost = "local:" + sourceHome.resolvingSymlinksInPath().path
+        let sourceState = try JSONSerialization.data(withJSONObject: [
+            scope: ["owner": aOwner, "inactive": [:]],
+            "local-projects": ["local": ["id": "local", "rootPaths": ["/project"]]],
+            "pinned-project-ids": ["local"],
+            mapKey: [sourceHost: ["local": "server"]],
+        ])
+        let auth = try CodexDesktopInstanceService.renderAuthJSON(for: a)
+        try auth.write(to: sourceHome.appendingPathComponent("auth.json"))
+        try sourceState.write(to: sourceHome.appendingPathComponent(stateName))
+        let dbURL = sourceHome.appendingPathComponent("state_5.sqlite")
+        try FileManager.default.removeItem(at: dbURL)
+        var db: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(dbURL.path, &db), SQLITE_OK)
+        XCTAssertEqual(sqlite3_exec(db, """
+            CREATE TABLE project_roots (project_id, path);
+            INSERT INTO project_roots VALUES ('server', '/project');
+            CREATE TABLE threads (id, cwd, project_id);
+            """, nil, nil, nil), SQLITE_OK)
+        sqlite3_close(db)
+
+        let instances = self.temporaryURL(named: "instances")
+        let service = CodexDesktopInstanceService(
+            resolveAppURL: { Self.appURL },
+            cloneHome: { try FileManager.default.copyItem(at: $0, to: $1) },
+            launchApp: { _, _, environment in
+                let home = URL(fileURLWithPath: try XCTUnwrap(environment["CODEX_HOME"]))
+                let data = try Data(contentsOf: home.appendingPathComponent(stateName))
+                let state = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+                let accounts = try XCTUnwrap(state[scope] as? [String: Any])
+                let inactive = try XCTUnwrap(accounts["inactive"] as? [String: [String: Any]])
+                let globals = try XCTUnwrap(inactive[bOwner]?["globals"] as? [String: Any])
+                XCTAssertEqual(globals["pinned-project-ids"] as? [String], ["local"])
+                let mappings = globals[mapKey] as? [String: [String: String]]
+                XCTAssertEqual(mappings?["local:" + home.resolvingSymlinksInPath().path]?["local"], "server")
+                return 4242
+            },
+            runningCodexPIDs: { [100] }, isProcessAlive: { _ in true }, sleep: { _ in },
+            codexHomeURL: sourceHome, instancesRootURL: instances
+        )
+        _ = try await service.launchInstance(for: b, mode: .clonedHome)
+        XCTAssertEqual(try Data(contentsOf: sourceHome.appendingPathComponent(stateName)), sourceState)
+        XCTAssertEqual(try Data(contentsOf: sourceHome.appendingPathComponent("auth.json")), auth)
     }
 
     func testSanitizedDirectoryNameReplacesUnsafeCharacters() {

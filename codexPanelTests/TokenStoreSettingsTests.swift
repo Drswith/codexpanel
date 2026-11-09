@@ -4,6 +4,33 @@ import XCTest
 
 @MainActor
 final class TokenStoreSettingsTests: CodexPanelTestCase {
+    func testDesktopSwitchRemainsPendingUntilLastInstanceQuits() throws {
+        let a = try self.makeOAuthAccount(accountID: "a", email: "a@example.com")
+        let b = try self.makeOAuthAccount(accountID: "b", email: "b@example.com")
+        let provider = CodexPanelProvider(
+            id: "openai-oauth", kind: .openAIOAuth, label: "OpenAI", activeAccountId: a.accountId,
+            accounts: [a, b].map { CodexPanelProviderAccount.fromTokenAccount($0) }
+        )
+        let initial = CodexPanelConfig(active: .init(providerId: provider.id, accountId: a.accountId), providers: [provider])
+        let configStore = CodexPanelConfigStore()
+        try configStore.save(initial)
+        let sync = WaitingDesktopSync(activeID: a.accountId)
+        let store = self.makeTokenStore(syncService: sync, codexRunningProcessIDs: { sync.running ? [42] : [] })
+
+        XCTAssertFalse(try store.requestDesktopSwitch(b))
+        XCTAssertTrue(store.isDesktopSwitchPending)
+        XCTAssertEqual(try configStore.loadOrMigrate().active.accountId, a.accountId)
+        store.completePendingDesktopSwitch()
+        XCTAssertTrue(store.isDesktopSwitchPending)
+        XCTAssertEqual(sync.activeID, a.accountId)
+
+        sync.running = false
+        store.completePendingDesktopSwitch()
+        XCTAssertEqual(store.desktopSwitchFeedback, .completed(accountID: b.accountId))
+        XCTAssertEqual(try configStore.loadOrMigrate().active.accountId, b.accountId)
+        XCTAssertEqual(sync.activeID, b.accountId)
+    }
+
     func testDefaultGlobalSettingsUseUpstreamDefaults() {
         let config = CodexPanelConfig()
 
@@ -760,7 +787,8 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
 
     private func makeTokenStore(
         syncService: any CodexSynchronizing = CodexSyncServiceNoOp(),
-        costSummaryService: any LocalCostSummaryProviding = LocalCostSummaryService()
+        costSummaryService: any LocalCostSummaryProviding = LocalCostSummaryService(),
+        codexRunningProcessIDs: @escaping () -> Set<pid_t> = { [] }
     ) -> TokenStore {
         let configStore = CodexPanelConfigStore()
         var config = (try? configStore.loadOrMigrate()) ?? CodexPanelConfig()
@@ -777,8 +805,22 @@ final class TokenStoreSettingsTests: CodexPanelTestCase {
             chatCompletionsGatewayService: ChatGatewayControllerStub(),
             aggregateGatewayLeaseStore: AggregateGatewayLeaseStoreStub(),
             aggregateRouteJournalStore: AggregateRouteJournalStoreStub(),
-            codexRunningProcessIDs: { [] }
+            codexRunningProcessIDs: codexRunningProcessIDs
         )
+    }
+}
+
+private final class WaitingDesktopSync: CodexSynchronizing {
+    var activeID: String?
+    var running = true
+
+    init(activeID: String) { self.activeID = activeID }
+
+    func synchronize(config: CodexPanelConfig) throws {
+        if self.running && self.activeID != config.active.accountId {
+            throw CodexSyncService.SidebarSwitchError.desktopRunning
+        }
+        self.activeID = config.active.accountId
     }
 }
 
